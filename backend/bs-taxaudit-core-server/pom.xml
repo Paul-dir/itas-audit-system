@@ -11,7 +11,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>com.mor.itas</groupId>
+    <groupId>mor.itas</groupId>
     <artifactId>bs-taxaudit-core-server</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>ITAS Tax Audit Core Server</name>
