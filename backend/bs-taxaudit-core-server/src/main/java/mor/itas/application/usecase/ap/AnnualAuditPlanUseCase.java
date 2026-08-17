@@ -3,7 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.api.dto.request.ap.CreatePlanRequest;
 import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
-import mor.itas.application.port.outboundport.risk.RiskEnginePort;
+import mor.itas.application.port.outboundport.riskengine.RiskEnginePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
