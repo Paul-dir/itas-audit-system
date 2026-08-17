@@ -1,4 +1,4 @@
-package mor.itas.infrastructure.workflow;
+package mor.itas.application.port.outboundport.workflow;
 
 import java.util.UUID;
 

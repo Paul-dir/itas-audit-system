@@ -1,4 +1,4 @@
-package mor.itas.infrastructure.dms;
+package mor.itas.application.port.outboundport.dms;
 
 import java.util.UUID;
 

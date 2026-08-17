@@ -2,6 +2,7 @@ package mor.itas.infrastructure.notification;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import mor.itas.application.port.outboundport.notification.NotificationEnginePort;
 
 @Component
 @Profile("mock")

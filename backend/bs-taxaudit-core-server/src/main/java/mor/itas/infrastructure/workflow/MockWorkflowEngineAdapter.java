@@ -2,6 +2,7 @@ package mor.itas.infrastructure.workflow;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import mor.itas.application.port.outboundport.workflow.WorkflowEnginePort;
 import java.util.UUID;
 
 @Component

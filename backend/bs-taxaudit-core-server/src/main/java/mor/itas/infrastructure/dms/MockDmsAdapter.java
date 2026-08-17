@@ -2,6 +2,7 @@ package mor.itas.infrastructure.dms;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import mor.itas.application.port.outboundport.dms.DmsPort;
 import java.util.UUID;
 
 @Component
