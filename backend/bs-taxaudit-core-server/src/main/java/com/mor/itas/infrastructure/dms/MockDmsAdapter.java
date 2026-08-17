@@ -1,4 +1,4 @@
-package com.mor.itas.engineadapter.dms;
+package com.mor.itas.infrastructure.dms;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;

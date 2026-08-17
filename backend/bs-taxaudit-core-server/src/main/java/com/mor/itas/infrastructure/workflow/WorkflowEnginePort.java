@@ -1,4 +1,4 @@
-package com.mor.itas.engineadapter.workflow;
+package com.mor.itas.infrastructure.workflow;
 
 import java.util.UUID;
 

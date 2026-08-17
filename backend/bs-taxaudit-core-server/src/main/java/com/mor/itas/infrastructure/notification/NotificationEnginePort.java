@@ -1,4 +1,4 @@
-package com.mor.itas.engineadapter.notification;
+package com.mor.itas.infrastructure.notification;
 
 public interface NotificationEnginePort {
     void sendNotification(String userId, String message);

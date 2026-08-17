@@ -1,4 +1,4 @@
-package com.mor.itas.engineadapter.workflow;
+package com.mor.itas.infrastructure.workflow;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;

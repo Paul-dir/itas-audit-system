@@ -1,4 +1,4 @@
-package com.mor.itas.engineadapter.notification;
+package com.mor.itas.infrastructure.notification;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
