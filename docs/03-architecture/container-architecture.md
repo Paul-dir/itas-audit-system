@@ -1,156 +1,8 @@
-# Architecture Overview
-
-**Version:** 1.0
-**Status:** Approved
-**Last Updated:** 2026-08-16
-
-This document provides a high-level overview of the system architecture, explaining the core architectural patterns, the reasoning behind key decisions, and the overall structure of the codebase.
-
----
-
-## 1. Architectural Pattern: Hexagonal Architecture (Ports & Adapters)
-
-The system follows **Hexagonal Architecture** (also known as Ports & Adapters) combined with **Domain-Driven Design (DDD)**. This ensures that the core business logic (Domain) is completely isolated from external concerns (UI, databases, integrations).
-
-### 1.1 The Four Layers
-
-| Layer | Responsibility | Dependencies |
-| :--- | :--- | :--- |
-| **API Layer (Inbound Adapters)** | Handles HTTP requests, validates inputs, calls application use cases, returns HTTP responses. | Depends on Application Layer. |
-| **Application Layer (Orchestration)** | Orchestrates use cases, manages transactions, coordinates domain logic, uses outbound ports. | Depends on Domain Layer and Outbound Ports. |
-| **Domain Layer (Core Business)** | Pure business logic. Enforces invariants, aggregates, domain events. Has zero dependencies on frameworks. | Depends on nothing. |
-| **Infrastructure Layer (Outbound Adapters)** | Implements persistence (JPA), external clients (REST), messaging (Kafka), and internal engines. | Depends on Application Ports. |
-
-### 1.2 Dependency Direction
-- **Inward:** Dependencies point inward toward the Domain.
-- **Domain Layer** has zero dependencies on Spring, JPA, or any framework.
-- **Application Layer** depends on Domain and Outbound Ports.
-- **Infrastructure Layer** implements Outbound Ports.
-
----
-
-## 2. Key Architectural Decisions
-
-| Decision | Rationale | Impact |
-| :--- | :--- | :--- |
-| **Single Deployable Unit** | Avoids distributed transaction complexity, reduces latency, simplifies AI-assisted development. | One JAR, one codebase, one set of CI/CD pipelines. |
-| **Single Central Database** | Enables ACID transactions, simplifies reporting, reduces operational overhead. | One PostgreSQL schema. Table ownership enforced by 2-letter prefixes. |
-| **Internal Engines (Mock-First)** | Workflow, Rules, Notification, DMS, and Ledger are internal libraries (not external microservices). Phase 1 uses in-memory mocks. Phase 2 replaces with real implementations via Spring Profiles. | Enables ACID transactions, reduces network calls, simplifies debugging, enables parallel development. |
-| **Risk-Proposal Engine** | Replaces manual number entry in TA-001. Plans are generated from Risk Heatmap + Capacity. | Plans are data-driven, not guesswork. |
-| **3-Tier Hierarchy (AP Only)** | National → Region → Tax Center. Plans are distributed and feedback is aggregated. Tax Center is the fundamental execution unit. | Matches the actual organizational structure. |
-| **Federal Routing (TP/JA)** | TP and Joint cases are `FEDERAL_COMMITTEE`, skipped by TA-004, handled by specialized committees. | Specialized audits require specialized assignment. |
-| **Event-Sourced Reporting** | Management reports are built from Outbox events (event stream), not live queries. | Prevents performance bottlenecks, enables auditability. |
-| **Transactional Outbox** | Domain events are stored atomically with aggregate saves. | Guarantees reliable event delivery without distributed transactions. |
-| **Immutable Audit Trail** | All mutations are recorded in an append-only log. 7-year retention. | Legal compliance and full traceability. |
-| **Read-Only External Calls** | All calls to Risk Engine and Registration Service are GET-only. | Prevents accidental writes to external systems. |
-
----
-
-## 3. Internal Engine Architecture (The "Inside" Services)
-
-These are **not** external microservices. They are Spring Beans residing in the `shared/infrastructure/engine/` package.
-
-| Engine | Implementation | Purpose | Phase 1 | Phase 2 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Workflow Engine** | Spring State Machine | Orchestrates approval chains, SLA timers, and state transitions for Audit Plans, Reports, and Issue Audits. | In-Memory Mock | Real State Machine |
-| **Rule Engine** | EasyRules | Evaluates configurable business rules: CAAT eligibility, TP method selection, QA sampling criteria, revision cap logic. | In-Memory Mock | Real EasyRules |
-| **Notification Engine** | Spring Mail + Async | Sends emails, SMS, and Portal notifications. Logs delivery attempts. | In-Memory Mock | Real SMTP/SMS |
-| **DMS (Document Service)** | Spring Content (S3/Minio) | Stores evidence, renders audit reports (PDF), and manages notice generation. | In-Memory Mock | Real S3/Minio |
-| **Ledger Engine** | Plain JPA | Append-only accounting journal. Posts Principal, Penalty, and Interest to the ledger during Assessment (TA-018). | In-Memory Mock | Real PostgreSQL |
-
----
-
-## 4. External Integration Architecture (The "Outside" Services)
-
-Only **two** external services exist (read-only). All others are internal.
-
-| External Service | Port Interface | Adapter Implementation | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Registration Service** | `RegistrationServicePort` | `RegistrationServiceRestClient` | Fetch taxpayer TIN, basic profile, and organizational hierarchy (Region/Tax Center mapping). |
-| **Risk Engine** | `RiskEnginePort` | `RiskEngineRestClient` | Supports 4 query types: Aggregated Heatmap, Scoped TIN List, Single TIN Score, Random Sample. |
-
-### 4.1 Risk Engine Query Types
-
-| Query Type | Purpose | Used In |
-| :--- | :--- | :--- |
-| **Aggregated Heatmap** | Returns total risk counts per Region/Tax Center/Audit Type. | TA-001 (Plan Proposal Generation) |
-| **TIN List (Scoped)** | Returns specific TINs for a given Tax Center + Audit Type + Limit. | TA-002 (Cascade) |
-| **Single TIN Score** | Returns the real-time risk profile for a specific taxpayer. | TA-005, TA-009, TA-015, TA-025 (Execution) |
-| **Random Sample** | Returns random TINs from a given population for model validation. | TA-003 (AF5 - Random Selection) |
-
----
-
-## 5. Event-Driven Communication
-
-### 5.1 Outbox Pattern Overview
-
-| Component | Responsibility |
-| :--- | :--- |
-| **Application Layer** | Saves the aggregate and inserts an outbox event in the same JPA transaction. |
-| **Outbox Table** | Stores domain events (`shared_outbox_entries`) before publishing. |
-| **Outbox Poller** | Periodically polls the outbox table for unprocessed events and publishes them to Kafka. |
-| **Kafka** | Delivers events to downstream consumers (Reporting, Fraud, Case Management). |
-
-### 5.2 Event Consumers
-
-| Consumer | Events Consumed | Purpose |
-| :--- | :--- | :--- |
-| **Reporting Service** | `AnnualAuditPlanFinalized`, `AuditCaseClosed`, `AssessmentNoticeIssued`, etc. | Builds KPI dashboards, audit yield reports, productivity reports. |
-| **Audit Service** | `FraudEscalatedFromIssueAudit`, `FraudInvestigationTriggered` | Handles fraud investigation workflows. |
-| **Case Management Service** | `ObjectionRaised`, `ObjectionResolved` | Handles taxpayer objections and appeals. |
-| **Risk Engine (Feedback)** | `RandomAuditCaseSelected`, `AuditCaseClosed` | Feedback loop for risk model calibration. |
-
----
-
-## 6. Database Strategy (Single Central Schema)
-
-| Attribute | Decision |
-| :--- | :--- |
-| **Database** | PostgreSQL 15+ (Single Central Schema) |
-| **Migration** | Flyway (versioned SQL scripts) |
-| **Table Ownership** | 2-Letter Prefix Rule: `ap_`, `ex_`, `tp_`, `ja_`, `cm_`, `rf_`, `qa_`, `ia_`, `shared_` |
-| **Prefix Rule** | No developer may modify tables belonging to another cluster without explicit approval. |
-
----
-
-## 7. Cross-Cutting Technical Concerns
-
-| Concern | Approach |
-| :--- | :--- |
-| **Audit Trail** | Immutable append-only log (`shared_audit_trail_entries`). 7-year retention. |
-| **Idempotency** | Use idempotency keys for event handling to prevent duplicate processing. |
-| **Testing** | Unit tests (≥80% coverage) + Integration tests (Testcontainers) + Contract tests. |
-| **Logging** | Structured JSON logging (ELK/OpenSearch compatible). |
-| **Monitoring** | Prometheus metrics + Grafana dashboards. |
-| **Security** | Keycloak OIDC, server-side authorization. |
-| **Configuration** | Spring Profiles: `dev` (mocks), `test` (mocks), `uat` (real services), `prod` (real services). |
-
----
-
-## 8. Development Phasing (Mock-First Strategy)
-
-| Phase | Description | Timeline |
-| :--- | :--- | :--- |
-| **Phase 1** | All internal engines and external clients are **in-memory mocks**. All developers build full end-to-end features without real infrastructure. | Sprint 1-4 |
-| **Phase 2** | Replace mocks with real implementations using Spring Profiles (`uat`, `prod`). | Sprint 5+ |
-
----
-
-## 9. Summary of Key Architecture Files
-
-| File | Purpose |
-| :--- | :--- |
-| `system-context.md` | Who interacts with the system and what external systems it depends on. |
-| `architecture-overview.md` | This file. High-level architecture, decisions, patterns. |
-| `container-architecture.md` | Deployment containers (Backend, Frontend, PostgreSQL, Kafka, etc.). |
-| `component-architecture.md` | Internal package structure, the critical handoff contract (`AuditTypeSpecificPlanningPort`), layer responsibilities. |
-| `security-architecture.md` | Authentication, authorization, audit trail, data security. |
-| `integration-architecture.md` | Contracts for Risk Engine, Registration Service, internal engine ports, fallback mechanisms. |
 # Container Architecture
 
 **Version:** 1.0
 **Status:** Approved
-**Last Updated:** 2026-08-16
+**Last Updated:** 2026-08-18
 
 This document defines the deployment-level containers and their interactions. It describes what runs where, how they communicate, and the infrastructure required to run the system.
 
@@ -190,3 +42,319 @@ graph TB
     style Kafka fill:#231f20,color:#fff
     style S3 fill:#569a31,color:#fff
     style Keycloak fill:#0088cc,color:#fff
+```
+
+---
+
+## 2. Container Descriptions
+
+### 2.1 Frontend Containers
+
+#### Back-Office UI (Port 3000)
+- **Technology:** Next.js / React (TypeScript)
+- **Purpose:** Internal user interface for tax auditors, team leaders, directors, etc.
+- **Features:**
+  - Annual Plan Management (view, create, approve)
+  - Case Assignment & Tracking
+  - Audit Execution (desk, comprehensive, TP, joint)
+  - Report Generation
+  - Quality Assurance Review
+  - Dashboard & Analytics
+- **Authentication:** Keycloak OIDC
+
+#### Taxpayer Portal UI (Port 3001)
+- **Technology:** Next.js / React (TypeScript)
+- **Purpose:** Public interface for taxpayers to view audit notices and respond
+- **Features:**
+  - View Audit Notices
+  - Upload Evidence/Documents
+  - Respond to Assessments
+  - View Audit Results
+  - Message & Notification Center
+- **Authentication:** Keycloak OIDC
+
+### 2.2 Backend Container
+
+#### Tax Audit Core Server (Port 8080)
+- **Technology:** Java Spring Boot 3.x
+- **Purpose:** Single deployable service containing all business logic
+- **Structure:**
+  - Domain Layer (pure business logic)
+  - Application Layer (use cases & orchestration)
+  - API Layer (REST endpoints)
+  - Infrastructure Layer (persistence, external adapters)
+  - Observability Layer (audit trail, logging, metrics)
+- **Endpoints:**
+  - Back-Office API (e.g., `/api/backoffice/ap`, `/api/backoffice/ex`)
+  - Portal API (e.g., `/api/portal/notices`, `/api/portal/documents`)
+  - Webhook API (e.g., `/api/webhook/risk-engine-events`)
+  - Health Check (e.g., `/actuator/health`)
+
+### 2.3 Data & Infrastructure Containers
+
+#### PostgreSQL Database (Port 5432)
+- **Version:** PostgreSQL 15+
+- **Purpose:** Single central schema for all data
+- **Storage:**
+  - Tables owned by cluster prefixes (`ap_*`, `ex_*`, `tp_*`, etc.)
+  - Shared infrastructure tables (`shared_audit_trail_entries`, `shared_outbox_entries`)
+- **Backups:** Daily backups, 30-day retention (or as per policy)
+- **SSL:** TLS 1.2+ for all connections
+
+#### Kafka Broker (Port 9092)
+- **Version:** Apache Kafka 3.x+
+- **Purpose:** Event-driven communication between backend clusters and downstream consumers
+- **Topics:**
+  - `tax-audit-events` - Core audit lifecycle events
+  - `fraud-events` - Fraud escalation events
+  - `case-management-events` - Objection/dispute events
+- **Consumers:**
+  - Reporting Service (KPI dashboards)
+  - Audit Service (fraud investigation)
+  - Case Management Service (disputes)
+- **Retention:** 7 days (can be extended for compliance)
+
+#### S3 / Minio (Port 9000)
+- **Purpose:** Object storage for DMS (Document Management System)
+- **Objects:**
+  - Audit evidence files
+  - Audit reports (PDF)
+  - Audit notices (PDF)
+  - Working papers
+  - Taxpayer documents
+- **Buckets:**
+  - `audit-evidence` - Uploaded evidence from field work
+  - `audit-reports` - Generated reports
+  - `audit-notices` - Generated notices
+  - `taxpayer-documents` - Taxpayer submissions
+- **Access:** S3 API compatible (AWS SDK or Minio client)
+- **Security:** Server-side encryption enabled
+
+#### Keycloak (Port 8081)
+- **Version:** Keycloak 20+
+- **Purpose:** Single source of truth for user authentication and authorization
+- **Realms:**
+  - `tax-audit` - Main realm for all users
+- **Clients:**
+  - `backend-server` - Backend API
+  - `backoffice-ui` - Back-Office frontend
+  - `portal-ui` - Taxpayer portal frontend
+- **User Roles:**
+  - `AUDITOR`, `TEAM_LEADER`, `PROCESS_OWNER`, `DIRECTOR`, `SENIOR_MANAGEMENT`
+  - `REGIONAL_DIRECTOR`, `TAX_CENTER_MANAGER`, `TAXPAYER`, `QA_TEAM`
+  - `JOINT_COMMITTEE`, `TP_COMMITTEE`
+- **Authentication Flows:**
+  - Authorization Code Flow (web applications)
+  - Bearer Token (REST APIs)
+
+---
+
+## 3. Communication Patterns
+
+### 3.1 Synchronous Communication (REST)
+- Frontend → Backend (HTTPS)
+- Backend → Keycloak (REST/OIDC)
+- Backend → Risk Engine (REST, read-only)
+- Backend → Registration Service (REST, read-only)
+
+### 3.2 Asynchronous Communication (Kafka)
+- Backend (Domain Events) → Kafka (Outbox Pattern)
+- Kafka → Downstream Consumers (Event Subscribers)
+
+### 3.3 Data Access (JDBC)
+- Backend → PostgreSQL (JDBC connection pooling)
+
+### 3.4 File Storage (S3 API)
+- Backend → S3 / Minio (Upload/download via S3 API)
+
+---
+
+## 4. Phase 1 vs Phase 2 Deployment
+
+### 4.1 Phase 1 (Development)
+| Component | Deployment |
+| :--- | :--- |
+| Backend | Local Java process (`java -jar bs-taxaudit-core-server.jar`) |
+| Frontend | Local Node.js dev server (`npm run dev`) |
+| PostgreSQL | Docker container (`docker run -d postgres:15`) |
+| Kafka | In-memory mock (no external broker) |
+| S3 | Local filesystem mock |
+| Keycloak | Docker container or mock auth |
+
+**Deploy Command:**
+```bash
+# Terminal 1: PostgreSQL
+docker run -d --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 postgres:15
+
+# Terminal 2: Backend
+cd backend/bs-taxaudit-core-server && mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev"
+
+# Terminal 3: Back-Office UI
+cd frontend/backoffice && npm run dev
+
+# Terminal 4: Portal UI
+cd frontend/portal && npm run dev
+```
+
+### 4.2 Phase 2 (Production)
+| Component | Deployment |
+| :--- | :--- |
+| Backend | Kubernetes Pod (Spring Boot Docker image) |
+| Frontend | Kubernetes Pod (Next.js Docker image) |
+| PostgreSQL | Managed PostgreSQL (AWS RDS, Azure DB, etc.) |
+| Kafka | Managed Kafka Cluster (Confluent Cloud, AWS MSK, etc.) |
+| S3 | AWS S3 or MinIO instance |
+| Keycloak | Managed or self-hosted Keycloak |
+
+**Deploy Command:**
+```bash
+# Build images
+docker build -t tax-audit-backend:latest ./backend/bs-taxaudit-core-server
+docker build -t tax-audit-backoffice:latest ./frontend/backoffice
+docker build -t tax-audit-portal:latest ./frontend/portal
+
+# Push to registry
+docker push tax-audit-backend:latest
+docker push tax-audit-backoffice:latest
+docker push tax-audit-portal:latest
+
+# Deploy to Kubernetes
+kubectl apply -f kubernetes/
+```
+
+---
+
+## 5. Resource Requirements
+
+### 5.1 Phase 1 (Local Development)
+| Component | CPU | Memory | Storage |
+| :--- | :--- | :--- | :--- |
+| Backend | 2 cores | 2 GB | - |
+| PostgreSQL | 1 core | 1 GB | 10 GB |
+| Frontend (both) | 1 core | 1 GB | - |
+| **Total** | **4 cores** | **4 GB** | **10 GB** |
+
+### 5.2 Phase 2 (Production - Per Pod/Instance)
+| Component | CPU | Memory | Storage | Replicas |
+| :--- | :--- | :--- | :--- | :--- |
+| Backend | 2 cores | 4 GB | - | 3+ |
+| PostgreSQL | 4 cores | 8 GB | 100 GB+ | 1 (with standby) |
+| Kafka | 2 cores | 4 GB | 50 GB+ | 3 |
+| S3 | 2 cores | 4 GB | 500 GB+ | Variable |
+| Keycloak | 1 core | 2 GB | - | 2+ |
+
+---
+
+## 6. Networking & Firewall Rules
+
+### 6.1 Internal Network (Backend to Infrastructure)
+- Backend → PostgreSQL: Port 5432 (JDBC)
+- Backend → Kafka: Port 9092 (Broker)
+- Backend → S3: Port 9000 (or 443 for AWS)
+- Backend → Keycloak: Port 8081 (or 443)
+
+### 6.2 External Network (Frontend to Backend)
+- Back-Office UI → Backend: Port 8080 (HTTPS)
+- Portal UI → Backend: Port 8080 (HTTPS)
+- Both → Keycloak: Port 8081 (HTTPS)
+
+### 6.3 Allowed Protocols
+- HTTPS (TLS 1.2+) for all external communication
+- JDBC (with SSL) for database connections
+- S3 API (with SSL) for object storage
+
+---
+
+## 7. High Availability & Disaster Recovery
+
+### 7.1 Backend Replicas
+- Minimum 3 replicas in production
+- Auto-scaling based on CPU/memory utilization
+- Load balancer (nginx, HAProxy, or cloud LB)
+
+### 7.2 Database Replication
+- Primary-Standby replication
+- Automated failover
+- Daily backups (encrypted)
+- 30-day retention
+
+### 7.3 Kafka Replication
+- Replication factor: 3
+- Min in-sync replicas: 2
+- Retention: 7 days (extendable)
+
+### 7.4 RTO/RPO Targets
+- **Recovery Time Objective (RTO):** < 15 minutes
+- **Recovery Point Objective (RPO):** < 1 hour
+
+---
+
+## 8. Monitoring & Observability
+
+### 8.1 Metrics
+- Prometheus scrapes metrics from `/actuator/prometheus`
+- Grafana dashboards for visualization
+- Key metrics:
+  - Request latency (p50, p95, p99)
+  - Error rates per endpoint
+  - Database connection pool utilization
+  - Kafka lag per consumer group
+  - Audit trail entries written
+
+### 8.2 Logging
+- Structured JSON logging (ELK/OpenSearch)
+- Log levels: DEBUG (dev), INFO (uat), WARN (prod)
+- Logs include: timestamp, level, logger, message, context
+
+### 8.3 Tracing
+- Distributed tracing (Jaeger or OpenTelemetry)
+- Trace ID correlation across services
+- Latency analysis for slow requests
+
+### 8.4 Alerting
+- Alert on high error rates (> 5%)
+- Alert on high latency (p99 > 2s)
+- Alert on low database availability
+- Alert on Kafka consumer lag
+
+---
+
+## 9. Summary of Container Interactions
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      ITAS Tax Audit System                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────────┐   ┌─────────────────┐   ┌────────────────┐ │
+│  │  Back-Office   │   │  Taxpayer Portal │   │   Keycloak     │ │
+│  │   UI (3000)    │   │    UI (3001)     │   │   (8081)       │ │
+│  └────────┬────────┘   └────────┬─────────┘   └────────┬───────┘ │
+│           │                     │                      │          │
+│           └─────────────────────┼──────────────────────┘          │
+│                                 │ HTTPS                           │
+│                                 ▼                                 │
+│                      ┌──────────────────────┐                     │
+│                      │   Spring Boot Core   │                     │
+│                      │  API Server (8080)   │                     │
+│                      └──────┬───────┬───┬───┘                     │
+│                             │       │   │                        │
+│                 ┌───────────┘       │   └────────────────┐        │
+│                 │                   │                    │        │
+│                 ▼                   ▼                    ▼        │
+│            ┌────────────┐    ┌──────────────┐    ┌──────────┐   │
+│            │ PostgreSQL │    │    Kafka     │    │  S3 /    │   │
+│            │  (5432)    │    │   (9092)     │    │  Minio   │   │
+│            └────────────┘    └──────────────┘    └──────────┘   │
+│                 │                    │                            │
+│                 └────────┬───────────┘                            │
+│                          │                                        │
+│                          ▼                                        │
+│              ┌─────────────────────────┐                         │
+│              │  Downstream Consumers   │                         │
+│              │  (Reporting, Fraud,     │                         │
+│              │   Case Management)      │                         │
+│              └─────────────────────────┘                         │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
