@@ -41,7 +41,7 @@ mor.itas/
 │   │   │   ├── workflow/                   # WorkflowEnginePort (Mock adapter in infrastructure/)
 │   │   │   └── dms/                        # DmsPort (Mock adapter in infrastructure/)
 │   │   └── inboundport/                    # Inbound Ports (Defined by API layer)
-│   ├── dto/                                # Shared DTOs (used across clusters)
+│   ├                         
 │   └── event/                              # Application Events (listeners, publishers)
 │
 ├── api/                                    # API Layer (Shared Utilities Only - NO CLUSTER CONTROLLERS)
