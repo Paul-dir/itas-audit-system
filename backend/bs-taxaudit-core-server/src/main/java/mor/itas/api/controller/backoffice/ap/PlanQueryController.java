@@ -9,6 +9,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import mor.itas.api.dto.mapper.ApResponseDtoMapper;
+import mor.itas.api.dto.response.ap.PlanResponse;
+import mor.itas.api.dto.response.ap.GenericResponse;
 
 /**
  * Plan Query REST Controller
@@ -25,12 +28,13 @@ import java.util.UUID;
 public class PlanQueryController {
 
     private final PlanQueryPort planQueryPort;
+    private final ApResponseDtoMapper dtoMapper;
 
     /**
      * 7.1 Get all plans with optional filters
      */
     @GetMapping
-    public ResponseEntity<GetPlansResponse> getPlans(
+    public ResponseEntity<GenericResponse<Object>> getPlans(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String fiscalYear,
             @RequestParam(defaultValue = "0") int page,
@@ -39,28 +43,33 @@ public class PlanQueryController {
         List<AnnualAuditPlan> plans = planQueryPort.getPlans(status, 
             fiscalYear != null ? Integer.parseInt(fiscalYear) : null, page, size);
         
-        return ResponseEntity.ok(new GetPlansResponse(plans.size(), plans.size(), plans));
+        var plansResponse = plans.stream()
+            .map(dtoMapper::toPlanResponse)
+            .toList();
+        
+        return ResponseEntity.ok(GenericResponse.success(plansResponse, plansResponse.size(), (long) plansResponse.size()));
     }
 
     /**
      * 7.2 Get plan by ID
      */
     @GetMapping("/{planId}")
-    public ResponseEntity<AnnualAuditPlan> getPlanById(@PathVariable UUID planId) {
+    public ResponseEntity<GenericResponse<PlanResponse>> getPlanById(@PathVariable UUID planId) {
         AnnualAuditPlan plan = planQueryPort.getPlanById(planId);
-        return ResponseEntity.ok(plan);
+        PlanResponse response = dtoMapper.toPlanResponse(plan);
+        return ResponseEntity.ok(GenericResponse.success(response));
     }
 
     /**
      * 7.7 Get plan statistics
      */
     @GetMapping("/stats")
-    public ResponseEntity<Map<String, Long>> getPlanStatistics() {
+    public ResponseEntity<GenericResponse<Object>> getPlanStatistics() {
         Map<String, Long> stats = planQueryPort.getPlanStatistics();
-        return ResponseEntity.ok(stats);
+        return ResponseEntity.ok(GenericResponse.success(stats));
     }
 
-    // ==================== REQUEST/RESPONSE DTOs ====================
+    // ==================== REQUEST DTOs ====================
 
     @Data
     static class GetPlansResponse {
