@@ -1,7 +1,7 @@
 package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.domain.model.ap.AuditCase;
-import mor.itas.application.service.ap.CaseGenerationService;
+import mor.itas.application.usecase.ap.CaseManagementUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CaseManagementController {
 
-    private final CaseGenerationService caseGenerationService;
+    private final CaseManagementUseCase caseManagementUseCase;
 
     // ==================== CASE QUERIES ====================
 
@@ -28,7 +28,7 @@ public class CaseManagementController {
      */
     @GetMapping("/{caseId}")
     public ResponseEntity<AuditCase> getCaseById(@PathVariable UUID caseId) {
-        AuditCase auditCase = caseGenerationService.getCaseById(caseId);
+        AuditCase auditCase = caseManagementUseCase.getCaseById(caseId);
         return ResponseEntity.ok(auditCase);
     }
 
@@ -44,11 +44,11 @@ public class CaseManagementController {
         List<AuditCase> cases;
         
         if (status != null) {
-            cases = caseGenerationService.getCasesByStatus(status);
+            cases = caseManagementUseCase.getCasesByStatus(status);
         } else if (assignedAuditor != null) {
-            cases = caseGenerationService.getCasesForAuditor(assignedAuditor);
+            cases = caseManagementUseCase.getCasesForAuditor(assignedAuditor);
         } else if (assignedTeamLeader != null) {
-            cases = caseGenerationService.getCasesForTeamLeader(assignedTeamLeader);
+            cases = caseManagementUseCase.getCasesForTeamLeader(assignedTeamLeader);
         } else {
             throw new IllegalArgumentException("Must provide at least one filter: status, assignedAuditor, or assignedTeamLeader");
         }
@@ -67,7 +67,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody AssignTeamLeaderRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseGenerationService.assignCaseToTeamLeader(caseId, request.getTeamLeaderId());
+        AuditCase auditCase = caseManagementUseCase.assignCaseToTeamLeader(caseId, request.getTeamLeaderId());
         return ResponseEntity.ok(auditCase);
     }
 
@@ -80,7 +80,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody AssignAuditorRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseGenerationService.assignCaseToAuditor(caseId, request.getAuditorId());
+        AuditCase auditCase = caseManagementUseCase.assignCaseToAuditor(caseId, request.getAuditorId());
         return ResponseEntity.ok(auditCase);
     }
 
@@ -94,7 +94,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody UpdateCaseStatusRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseGenerationService.updateCaseStatus(caseId, request.getStatus());
+        AuditCase auditCase = caseManagementUseCase.updateCaseStatus(caseId, request.getStatus());
         return ResponseEntity.ok(auditCase);
     }
 

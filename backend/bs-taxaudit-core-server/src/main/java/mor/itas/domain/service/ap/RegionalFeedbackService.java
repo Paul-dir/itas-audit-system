@@ -1,4 +1,4 @@
-package mor.itas.application.service.ap;
+package mor.itas.domain.service.ap;
 
 import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.RegionalFeedback;
