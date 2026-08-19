@@ -2,6 +2,7 @@ package mor.itas.application.usecase.ap;
 
 import mor.itas.domain.model.ap.AuditCase;
 import mor.itas.domain.service.ap.CaseGenerationService;
+import mor.itas.application.port.inboundport.ap.CaseManagementPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,13 +12,15 @@ import java.util.UUID;
 /**
  * Case Management Use Case
  * 
- * Orchestrates domain services for case generation, assignment, and lifecycle management
- * Bridges application layer with domain services
+ * Implements CaseManagementPort inbound interface.
+ * Orchestrates domain services for case generation, assignment, and lifecycle management.
+ * 
+ * Hexagonal/DDD: Implements inbound port, delegates to domain services via outbound ports
  */
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class CaseManagementUseCase {
+public class CaseManagementUseCase implements CaseManagementPort {
 
     private final CaseGenerationService caseGenerationService;
 

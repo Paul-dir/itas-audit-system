@@ -3,8 +3,8 @@ package mor.itas.api.controller.backoffice.ap;
 import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.PlanTimeline;
 import mor.itas.domain.model.ap.RegionalFeedback;
-import mor.itas.application.usecase.ap.PlanWorkflowUseCase;
-import mor.itas.application.usecase.ap.CaseManagementUseCase;
+import mor.itas.application.port.inboundport.ap.PlanWorkflowPort;
+import mor.itas.application.port.inboundport.ap.CaseManagementPort;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
@@ -15,16 +15,19 @@ import java.util.UUID;
 /**
  * Plan Workflow REST Controller
  * 
- * Handles all plan status transitions and feedback collection workflows
- * Extracted from frontend AppContext business logic
+ * REST Adapter for Plan Workflow use cases.
+ * Depends on inbound ports (PlanWorkflowPort), not directly on use cases.
+ * This is the driving adapter - converts HTTP to domain operations.
+ * 
+ * Hexagonal/DDD: REST Controller is an adapter that uses inbound ports
  */
 @RestController
 @RequestMapping("/api/v1/backoffice/ap/plans")
 @RequiredArgsConstructor
 public class PlanWorkflowController {
 
-    private final PlanWorkflowUseCase planWorkflowUseCase;
-    private final CaseManagementUseCase caseManagementUseCase;
+    private final PlanWorkflowPort planWorkflowPort;
+    private final CaseManagementPort caseManagementPort;
 
     // ==================== PLAN STATUS TRANSITIONS ====================
 
@@ -36,7 +39,7 @@ public class PlanWorkflowController {
     public ResponseEntity<AnnualAuditPlan> submitToDirector(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.submitToDirector(planId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.submitToDirector(planId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -49,7 +52,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @RequestBody CommentRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.approvePlan(planId, actorId, request.getComment());
+        AnnualAuditPlan plan = planWorkflowPort.approvePlan(planId, actorId, request.getComment());
         return ResponseEntity.ok(plan);
     }
 
@@ -62,7 +65,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @RequestBody CommentRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.requestRevision(planId, actorId, request.getComment());
+        AnnualAuditPlan plan = planWorkflowPort.requestRevision(planId, actorId, request.getComment());
         return ResponseEntity.ok(plan);
     }
 
@@ -74,7 +77,7 @@ public class PlanWorkflowController {
     public ResponseEntity<AnnualAuditPlan> sendToRegions(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.sendToRegions(planId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.sendToRegions(planId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -90,7 +93,7 @@ public class PlanWorkflowController {
             @PathVariable String regionId,
             @RequestBody RegionalFeedbackRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.submitRegionalFeedback(
+        AnnualAuditPlan plan = planWorkflowPort.submitRegionalFeedback(
             planId, regionId, request.getFeedbackText(), actorId);
         return ResponseEntity.ok(plan);
     }
@@ -105,7 +108,7 @@ public class PlanWorkflowController {
             @PathVariable String regionId,
             @RequestBody OverrideFeedbackRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        planWorkflowUseCase.overrideRegionalFeedback(planId, regionId, request.getOverrideComment(), actorId);
+        planWorkflowPort.overrideRegionalFeedback(planId, regionId, request.getOverrideComment(), actorId);
         return ResponseEntity.noContent().build();
     }
 
@@ -129,7 +132,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @RequestBody CommentRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.sendAmendmentToPlanningTeam(planId, actorId, request.getComment());
+        AnnualAuditPlan plan = planWorkflowPort.sendAmendmentToPlanningTeam(planId, actorId, request.getComment());
         return ResponseEntity.ok(plan);
     }
 
@@ -143,7 +146,7 @@ public class PlanWorkflowController {
     public ResponseEntity<AnnualAuditPlan> submitToSeniorMgmt(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.submitToSeniorMgmt(planId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.submitToSeniorMgmt(planId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -156,7 +159,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @RequestBody CommentRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.approveBySenior(planId, actorId, request.getComment());
+        AnnualAuditPlan plan = planWorkflowPort.approveBySenior(planId, actorId, request.getComment());
         return ResponseEntity.ok(plan);
     }
 
@@ -169,7 +172,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @RequestBody CommentRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.rejectBySenior(planId, actorId, request.getComment());
+        AnnualAuditPlan plan = planWorkflowPort.rejectBySenior(planId, actorId, request.getComment());
         return ResponseEntity.ok(plan);
     }
 
@@ -181,7 +184,7 @@ public class PlanWorkflowController {
     public ResponseEntity<AnnualAuditPlan> sendApprovedToRegions(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.sendApprovedToRegions(planId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.sendApprovedToRegions(planId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -194,7 +197,7 @@ public class PlanWorkflowController {
             @PathVariable UUID planId,
             @PathVariable String regionId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.deployToTaxCenters(planId, regionId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.deployToTaxCenters(planId, regionId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -206,7 +209,7 @@ public class PlanWorkflowController {
     public ResponseEntity<AnnualAuditPlan> finalizePlan(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowUseCase.finalizePlan(planId, actorId);
+        AnnualAuditPlan plan = planWorkflowPort.finalizePlan(planId, actorId);
         return ResponseEntity.ok(plan);
     }
 
@@ -220,7 +223,7 @@ public class PlanWorkflowController {
     public ResponseEntity<CaseGenerationResponse> generateCases(
             @PathVariable UUID planId,
             @RequestHeader("X-Actor-Id") String actorId) {
-        var cases = caseManagementUseCase.generateCasesForPlan(planId, actorId);
+        var cases = caseManagementPort.generateCasesForPlan(planId, actorId);
         return ResponseEntity.ok(new CaseGenerationResponse(cases.size(), cases));
     }
 
@@ -229,7 +232,7 @@ public class PlanWorkflowController {
      */
     @GetMapping("/{planId}/cases")
     public ResponseEntity<GetCasesResponse> getCasesForPlan(@PathVariable UUID planId) {
-        var cases = caseManagementUseCase.getCasesForPlan(planId);
+        var cases = caseManagementPort.getCasesForPlan(planId);
         return ResponseEntity.ok(new GetCasesResponse(cases.size(), cases));
     }
 

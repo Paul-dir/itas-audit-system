@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
 import mor.itas.domain.service.ap.PlanStatusTransitionService;
 import mor.itas.domain.service.ap.RegionalFeedbackService;
+import mor.itas.application.port.inboundport.ap.PlanWorkflowPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,13 +12,15 @@ import java.util.UUID;
 /**
  * Plan Workflow Use Case
  * 
- * Orchestrates domain services for plan status transitions and feedback workflows
- * Bridges application layer with domain services
+ * Implements PlanWorkflowPort inbound interface.
+ * Orchestrates domain services for plan status transitions and feedback workflows.
+ * 
+ * Hexagonal/DDD: Implements inbound port, delegates to domain services via outbound ports
  */
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class PlanWorkflowUseCase {
+public class PlanWorkflowUseCase implements PlanWorkflowPort {
 
     private final PlanStatusTransitionService planStatusService;
     private final RegionalFeedbackService regionalFeedbackService;

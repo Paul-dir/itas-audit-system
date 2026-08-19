@@ -1,7 +1,7 @@
 package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.domain.model.ap.AuditCase;
-import mor.itas.application.usecase.ap.CaseManagementUseCase;
+import mor.itas.application.port.inboundport.ap.CaseManagementPort;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
@@ -12,14 +12,18 @@ import java.util.UUID;
 /**
  * Case Management REST Controller
  * 
- * Handles audit case assignment and lifecycle management
+ * REST Adapter for Case Management use cases.
+ * Depends on inbound ports (CaseManagementPort), not directly on use cases.
+ * This is the driving adapter - converts HTTP to domain operations.
+ * 
+ * Hexagonal/DDD: REST Controller is an adapter that uses inbound ports
  */
 @RestController
 @RequestMapping("/api/v1/backoffice/ap/cases")
 @RequiredArgsConstructor
 public class CaseManagementController {
 
-    private final CaseManagementUseCase caseManagementUseCase;
+    private final CaseManagementPort caseManagementPort;
 
     // ==================== CASE QUERIES ====================
 
@@ -28,7 +32,7 @@ public class CaseManagementController {
      */
     @GetMapping("/{caseId}")
     public ResponseEntity<AuditCase> getCaseById(@PathVariable UUID caseId) {
-        AuditCase auditCase = caseManagementUseCase.getCaseById(caseId);
+        AuditCase auditCase = caseManagementPort.getCaseById(caseId);
         return ResponseEntity.ok(auditCase);
     }
 
@@ -44,11 +48,11 @@ public class CaseManagementController {
         List<AuditCase> cases;
         
         if (status != null) {
-            cases = caseManagementUseCase.getCasesByStatus(status);
+            cases = caseManagementPort.getCasesByStatus(status);
         } else if (assignedAuditor != null) {
-            cases = caseManagementUseCase.getCasesForAuditor(assignedAuditor);
+            cases = caseManagementPort.getCasesForAuditor(assignedAuditor);
         } else if (assignedTeamLeader != null) {
-            cases = caseManagementUseCase.getCasesForTeamLeader(assignedTeamLeader);
+            cases = caseManagementPort.getCasesForTeamLeader(assignedTeamLeader);
         } else {
             throw new IllegalArgumentException("Must provide at least one filter: status, assignedAuditor, or assignedTeamLeader");
         }
@@ -67,7 +71,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody AssignTeamLeaderRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseManagementUseCase.assignCaseToTeamLeader(caseId, request.getTeamLeaderId());
+        AuditCase auditCase = caseManagementPort.assignCaseToTeamLeader(caseId, request.getTeamLeaderId());
         return ResponseEntity.ok(auditCase);
     }
 
@@ -80,7 +84,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody AssignAuditorRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseManagementUseCase.assignCaseToAuditor(caseId, request.getAuditorId());
+        AuditCase auditCase = caseManagementPort.assignCaseToAuditor(caseId, request.getAuditorId());
         return ResponseEntity.ok(auditCase);
     }
 
@@ -94,7 +98,7 @@ public class CaseManagementController {
             @PathVariable UUID caseId,
             @RequestBody UpdateCaseStatusRequest request,
             @RequestHeader("X-Actor-Id") String actorId) {
-        AuditCase auditCase = caseManagementUseCase.updateCaseStatus(caseId, request.getStatus());
+        AuditCase auditCase = caseManagementPort.updateCaseStatus(caseId, request.getStatus());
         return ResponseEntity.ok(auditCase);
     }
 
