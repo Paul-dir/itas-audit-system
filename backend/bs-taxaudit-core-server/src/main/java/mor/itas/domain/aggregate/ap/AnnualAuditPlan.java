@@ -14,6 +14,9 @@ public class AnnualAuditPlan extends AggregateRoot {
     private Integer planYear;
     private String planName;
     private String status;
+    private String directorComment;
+    private String seniorComment;
+    private String amendmentComment;
     private OffsetDateTime createdAt;
     private String createdBy;
     private List<PlanAllocation> allocations;
@@ -26,6 +29,9 @@ public class AnnualAuditPlan extends AggregateRoot {
         this.createdAt = OffsetDateTime.now();
         this.createdBy = createdBy;
         this.allocations = new ArrayList<>();
+        this.directorComment = null;
+        this.seniorComment = null;
+        this.amendmentComment = null;
     }
 
     public AnnualAuditPlan(UUID id, Integer planYear, String planName, String status, OffsetDateTime createdAt, String createdBy, List<PlanAllocation> allocations) {
@@ -36,6 +42,9 @@ public class AnnualAuditPlan extends AggregateRoot {
         this.createdAt = createdAt;
         this.createdBy = createdBy;
         this.allocations = new ArrayList<>(allocations);
+        this.directorComment = null;
+        this.seniorComment = null;
+        this.amendmentComment = null;
     }
 
     public void addAllocation(String taxCenterCode, Integer count) {
@@ -46,7 +55,16 @@ public class AnnualAuditPlan extends AggregateRoot {
     public Integer getPlanYear() { return planYear; }
     public String getPlanName() { return planName; }
     public String getStatus() { return status; }
+    public String getDirectorComment() { return directorComment; }
+    public String getSeniorComment() { return seniorComment; }
+    public String getAmendmentComment() { return amendmentComment; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public String getCreatedBy() { return createdBy; }
     public List<PlanAllocation> getAllocations() { return Collections.unmodifiableList(allocations); }
+
+    // Setters for domain operations
+    public void setStatus(String status) { this.status = status; }
+    public void setDirectorComment(String directorComment) { this.directorComment = directorComment; }
+    public void setSeniorComment(String seniorComment) { this.seniorComment = seniorComment; }
+    public void setAmendmentComment(String amendmentComment) { this.amendmentComment = amendmentComment; }
 }
