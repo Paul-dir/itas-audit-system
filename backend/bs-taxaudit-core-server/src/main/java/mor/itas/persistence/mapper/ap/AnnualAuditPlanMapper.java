@@ -1,6 +1,6 @@
 package mor.itas.persistence.mapper.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
 import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;

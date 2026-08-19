@@ -1,6 +1,6 @@
 package mor.itas.persistence.adapter.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
 import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;

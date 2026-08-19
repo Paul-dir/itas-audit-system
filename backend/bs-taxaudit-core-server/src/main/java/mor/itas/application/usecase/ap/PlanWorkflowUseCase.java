@@ -1,6 +1,6 @@
 package mor.itas.application.usecase.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.service.ap.PlanStatusTransitionService;
 import mor.itas.domain.service.ap.RegionalFeedbackService;
 import mor.itas.application.port.inboundport.ap.PlanWorkflowPort;

@@ -2,7 +2,7 @@ package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.api.dto.request.ap.CreatePlanRequest;
 import mor.itas.application.usecase.ap.AnnualAuditPlanUseCase;
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

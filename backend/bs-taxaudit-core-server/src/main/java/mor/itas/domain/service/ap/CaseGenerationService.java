@@ -1,6 +1,6 @@
 package mor.itas.domain.service.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.AuditCase;
 import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;

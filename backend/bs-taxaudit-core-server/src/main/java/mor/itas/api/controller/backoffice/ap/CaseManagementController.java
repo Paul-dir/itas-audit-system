@@ -2,7 +2,7 @@ package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.domain.model.ap.AuditCase;
 import mor.itas.application.port.inboundport.ap.CaseManagementPort;
-import mor.itas.api.dto.mapper.ApResponseDtoMapper;
+import mor.itas.persistence.mapper.ap.ApResponseDtoMapper;
 import mor.itas.api.dto.response.ap.AuditCaseResponse;
 import mor.itas.api.dto.response.ap.GenericResponse;
 import lombok.RequiredArgsConstructor;

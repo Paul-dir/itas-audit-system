@@ -1,6 +1,7 @@
 package mor.itas.persistence.jpa.repository.ap;
 
 import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
+import mor.itas.persistence.jpa.entity.ap.PlanStatusEnum;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,7 +21,7 @@ public interface AnnualAuditPlanJpaRepository extends JpaRepository<AnnualAuditP
     /**
      * Find plans by status
      */
-    List<AnnualAuditPlanEntity> findByStatus(String status);
+    List<AnnualAuditPlanEntity> findByStatus(PlanStatusEnum status);
     
     /**
      * Find plans by year
@@ -30,8 +31,8 @@ public interface AnnualAuditPlanJpaRepository extends JpaRepository<AnnualAuditP
     /**
      * Find plans by status and year
      */
-    List<AnnualAuditPlanEntity> findByStatusAndYear(String status, Integer year);
-    
+    List<AnnualAuditPlanEntity> findByStatusAndYear(PlanStatusEnum status, Integer year);
+
     /**
      * Find plans with pagination and filtering
      */
@@ -39,8 +40,9 @@ public interface AnnualAuditPlanJpaRepository extends JpaRepository<AnnualAuditP
            "(:status IS NULL OR p.status = :status) AND " +
            "(:year IS NULL OR p.year = :year)")
     Page<AnnualAuditPlanEntity> findPlansWithFilters(
-           @Param("status") String status,
+           @Param("status") PlanStatusEnum status,
            @Param("year") Integer year,
            Pageable pageable);
 }
+
 

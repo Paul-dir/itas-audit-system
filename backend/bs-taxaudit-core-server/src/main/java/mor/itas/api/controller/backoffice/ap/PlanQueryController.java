@@ -1,7 +1,7 @@
 package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.application.port.inboundport.ap.PlanQueryPort;
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import mor.itas.api.dto.mapper.ApResponseDtoMapper;
+import mor.itas.persistence.mapper.ap.ApResponseDtoMapper;
 import mor.itas.api.dto.response.ap.PlanResponse;
 import mor.itas.api.dto.response.ap.GenericResponse;
 

@@ -1,7 +1,7 @@
 package mor.itas.application.usecase.ap;
 
 import mor.itas.api.dto.request.ap.CreatePlanRequest;
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.application.port.outboundport.riskengine.RiskEnginePort;
 import lombok.RequiredArgsConstructor;

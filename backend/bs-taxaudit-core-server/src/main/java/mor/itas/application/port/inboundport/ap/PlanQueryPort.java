@@ -1,6 +1,6 @@
 package mor.itas.application.port.inboundport.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

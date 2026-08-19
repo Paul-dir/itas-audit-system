@@ -1,275 +1,335 @@
 package mor.itas.api.controller.backoffice.ap;
 
-import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
-import mor.itas.application.port.inboundport.ap.PlanWorkflowPort;
-import mor.itas.application.port.inboundport.ap.CaseManagementPort;
-import mor.itas.api.dto.mapper.ApResponseDtoMapper;
+import jakarta.validation.Valid;
+import mor.itas.api.dto.request.ap.ApprovalRequest;
+import mor.itas.api.dto.request.ap.CreatePlanRequest;
+import mor.itas.api.dto.request.ap.DivideAllocationRequest;
+import mor.itas.api.dto.request.ap.SubmitTaxCenterFeedbackRequest;
+import mor.itas.api.dto.response.ap.AllocationResponse;
+import mor.itas.api.dto.response.ap.AuditLogResponse;
 import mor.itas.api.dto.response.ap.PlanResponse;
-import mor.itas.api.dto.response.ap.GenericResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.Data;
+import mor.itas.api.mapper.ap.PlanResponseMapper;
+import mor.itas.application.usecase.ap.PlanManagementUseCase;
+import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanAllocation;
+import mor.itas.domain.model.ap.PlanAuditLog;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Plan Workflow REST Controller
+ * PlanWorkflowController - REST API for Annual Audit Plan workflow
+ * Implements 4-level approval workflow with regional allocations
  * 
- * REST Adapter for Plan Workflow use cases.
- * Depends on inbound ports, converts domain objects to response DTOs.
- * This is the driving adapter - converts HTTP to domain operations and back to DTOs.
- * 
- * Hexagonal/DDD: REST Controller → Inbound Port → Use Case → Domain Services
+ * Endpoints:
+ * 1. Planning Team: Create plan, submit to Director
+ * 2. Director: Approve, route forward, send to Tax Centers
+ * 3. Regional Director: Approve, divide regional into tax centers
+ * 4. Tax Center Manager: Submit feedback
  */
 @RestController
 @RequestMapping("/api/v1/backoffice/ap/plans")
-@RequiredArgsConstructor
 public class PlanWorkflowController {
 
-    private final PlanWorkflowPort planWorkflowPort;
-    private final CaseManagementPort caseManagementPort;
-    private final ApResponseDtoMapper dtoMapper;
+    @Autowired
+    private PlanManagementUseCase planManagementUseCase;
 
-    // ==================== PLAN STATUS TRANSITIONS ====================
+    @Autowired
+    private PlanResponseMapper responseMapper;
+
+    // ============= LEVEL 1: Planning Team =============
 
     /**
-     * 1.2 Submit plan from Planning Team to Director for review
-     * Status: DRAFT → SUBMITTED_TO_DIRECTOR
+     * Create plan with regional allocations
+     * POST /api/v1/backoffice/ap/plans
      */
-    @PostMapping("/{planId}/submit")
-    public ResponseEntity<GenericResponse<PlanResponse>> submitToDirector(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.submitToDirector(planId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    @PostMapping
+    public ResponseEntity<PlanResponse> createPlan(
+        @Valid @RequestBody CreatePlanRequest request,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        // Convert request DTOs to use case DTOs
+        List<PlanManagementUseCase.RegionalAllocationDto> regionalAllocations = request.getRegionalAllocations()
+            .stream()
+            .map(r -> new PlanManagementUseCase.RegionalAllocationDto(r.getRegionCode(), r.getProposedCount()))
+            .toList();
+
+        AnnualAuditPlan plan = planManagementUseCase.createPlanWithRegionalAllocations(
+            request.getPlanYear(),
+            request.getPlanName(),
+            regionalAllocations,
+            actorId
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * 1.3 Director approves the plan
-     * Status: SUBMITTED_TO_DIRECTOR → DIRECTOR_APPROVED
+     * Submit plan to Director
+     * POST /api/v1/backoffice/ap/plans/{planId}/submit-to-director
      */
-    @PostMapping("/{planId}/approve")
-    public ResponseEntity<GenericResponse<PlanResponse>> approvePlan(
-            @PathVariable UUID planId,
-            @RequestBody CommentRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.approvePlan(planId, actorId, request.getComment());
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    @PostMapping("/{planId}/submit-to-director")
+    public ResponseEntity<PlanResponse> submitToDirector(
+        @PathVariable UUID planId,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.submitToDirector(planId, actorId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
+    }
+
+    // ============= LEVEL 2: Director =============
+
+    /**
+     * Approve plan by Director
+     * POST /api/v1/backoffice/ap/plans/{planId}/approve-by-director
+     */
+    @PostMapping("/{planId}/approve-by-director")
+    public ResponseEntity<PlanResponse> approveByDirector(
+        @PathVariable UUID planId,
+        @Valid @RequestBody ApprovalRequest request,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.approveByDirector(
+            planId,
+            actorId,
+            request.getReason()
+        );
+
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * 1.4 Director requests revision of the plan
-     * Status: SUBMITTED_TO_DIRECTOR → REVISION_REQUESTED
+     * Submit plan to Regional Directors
+     * POST /api/v1/backoffice/ap/plans/{planId}/submit-to-regional
      */
-    @PostMapping("/{planId}/request-revision")
-    public ResponseEntity<GenericResponse<PlanResponse>> requestRevision(
-            @PathVariable UUID planId,
-            @RequestBody CommentRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.requestRevision(planId, actorId, request.getComment());
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    @PostMapping("/{planId}/submit-to-regional")
+    public ResponseEntity<PlanResponse> submitToRegional(
+        @PathVariable UUID planId,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.submitToRegionalDirectors(planId, actorId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * 1.5 Send plan to all regions for feedback collection
-     * Status: DIRECTOR_APPROVED → AWAITING_REGIONAL_FEEDBACK
+     * Send plan to Tax Centers
+     * POST /api/v1/backoffice/ap/plans/{planId}/send-to-tax-centers
      */
-    @PostMapping("/{planId}/send-to-regions")
-    public ResponseEntity<GenericResponse<PlanResponse>> sendToRegions(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.sendToRegions(planId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    @PostMapping("/{planId}/send-to-tax-centers")
+    public ResponseEntity<PlanResponse> sendToTaxCenters(
+        @PathVariable UUID planId,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.sendToTaxCenters(planId, actorId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
-    // ==================== REGIONAL FEEDBACK WORKFLOW ====================
+    // ============= LEVEL 3: Regional Director =============
 
     /**
-     * 2.1 Submit regional feedback for a plan
-     * Aggregates feedback and updates plan status if all regions have submitted
+     * Approve plan by Regional Director
+     * POST /api/v1/backoffice/ap/plans/{planId}/approve-by-regional
      */
-    @PostMapping("/{planId}/regions/{regionId}/feedback")
-    public ResponseEntity<GenericResponse<PlanResponse>> submitRegionalFeedback(
-            @PathVariable UUID planId,
-            @PathVariable String regionId,
-            @RequestBody RegionalFeedbackRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.submitRegionalFeedback(
-            planId, regionId, request.getFeedbackText(), actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
-    }
+    @PostMapping("/{planId}/approve-by-regional")
+    public ResponseEntity<PlanResponse> approveByRegional(
+        @PathVariable UUID planId,
+        @Valid @RequestBody ApprovalRequest request,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
 
-    /**
-     * 2.2 Director overrides regional feedback
-     * Allows director to modify allocations from a specific region
-     */
-    @PostMapping("/{planId}/regions/{regionId}/override")
-    public ResponseEntity<Void> overrideRegionalFeedback(
-            @PathVariable UUID planId,
-            @PathVariable String regionId,
-            @RequestBody OverrideFeedbackRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        planWorkflowPort.overrideRegionalFeedback(planId, regionId, request.getOverrideComment(), actorId);
-        return ResponseEntity.noContent().build();
+        AnnualAuditPlan plan = planManagementUseCase.approveByRegionalDirector(
+            planId,
+            actorId,
+            request.getReason()
+        );
+
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * Get all feedback for a plan
+     * Divide regional allocation into tax center allocations
+     * POST /api/v1/backoffice/ap/plans/{planId}/divide-allocations
      */
-    @GetMapping("/{planId}/feedback")
-    public ResponseEntity<GenericResponse<Object>> getFeedbackByPlan(@PathVariable UUID planId) {
-        // TODO: Implement feedback retrieval in use case
-        return ResponseEntity.ok(GenericResponse.success(List.of()));
+    @PostMapping("/{planId}/divide-allocations")
+    public ResponseEntity<PlanResponse> divideAllocations(
+        @PathVariable UUID planId,
+        @Valid @RequestBody DivideAllocationRequest request,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        // Convert request DTOs to use case DTOs
+        List<PlanManagementUseCase.TaxCenterAllocationDto> tcAllocations = request.getTaxCenterAllocations()
+            .stream()
+            .map(t -> new PlanManagementUseCase.TaxCenterAllocationDto(t.getTaxCenterCode(), t.getAuditCount()))
+            .toList();
+
+        AnnualAuditPlan plan = planManagementUseCase.divideRegionalAllocationIntoTaxCenters(
+            planId,
+            request.getRegionCode(),
+            tcAllocations,
+            actorId
+        );
+
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
-    // ==================== AMENDMENT CYCLE ====================
+    // ============= LEVEL 4: Tax Center Manager =============
 
     /**
-     * 3.1 Send amendment back to planning team after feedback collection
-     * Status: FEEDBACK_COLLECTED → AMENDMENT_REQUIRED
+     * Submit tax center feedback
+     * PATCH /api/v1/backoffice/ap/plans/{planId}/allocations/{taxCenterCode}/feedback
      */
-    @PostMapping("/{planId}/amendment")
-    public ResponseEntity<GenericResponse<PlanResponse>> sendAmendmentToPlanningTeam(
-            @PathVariable UUID planId,
-            @RequestBody CommentRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.sendAmendmentToPlanningTeam(planId, actorId, request.getComment());
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    @PatchMapping("/{planId}/allocations/{taxCenterCode}/feedback")
+    public ResponseEntity<PlanResponse> submitTaxCenterFeedback(
+        @PathVariable UUID planId,
+        @PathVariable String taxCenterCode,
+        @Valid @RequestBody SubmitTaxCenterFeedbackRequest request,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.submitTaxCenterFeedback(
+            planId,
+            taxCenterCode,
+            request.getAdjustedCount(),
+            request.getJustification(),
+            actorId
+        );
+
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
-    // ==================== SENIOR MANAGEMENT APPROVAL ====================
+    // ============= FINALIZATION =============
 
     /**
-     * 3.2 Submit amended plan to senior management for approval
-     * Status: AMENDMENT_REQUIRED → SUBMITTED_TO_SENIOR_MGMT
+     * Record all tax centers have submitted feedback
+     * POST /api/v1/backoffice/ap/plans/{planId}/mark-feedback-complete
      */
-    @PostMapping("/{planId}/submit-to-senior")
-    public ResponseEntity<GenericResponse<PlanResponse>> submitToSeniorMgmt(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.submitToSeniorMgmt(planId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
-    }
+    @PostMapping("/{planId}/mark-feedback-complete")
+    public ResponseEntity<PlanResponse> markFeedbackComplete(
+        @PathVariable UUID planId,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
 
-    /**
-     * 4.1 Senior management approves the plan
-     * Status: SUBMITTED_TO_SENIOR_MGMT → SENIOR_MGMT_APPROVED
-     */
-    @PostMapping("/{planId}/senior-approve")
-    public ResponseEntity<GenericResponse<PlanResponse>> approveBySenior(
-            @PathVariable UUID planId,
-            @RequestBody CommentRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.approveBySenior(planId, actorId, request.getComment());
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
-    }
-
-    /**
-     * 4.2 Senior management rejects the plan
-     * Status: SUBMITTED_TO_SENIOR_MGMT → SENIOR_MGMT_REJECTED
-     */
-    @PostMapping("/{planId}/senior-reject")
-    public ResponseEntity<GenericResponse<PlanResponse>> rejectBySenior(
-            @PathVariable UUID planId,
-            @RequestBody CommentRequest request,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.rejectBySenior(planId, actorId, request.getComment());
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+        AnnualAuditPlan plan = planManagementUseCase.recordAllTaxCenterFeedbackSubmitted(planId, actorId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * 5.1 Send approved plan to regions for deployment
-     * Status: SENIOR_MGMT_APPROVED → APPROVED_TO_REGIONS
-     */
-    @PostMapping("/{planId}/send-approved-to-regions")
-    public ResponseEntity<GenericResponse<PlanResponse>> sendApprovedToRegions(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.sendApprovedToRegions(planId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
-    }
-
-    /**
-     * 5.2 Regional director deploys plan to their tax centers
-     * Status: APPROVED_TO_REGIONS → FINALIZED (when all regions deployed)
-     */
-    @PostMapping("/{planId}/regions/{regionId}/deploy")
-    public ResponseEntity<GenericResponse<PlanResponse>> deployToTaxCenters(
-            @PathVariable UUID planId,
-            @PathVariable String regionId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.deployToTaxCenters(planId, regionId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
-    }
-
-    /**
-     * 5.3 Finalize plan directly (legacy path)
-     * Status: Any → FINALIZED
+     * Finalize plan
+     * POST /api/v1/backoffice/ap/plans/{planId}/finalize
      */
     @PostMapping("/{planId}/finalize")
-    public ResponseEntity<GenericResponse<PlanResponse>> finalizePlan(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        AnnualAuditPlan plan = planWorkflowPort.finalizePlan(planId, actorId);
-        PlanResponse response = dtoMapper.toPlanResponse(plan);
-        return ResponseEntity.ok(GenericResponse.success(response));
+    public ResponseEntity<PlanResponse> finalizePlan(
+        @PathVariable UUID planId,
+        @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
+
+        AnnualAuditPlan plan = planManagementUseCase.finalizePlan(planId, actorId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
-    // ==================== CASE GENERATION ====================
+    // ============= QUERIES =============
 
     /**
-     * 6.1 Generate audit cases from finalized plan
-     * Creates one case per approved quota in the plan's allocations
+     * Get plan by ID
+     * GET /api/v1/backoffice/ap/plans/{planId}
      */
-    @PostMapping("/{planId}/generate-cases")
-    public ResponseEntity<GenericResponse<Object>> generateCases(
-            @PathVariable UUID planId,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        var cases = caseManagementPort.generateCasesForPlan(planId, actorId);
-        var casesResponse = cases.stream()
-            .map(dtoMapper::toAuditCaseResponse)
-            .toList();
-        return ResponseEntity.ok(GenericResponse.success(casesResponse, casesResponse.size(), (long) casesResponse.size()));
+    @GetMapping("/{planId}")
+    public ResponseEntity<PlanResponse> getPlanById(@PathVariable UUID planId) {
+        AnnualAuditPlan plan = planManagementUseCase.getPlanById(planId);
+        return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
     /**
-     * Get all cases for a plan
+     * Get regional allocations for a plan
+     * GET /api/v1/backoffice/ap/plans/{planId}/regional-allocations
      */
-    @GetMapping("/{planId}/cases")
-    public ResponseEntity<GenericResponse<Object>> getCasesForPlan(@PathVariable UUID planId) {
-        var cases = caseManagementPort.getCasesForPlan(planId);
-        var casesResponse = cases.stream()
-            .map(dtoMapper::toAuditCaseResponse)
-            .toList();
-        return ResponseEntity.ok(GenericResponse.success(casesResponse, casesResponse.size(), (long) casesResponse.size()));
+    @GetMapping("/{planId}/regional-allocations")
+    public ResponseEntity<List<AllocationResponse>> getRegionalAllocations(@PathVariable UUID planId) {
+        List<PlanAllocation> allocations = planManagementUseCase.getRegionalAllocations(planId);
+        return ResponseEntity.ok(responseMapper.toAllocationResponses(allocations));
     }
 
-    // ==================== REQUEST/RESPONSE DTOs ====================
-
-    @Data
-    static class CommentRequest {
-        private String comment;
+    /**
+     * Get tax center allocations for a plan
+     * GET /api/v1/backoffice/ap/plans/{planId}/tax-center-allocations
+     */
+    @GetMapping("/{planId}/tax-center-allocations")
+    public ResponseEntity<List<AllocationResponse>> getTaxCenterAllocations(@PathVariable UUID planId) {
+        List<PlanAllocation> allocations = planManagementUseCase.getTaxCenterAllocations(planId);
+        return ResponseEntity.ok(responseMapper.toAllocationResponses(allocations));
     }
 
-    @Data
-    static class RegionalFeedbackRequest {
-        private String feedbackText;
+    /**
+     * Get tax center allocations by region
+     * GET /api/v1/backoffice/ap/plans/{planId}/regions/{regionCode}/allocations
+     */
+    @GetMapping("/{planId}/regions/{regionCode}/allocations")
+    public ResponseEntity<List<AllocationResponse>> getTaxCenterAllocationsByRegion(
+        @PathVariable UUID planId,
+        @PathVariable String regionCode) {
+
+        List<PlanAllocation> allocations = planManagementUseCase.getTaxCenterAllocationsByRegion(planId, regionCode);
+        return ResponseEntity.ok(responseMapper.toAllocationResponses(allocations));
     }
 
-    @Data
-    static class OverrideFeedbackRequest {
-        private String overrideComment;
+    /**
+     * Get audit log for a plan
+     * GET /api/v1/backoffice/ap/plans/{planId}/audit-log
+     */
+    @GetMapping("/{planId}/audit-log")
+    public ResponseEntity<List<AuditLogResponse>> getAuditLog(@PathVariable UUID planId) {
+        List<PlanAuditLog> auditLogs = planManagementUseCase.getPlanAuditLog(planId);
+        return ResponseEntity.ok(responseMapper.toAuditLogResponses(auditLogs));
+    }
+
+    // ============= ERROR HANDLING =============
+
+    /**
+     * Handle validation errors
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_INPUT", ex.getMessage()));
+    }
+
+    /**
+     * Handle state transition errors
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("INVALID_STATE", ex.getMessage()));
+    }
+
+    /**
+     * Handle not found errors
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleException(Exception ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("INTERNAL_ERROR", ex.getMessage()));
+    }
+
+    /**
+     * Error response DTO
+     */
+    public static class ErrorResponse {
+        private String code;
+        private String message;
+
+        public ErrorResponse(String code, String message) {
+            this.code = code;
+            this.message = message;
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public String getMessage() {
+            return message;
+        }
     }
 }
