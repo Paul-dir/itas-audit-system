@@ -1,6 +1,7 @@
 package mor.itas.api.dto.request.ap;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,7 +17,10 @@ import java.util.Map;
  */
 public class CreatePlanRequest {
     
+    @JsonProperty("planYear")
     private Integer year;
+    
+    @JsonProperty("planName")
     private String name;
     private String strategy;
     private String startDate;
