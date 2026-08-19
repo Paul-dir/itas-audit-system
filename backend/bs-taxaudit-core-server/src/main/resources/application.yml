@@ -1,6 +1,9 @@
 spring:
   application:
     name: bs-taxaudit-core-server
+  
+  profiles:
+    active: mock
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:itas_audit}

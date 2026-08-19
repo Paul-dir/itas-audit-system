@@ -16,19 +16,19 @@ public class AnnualAuditPlanMapper {
         if (domain == null) return null;
         AnnualAuditPlanEntity entity = new AnnualAuditPlanEntity();
         entity.setId(domain.getId());
-        entity.setPlanYear(domain.getPlanYear());
-        entity.setPlanName(domain.getPlanName());
+        entity.setYear(domain.getPlanYear());
+        entity.setName(domain.getPlanName());
         entity.setStatus(domain.getStatus());
-        entity.setCreatedAt(domain.getCreatedAt());
+        entity.setCreatedAt(domain.getCreatedAt().toInstant());
         entity.setCreatedBy(domain.getCreatedBy());
 
         List<PlanAllocationEntity> allocationEntities = domain.getAllocations().stream().map(a -> {
             PlanAllocationEntity ae = new PlanAllocationEntity();
             ae.setId(a.getId());
-            ae.setPlan(entity);
+            ae.setAnnualPlan(entity);
             ae.setTaxCenterCode(a.getTaxCenterCode());
             ae.setProposedCount(a.getProposedCount());
-            ae.setCreatedAt(a.getCreatedAt());
+            ae.setCreatedAt(a.getCreatedAt().toInstant());
             return ae;
         }).collect(Collectors.toList());
 
@@ -39,15 +39,15 @@ public class AnnualAuditPlanMapper {
     public AnnualAuditPlan toDomain(AnnualAuditPlanEntity entity) {
         if (entity == null) return null;
         List<PlanAllocation> allocations = entity.getAllocations().stream().map(ae -> 
-            new PlanAllocation(ae.getId(), entity.getId(), ae.getTaxCenterCode(), ae.getProposedCount(), ae.getCreatedAt())
+            new PlanAllocation(ae.getId(), entity.getId(), ae.getTaxCenterCode(), ae.getProposedCount(), ae.getCreatedAt().atOffset(java.time.ZoneOffset.UTC))
         ).collect(Collectors.toList());
 
         return new AnnualAuditPlan(
             entity.getId(),
-            entity.getPlanYear(),
-            entity.getPlanName(),
+            entity.getYear(),
+            entity.getName(),
             entity.getStatus(),
-            entity.getCreatedAt(),
+            entity.getCreatedAt().atOffset(java.time.ZoneOffset.UTC),
             entity.getCreatedBy(),
             allocations
         );

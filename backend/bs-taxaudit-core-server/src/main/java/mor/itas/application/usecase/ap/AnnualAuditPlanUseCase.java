@@ -18,7 +18,7 @@ public class AnnualAuditPlanUseCase {
 
     @Transactional
     public AnnualAuditPlan createPlan(CreatePlanRequest request, String actorId) {
-        AnnualAuditPlan plan = new AnnualAuditPlan(request.getPlanYear(), request.getPlanName(), actorId);
+        AnnualAuditPlan plan = new AnnualAuditPlan(request.getYear(), request.getName(), actorId);
 
         Map<String, Integer> quotas = riskEnginePort.fetchSuggestedQuotas();
         quotas.forEach(plan::addAllocation);
