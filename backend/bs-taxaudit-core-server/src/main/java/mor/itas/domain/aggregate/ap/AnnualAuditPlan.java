@@ -1,6 +1,7 @@
 package mor.itas.domain.aggregate.ap;
 
 import mor.itas.domain.aggregate.AggregateRoot;
+import mor.itas.domain.model.ap.PlanAllocation;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;

@@ -24,6 +24,15 @@ public class PlanAllocationEntity {
     @Column(nullable = false, name = "proposed_count")
     private Integer proposedCount;
 
+    @Column(name = "tc_adjusted_count")
+    private Integer tcAdjustedCount;
+
+    @Column(name = "tc_justification", columnDefinition = "TEXT")
+    private String tcJustification;
+
+    @Column(name = "tc_feedback_submitted", nullable = false)
+    private Boolean tcFeedbackSubmitted = false;
+
     @Column(nullable = false, name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -90,5 +99,29 @@ public class PlanAllocationEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getTcAdjustedCount() {
+        return tcAdjustedCount;
+    }
+
+    public void setTcAdjustedCount(Integer tcAdjustedCount) {
+        this.tcAdjustedCount = tcAdjustedCount;
+    }
+
+    public String getTcJustification() {
+        return tcJustification;
+    }
+
+    public void setTcJustification(String tcJustification) {
+        this.tcJustification = tcJustification;
+    }
+
+    public Boolean getTcFeedbackSubmitted() {
+        return tcFeedbackSubmitted;
+    }
+
+    public void setTcFeedbackSubmitted(Boolean tcFeedbackSubmitted) {
+        this.tcFeedbackSubmitted = tcFeedbackSubmitted;
     }
 }

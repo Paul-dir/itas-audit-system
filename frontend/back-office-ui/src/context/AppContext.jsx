@@ -362,34 +362,54 @@ export function AppProvider({ children }) {
       dispatch({ type: 'UPDATE_PLAN', payload: updated });
     },
 
-    submitTaxCenterFeedback: (planId, regionId, taxCenterId, feedbackText, adjustedAllocation, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      
-      // Store tax center feedback
-      const tcFeedback = plan.taxCenterFeedback || {};
-      const regionTCFeedback = tcFeedback[regionId] || {};
-      
-      const newTCFeedback = {
-        ...tcFeedback,
-        [regionId]: {
-          ...regionTCFeedback,
-          [taxCenterId]: {
-            feedback: feedbackText,
-            adjustedAllocation,
-            submittedAt: new Date().toISOString(),
-            submittedBy: actorId,
-          },
-        },
-      };
-      
-      dispatch({ 
-        type: 'UPDATE_PLAN', 
-        payload: timeline({ 
-          ...plan, 
-          taxCenterFeedback: newTCFeedback 
-        }, plan.status, actorId, `${taxCenterId} submitted feedback`)
-      });
+    submitTaxCenterFeedback: async (planId, regionId, taxCenterId, feedbackText, adjustedAllocation, actorId) => {
+      try {
+        const plan = getPlan(planId);
+        if (!plan) return;
+
+        // Sum the adjusted allocations across all audit types
+        const totalAdjusted = Object.values(adjustedAllocation).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+
+        // Find the specific allocation ID for this tax center
+        const allocation = (plan.allocations || []).find(a => a.taxCenterCode === taxCenterId);
+        if (!allocation) {
+           console.error("Allocation not found for tax center", taxCenterId);
+           return;
+        }
+
+        const { default: planService } = await import('../features/ap/services/planService.js');
+        const updatedPlan = await planService.submitTaxCenterFeedback(planId, allocation.id, {
+          tcAdjustedCount: totalAdjusted,
+          tcJustification: feedbackText
+        }, actorId);
+
+        // We can just replace the plan in our local state with the backend's updated version.
+        // We will merge it with our local timeline/frontend specific fields so the UI doesn't break
+        const mergedPlan = {
+          ...plan,
+          ...updatedPlan,
+          // Retain legacy frontend structure for now to not break other views
+          taxCenterFeedback: {
+            ...(plan.taxCenterFeedback || {}),
+            [regionId]: {
+              ...(plan.taxCenterFeedback?.[regionId] || {}),
+              [taxCenterId]: {
+                feedback: feedbackText,
+                adjustedAllocation,
+                submittedAt: new Date().toISOString(),
+                submittedBy: actorId,
+              }
+            }
+          }
+        };
+
+        dispatch({ 
+          type: 'UPDATE_PLAN', 
+          payload: timeline(mergedPlan, plan.status, actorId, `${taxCenterId} submitted feedback`)
+        });
+      } catch (error) {
+        console.error("Failed to submit feedback:", error);
+      }
     },
     // ── Senior Management ──────────────────────────────────────────────────
     approveBySenior: (planId, actorId, comment) => {

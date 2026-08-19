@@ -1,7 +1,7 @@
 package mor.itas.persistence.mapper.ap;
 
 import mor.itas.domain.aggregate.ap.AnnualAuditPlan;
-import mor.itas.domain.aggregate.ap.PlanAllocation;
+import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
 import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;
 import org.springframework.stereotype.Component;
@@ -28,6 +28,9 @@ public class AnnualAuditPlanMapper {
             ae.setAnnualPlan(entity);
             ae.setTaxCenterCode(a.getTaxCenterCode());
             ae.setProposedCount(a.getProposedCount());
+            ae.setTcAdjustedCount(a.getTcAdjustedCount());
+            ae.setTcJustification(a.getTcJustification());
+            ae.setTcFeedbackSubmitted(a.getTcFeedbackSubmitted());
             ae.setCreatedAt(a.getCreatedAt().toInstant());
             return ae;
         }).collect(Collectors.toList());
@@ -39,7 +42,9 @@ public class AnnualAuditPlanMapper {
     public AnnualAuditPlan toDomain(AnnualAuditPlanEntity entity) {
         if (entity == null) return null;
         List<PlanAllocation> allocations = entity.getAllocations().stream().map(ae -> 
-            new PlanAllocation(ae.getId(), entity.getId(), ae.getTaxCenterCode(), ae.getProposedCount(), ae.getCreatedAt().atOffset(java.time.ZoneOffset.UTC))
+            new PlanAllocation(ae.getId(), entity.getId(), ae.getTaxCenterCode(), ae.getProposedCount(), 
+                               ae.getTcAdjustedCount(), ae.getTcJustification(), ae.getTcFeedbackSubmitted(),
+                               ae.getCreatedAt().atOffset(java.time.ZoneOffset.UTC))
         ).collect(Collectors.toList());
 
         return new AnnualAuditPlan(

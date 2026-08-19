@@ -41,6 +41,34 @@ class PlanService {
   }
 
   /**
+   * Submit Tax Center feedback for a specific allocation via Backend API
+   */
+  async submitTaxCenterFeedback(planId, allocationId, feedbackData, actorId) {
+    try {
+      console.log('🚀 Submitting TC feedback via Backend API:', planId, allocationId);
+      const response = await fetch(`${API_BASE_URL}/ap/plans/${planId}/allocations/${allocationId}/feedback`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Actor-Id': actorId || 'system'
+        },
+        body: JSON.stringify(feedbackData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Feedback submitted successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to submit feedback:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all plans from API with optional filters
    * Real-time fetch - no hardcoded statuses
    */

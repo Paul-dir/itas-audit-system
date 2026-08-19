@@ -25,4 +25,24 @@ public class AnnualAuditPlanUseCase {
 
         return repository.save(plan);
     }
+
+    @Transactional
+    public AnnualAuditPlan submitTaxCenterFeedback(java.util.UUID planId, java.util.UUID allocationId, Integer adjustedCount, String justification, String actorId, String userTaxCenter) {
+        AnnualAuditPlan plan = repository.findById(planId)
+            .orElseThrow(() -> new IllegalArgumentException("Plan not found with id: " + planId));
+        
+        mor.itas.domain.model.ap.PlanAllocation allocation = plan.getAllocations().stream()
+            .filter(a -> a.getId().equals(allocationId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Allocation not found with id: " + allocationId));
+            
+        // Security check: Tax Center Manager can only edit their own allocation
+        if (!allocation.getTaxCenterCode().equals(userTaxCenter)) {
+            throw new SecurityException("User does not have permission to edit feedback for tax center: " + allocation.getTaxCenterCode());
+        }
+            
+        allocation.submitLocalFeedback(adjustedCount, justification);
+        
+        return repository.update(plan);
+    }
 }
