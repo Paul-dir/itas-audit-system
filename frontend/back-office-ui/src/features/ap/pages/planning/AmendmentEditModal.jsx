@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Edit, Save, RotateCcw, AlertCircle } from 'lucide-react';
-import { Modal, Button, Textarea, Card, Alert, Badge, Input } from '../../components/ui/index.jsx';
+import { Modal, Button, Textarea, Card, Alert, Badge, Input } from '../../../../components/ui/index.jsx';
 import { DistributionTable } from '../shared/DistributionTable.jsx';
 import { REGIONS, AUDIT_TYPES, getTaxCentersForRegion } from '../../data/constants.js';
 import PlanTimeline from '../shared/PlanTimeline.jsx';

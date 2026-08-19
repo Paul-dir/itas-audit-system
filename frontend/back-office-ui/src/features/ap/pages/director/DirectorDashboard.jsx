@@ -3,9 +3,9 @@ import {
   CheckCircle, XCircle, RotateCcw, Send, Eye, FileText, Clock,
   CheckSquare, Map, AlertCircle, ArrowRight, Edit3, Zap,
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Textarea, Alert, Table, Empty, Tabs, Badge } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Modal, Textarea, Alert, Table, Empty, Tabs, Badge } from '../../../../components/ui/index.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import PlanDetailModal from '../planning/PlanDetailModal.jsx';
 import { DistributionTable } from '../shared/DistributionTable.jsx';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Tabs, Button, Badge, Alert } from '../../components/ui/index.jsx';
+import { Modal, Tabs, Button, Badge, Alert } from '../../../../components/ui/index.jsx';
 import { DistributionTable } from '../shared/DistributionTable.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import PlanTimeline from '../shared/PlanTimeline.jsx';

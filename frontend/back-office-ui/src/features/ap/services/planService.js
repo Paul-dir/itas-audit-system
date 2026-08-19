@@ -4,13 +4,40 @@
  * Integrates with MOR Backend API for real-time plan data
  */
 
-const API_BASE_URL = import.meta.env.VITE_MOR_IDENTITY_URL || 
-  'https://mor-org-forge.lovable.app/api/public/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1/backoffice';
 
 class PlanService {
   constructor() {
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  }
+
+  /**
+   * Create a new annual audit plan via Spring Boot backend API
+   */
+  async createPlan(planData, actorId) {
+    try {
+      console.log('🚀 Creating plan via Backend API:', planData.name);
+      const response = await fetch(`${API_BASE_URL}/ap/plans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Actor-Id': actorId || 'system'
+        },
+        body: JSON.stringify(planData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Plan created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to create plan:', error);
+      throw error;
+    }
   }
 
   /**

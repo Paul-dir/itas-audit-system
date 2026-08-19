@@ -1,4 +1,4 @@
-import { Modal, Badge } from '../../components/ui/index.jsx';
+import { Modal, Badge } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, RISK_LEVELS } from '../../data/constants.js';
 
 const riskColor = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };

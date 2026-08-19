@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Package, Users, CheckCircle, AlertTriangle, Eye, Send, Filter, Search } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
 
 export default function CaseManagement() {

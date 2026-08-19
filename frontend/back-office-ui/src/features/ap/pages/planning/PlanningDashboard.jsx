@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Plus, ClipboardList, Clock, CheckCircle, FileText, ArrowRight, Eye, Send, Edit, RotateCcw, Activity, AlertOctagon, Settings, Trash2, Edit2, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, CardHeader, StatCard, Button, Badge, Table, Empty, Modal, Alert } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, CardHeader, StatCard, Button, Badge, Table, Empty, Modal, Alert } from '../../../../components/ui/index.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import CreatePlanModal from './CreatePlanModal.jsx';
 import PlanDetailModal from './PlanDetailModal.jsx';

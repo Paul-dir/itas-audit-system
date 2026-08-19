@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, ChevronDown, ChevronUp, Users } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../../../context/AuthContext.jsx';
 import UserDirectory from '../components/UserDirectory.jsx';
 import { SEED_USERS } from '../data/seed.js';
 

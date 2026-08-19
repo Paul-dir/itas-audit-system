@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Building2, Users, Clock, CheckCircle, AlertCircle, Eye, UserCheck, Search } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Tabs, Input } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Tabs, Input } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, RISK_LEVELS } from '../../data/constants.js';
 import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 

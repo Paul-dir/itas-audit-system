@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Settings, Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
-import { Card, Button, Badge } from '../../components/ui/index.jsx';
+import { Card, Button, Badge } from '../../../../components/ui/index.jsx';
 
 export default function PlanConfigurationPage() {
   const [planningConfig, setPlanningConfig] = useState({

@@ -12,7 +12,7 @@ import {
   Info, Globe
 } from 'lucide-react';
 import { useRiskEngine } from '../../hooks/useRiskEngine.js';
-import { Card, StatCard, Button, Badge, Alert } from '../../components/ui/index.jsx';
+import { Card, StatCard, Button, Badge, Alert } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES } from '../../data/constants.js';
 
 // ── Colour helpers ─────────────────────────────────────────────────────────

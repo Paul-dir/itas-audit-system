@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Star, CheckCircle, XCircle, Eye, FileText, Clock, Award, BarChart3 } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Textarea, Alert, Table, Empty, Tabs } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Modal, Textarea, Alert, Table, Empty, Tabs } from '../../../../components/ui/index.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import { DistributionTable } from '../shared/DistributionTable.jsx';
 import PlanTimeline from '../shared/PlanTimeline.jsx';

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Building2, Users, Clock, CheckCircle, Send, Eye } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Textarea } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Modal, Badge, Alert, Textarea } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES } from '../../data/constants.js';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 

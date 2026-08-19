@@ -8,8 +8,8 @@
  * plan-creation defaults.
  */
 import { useState, useEffect, useCallback } from 'react';
-import riskEngineClient from '../api/riskEngineClient.js';
-import taxpayerClient from '../api/taxpayerClient.js';
+import riskEngineClient from '../services/riskEngineClient.js';
+import taxpayerClient from '../services/taxpayerClient.js';
 import { auditConfig } from '../config/auditConfig.js';
 import { REGIONS, AUDIT_TYPES } from '../data/constants.js';
 

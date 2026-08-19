@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { TrendingUp, AlertTriangle, Target, Database, Filter, Download, Play, CheckCircle, Eye } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Badge, Table, Input, Select, Modal, Alert, Tabs } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, StatCard, Button, Badge, Table, Input, Select, Modal, Alert, Tabs } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, REGIONS, getRiskLevel, getTaxCentersForRegion } from '../../data/constants.js';
 import { ADDIS_ABABA_TAXPAYERS, REGIONAL_TAXPAYER_COUNTS, getTaxpayersForTaxCenter, selectTopRiskTaxpayers } from '../../data/taxpayers.js';
 

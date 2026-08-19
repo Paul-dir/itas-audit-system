@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { MapPin, Send, CheckCircle, Clock, Eye, Package, ArrowRight, Search } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Card, Button, Alert, Badge, StatCard, Modal, Textarea, Tabs, Empty, Table, Input } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Card, Button, Alert, Badge, StatCard, Modal, Textarea, Tabs, Empty, Table, Input } from '../../../../components/ui/index.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import { DistributionTable, TaxCenterDistributionTable } from '../shared/DistributionTable.jsx';
 import { AUDIT_TYPES, REGIONS, CASE_STATUS, getTaxCentersForRegion } from '../../data/constants.js';

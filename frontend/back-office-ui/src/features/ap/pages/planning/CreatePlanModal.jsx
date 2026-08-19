@@ -7,9 +7,9 @@
  */
 import { useState, useCallback } from 'react';
 import { Activity, ArrowRight, BarChart2, CheckCircle } from 'lucide-react';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { Modal, Input, Textarea, Button, Alert, Select } from '../../components/ui/index.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
+import { Modal, Input, Textarea, Button, Alert, Select } from '../../../../components/ui/index.jsx';
 import { EditableDistributionTable } from '../shared/DistributionTable.jsx';
 import { REGIONS, AUDIT_TYPES } from '../../data/constants.js';
 import RiskAnalysisDashboard from './RiskAnalysisDashboard.jsx';
@@ -58,12 +58,12 @@ export default function CreatePlanModal({ open, onClose }) {
     setStep(2);
   }, []);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.name.trim()) { setError('Plan name is required'); return; }
     if (totalCases === 0) { setError('Please distribute at least some cases across regions'); return; }
     setLoading(true);
-    setTimeout(() => {
-      actions.createPlan({
+    try {
+      await actions.createPlan({
         ...form,
         year: parseInt(form.year),
         distribution,
@@ -73,7 +73,11 @@ export default function CreatePlanModal({ open, onClose }) {
       });
       setLoading(false);
       handleClose();
-    }, 300);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to create plan. Ensure backend is running.');
+      setLoading(false);
+    }
   };
 
   const handleClose = () => {

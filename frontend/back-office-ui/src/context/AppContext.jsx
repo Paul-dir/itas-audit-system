@@ -64,21 +64,31 @@ export function AppProvider({ children }) {
 
   const actions = {
     // ── Plan creation ──────────────────────────────────────────────────────
-    createPlan: (data) => {
-      const plan = {
-        id: `AP-${Date.now()}`,
-        ...data,
-        status: 'DRAFT',
-        createdAt: new Date().toISOString(),
-        directorComment: '',
-        revisions: [],
-        regionalFeedback: {},
-        seniorComment: '',
-        amendmentComment: '',
-        timeline: [{ status: 'DRAFT', actor: data.createdBy, comment: 'Plan created', timestamp: new Date().toISOString() }],
-      };
-      dispatch({ type: 'CREATE_PLAN', payload: plan });
-      return plan;
+    createPlan: async (data) => {
+      try {
+        const { default: planService } = await import('../features/ap/services/planService.js');
+        // Call backend API
+        const createdPlan = await planService.createPlan(data, data.createdBy);
+        
+        // Ensure plan meets UI expectations with local timeline logic
+        const plan = {
+          id: createdPlan.id,
+          ...data,
+          status: createdPlan.status || 'DRAFT',
+          createdAt: createdPlan.createdAt || new Date().toISOString(),
+          directorComment: '',
+          revisions: [],
+          regionalFeedback: {},
+          seniorComment: '',
+          amendmentComment: '',
+          timeline: [{ status: createdPlan.status || 'DRAFT', actor: data.createdBy, comment: 'Plan created via Backend API', timestamp: new Date().toISOString() }],
+        };
+        dispatch({ type: 'CREATE_PLAN', payload: plan });
+        return plan;
+      } catch (error) {
+        console.error("Error creating plan:", error);
+        throw error;
+      }
     },
 
     updatePlanDraft: (planId, updates) => {
