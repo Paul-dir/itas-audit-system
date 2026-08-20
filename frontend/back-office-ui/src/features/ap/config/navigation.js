@@ -211,6 +211,26 @@ export const ROLE_NAVIGATION = {
     footer: { id: 'configuration', label: 'Settings', icon: 'fas fa-cog' },
   },
 
+  committee: {
+    categories: [
+      {
+        label: 'Overview',
+        items: [
+          { id: 'dashboard', label: 'Dashboard', icon: 'fas fa-th-large' },
+        ],
+      },
+      {
+        label: 'Committee',
+        items: [
+          { id: 'reviews', label: 'Pending Reviews', icon: 'fas fa-inbox' },
+          { id: 'approvals', label: 'Approvals', icon: 'fas fa-check-circle' },
+          { id: 'reports', label: 'Reports', icon: 'fas fa-file-alt' },
+        ],
+      },
+    ],
+    footer: { id: 'configuration', label: 'Settings', icon: 'fas fa-cog' },
+  },
+
 
 
   directorate_requester: {
