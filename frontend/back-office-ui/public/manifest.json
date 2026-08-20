@@ -1,0 +1,16 @@
+{
+  "name": "ITAS Audit Planning System",
+  "short_name": "ITAS",
+  "description": "Integrated Tax Audit System - Back-office Planning and Management",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1e40af",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/mor-logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    }
+  ]
+}
