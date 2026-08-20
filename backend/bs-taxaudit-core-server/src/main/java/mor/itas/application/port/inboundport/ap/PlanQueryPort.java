@@ -1,0 +1,60 @@
+package mor.itas.application.port.inboundport.ap;
+
+import mor.itas.domain.model.ap.AnnualAuditPlan;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Plan Query Inbound Port (Driving Port)
+ * 
+ * Defines the contract for all plan read/query operations.
+ * REST Controllers depend on this interface, not on use cases directly.
+ * This is the boundary between external world (API) and application.
+ * 
+ * Hexagonal/DDD: Inbound port = Use case interface exposed to the outside world
+ */
+public interface PlanQueryPort {
+
+    /**
+     * Get plan by ID
+     */
+    AnnualAuditPlan getPlanById(UUID planId);
+
+    /**
+     * Get all plans with optional status filter
+     */
+    List<AnnualAuditPlan> getPlans(String statusFilter, Integer fiscalYearFilter, int page, int size);
+
+    /**
+     * Get regional allocations for a plan
+     */
+    List<?> getRegionalAllocations(UUID planId);
+
+    /**
+     * Get tax center allocations for a plan
+     */
+    List<?> getTaxCenterAllocations(UUID planId);
+
+    /**
+     * Get tax center allocations by region
+     */
+    List<?> getTaxCenterAllocationsByRegion(UUID planId, String regionCode);
+
+    /**
+     * Get audit log for a plan
+     */
+    List<?> getAuditLog(UUID planId);
+
+    /**
+     * Get plan statistics
+     */
+    Map<String, Long> getPlanStatistics();
+
+    /**
+     * Get all plans that have allocations for a specific region
+     * Returns only plans where the region has a non-zero allocation
+     * Used by Regional Directors to see only plans relevant to their region
+     */
+    List<AnnualAuditPlan> getPlansByRegion(String regionCode);
+}

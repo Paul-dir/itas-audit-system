@@ -1,0 +1,532 @@
+/**
+ * Assignment Data Layer
+ * Handles loading and saving Team Leaders, Auditors, and Assignments
+ * Uses localStorage as persistent storage
+ */
+
+import { loadData, saveData } from './data';
+import { createTeamLeader, createAuditor, createAssignment, validateTeamLeader, validateAuditor } from './assignmentDataModels';
+import { getUserById, getTeamMembers } from '../data/orgStructure';
+
+const STORAGE_KEY = 'audit_planning_system_v2';
+const TEAM_LEADERS_KEY = 'teamLeaders';
+const AUDITORS_KEY = 'auditors';
+const ASSIGNMENTS_KEY = 'assignments';
+
+// ===== TEAM LEADER DATA =====
+
+/**
+ * Load all team leaders for a specific tax center
+ * @param {string} region - Region name
+ * @param {string} taxCenter - Tax center name
+ * @returns {array} Array of team leaders
+ */
+export function loadTeamLeaders(region, taxCenter) {
+  try {
+    const data = loadData();
+    
+    if (!data.teamLeaders) {
+      console.warn('No team leaders in storage');
+      return getDefaultTeamLeaders(region, taxCenter);
+    }
+    
+    const filtered = data.teamLeaders.filter(tl =>
+      tl.region === region && tl.taxCenter === taxCenter
+    );
+    
+    console.log(`✓ Loaded ${filtered.length} team leaders for ${region} - ${taxCenter}`);
+    return filtered;
+  } catch (error) {
+    console.error('Error loading team leaders:', error);
+    return getDefaultTeamLeaders(region, taxCenter);
+  }
+}
+
+/**
+ * Load team leader by ID
+ * @param {string} teamLeaderId
+ * @returns {object} Team leader object or null
+ */
+export function loadTeamLeader(teamLeaderId) {
+  try {
+    const data = loadData();
+    if (!data.teamLeaders) return null;
+    
+    return data.teamLeaders.find(tl => tl.id === teamLeaderId) || null;
+  } catch (error) {
+    console.error('Error loading team leader:', error);
+    return null;
+  }
+}
+
+/**
+ * Save team leader
+ * @param {object} teamLeader
+ * @returns {object} Saved team leader
+ */
+export function saveTeamLeader(teamLeader) {
+  try {
+    const validation = validateTeamLeader(teamLeader);
+    if (!validation.valid) {
+      throw new Error(`Invalid team leader: ${validation.errors.join(', ')}`);
+    }
+    
+    const data = loadData();
+    if (!data.teamLeaders) {
+      data.teamLeaders = [];
+    }
+    
+    // Update if exists, insert if new
+    const index = data.teamLeaders.findIndex(tl => tl.id === teamLeader.id);
+    if (index >= 0) {
+      data.teamLeaders[index] = teamLeader;
+      console.log(`✓ Updated team leader: ${teamLeader.id}`);
+    } else {
+      data.teamLeaders.push(teamLeader);
+      console.log(`✓ Created team leader: ${teamLeader.id}`);
+    }
+    
+    saveData(data);
+    return teamLeader;
+  } catch (error) {
+    console.error('Error saving team leader:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update team leader workload
+ * @param {string} teamLeaderId
+ * @param {number} delta - Change in workload (+ or -)
+ * @returns {object} Updated team leader
+ */
+export function updateTeamLeaderWorkload(teamLeaderId, delta) {
+  try {
+    const tl = loadTeamLeader(teamLeaderId);
+    if (!tl) throw new Error(`Team leader not found: ${teamLeaderId}`);
+    
+    tl.currentWorkload += delta;
+    
+    if (tl.currentWorkload < 0) {
+      console.warn(`Warning: Team leader workload negative: ${tl.currentWorkload}`);
+      tl.currentWorkload = 0;
+    }
+    
+    if (tl.currentWorkload > tl.maxCapacity) {
+      console.warn(`Warning: Team leader over capacity: ${tl.currentWorkload}/${tl.maxCapacity}`);
+    }
+    
+    return saveTeamLeader(tl);
+  } catch (error) {
+    console.error('Error updating team leader workload:', error);
+    throw error;
+  }
+}
+
+// ===== AUDITOR DATA =====
+
+export function loadAuditors(teamLeaderId) {
+  try {
+    const tl = getUserById(teamLeaderId);
+    if (!tl || !tl.org_context || !tl.org_context.teamId) {
+      console.warn('No team leader or teamId found for', teamLeaderId);
+      return [];
+    }
+    
+    const teamMembers = getTeamMembers(tl.org_context.teamId);
+    
+    // Format orgStructure users into the structure expected by the UI
+    const auditors = teamMembers
+      .filter(u => u.role === 'auditor')
+      .map((u, idx) => ({
+        id: u.id,
+        fullName: u.full_name,
+        email: u.email,
+        seniority: idx === 0 ? 'Senior' : idx === 1 ? 'Mid' : 'Junior',
+        currentWorkload: 0, // In a real system, this would be computed from active cases
+        maxCapacity: 6,
+        status: 'ACTIVE',
+        expertise: [
+          { area: 'VAT Compliance', level: idx === 0 ? 'Expert' : 'Intermediate' },
+          { area: 'Revenue Recognition', level: 'Intermediate' }
+        ],
+        sectorExperience: ['Manufacturing', 'Retail']
+      }));
+    
+    console.log(`✓ Loaded ${auditors.length} auditors for team leader: ${teamLeaderId} from orgStructure`);
+    return auditors;
+  } catch (error) {
+    console.error('Error loading auditors:', error);
+    return [];
+  }
+}
+
+/**
+ * Load all auditors in a tax center
+ * @param {string} region
+ * @param {string} taxCenter
+ * @returns {array} Array of auditors
+ */
+export function loadAuditorsByTaxCenter(region, taxCenter) {
+  try {
+    const data = loadData();
+    
+    if (!data.auditors) {
+      console.warn('No auditors in storage');
+      return [];
+    }
+    
+    const filtered = data.auditors.filter(a =>
+      a.region === region && a.taxCenter === taxCenter
+    );
+    
+    console.log(`✓ Loaded ${filtered.length} auditors for ${region} - ${taxCenter}`);
+    return filtered;
+  } catch (error) {
+    console.error('Error loading auditors:', error);
+    return [];
+  }
+}
+
+/**
+ * Load auditor by ID
+ * @param {string} auditorId
+ * @returns {object} Auditor or null
+ */
+export function loadAuditor(auditorId) {
+  try {
+    // Try to load from orgStructure first (primary source)
+    const { getAllUsers } = require('../data/orgStructure');
+    const allUsers = getAllUsers();
+    const auditor = allUsers.find(u => u.id === auditorId && u.role === 'auditor');
+    
+    if (auditor) {
+      return {
+        id: auditor.id,
+        full_name: auditor.full_name,
+        email: auditor.email,
+        role: auditor.role,
+        org_context: auditor.org_context,
+        currentWorkload: auditor.currentWorkload || 0,
+        maxCapacity: auditor.maxCapacity || 6
+      };
+    }
+    
+    // Fallback: try localStorage (for backwards compatibility)
+    const data = loadData();
+    if (data.auditors) {
+      return data.auditors.find(a => a.id === auditorId) || null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error loading auditor:', error);
+    return null;
+  }
+}
+
+/**
+ * Save auditor
+ * @param {object} auditor
+ * @returns {object} Saved auditor
+ */
+export function saveAuditor(auditor) {
+  try {
+    const validation = validateAuditor(auditor);
+    if (!validation.valid) {
+      throw new Error(`Invalid auditor: ${validation.errors.join(', ')}`);
+    }
+    
+    const data = loadData();
+    if (!data.auditors) {
+      data.auditors = [];
+    }
+    
+    // Update if exists, insert if new
+    const index = data.auditors.findIndex(a => a.id === auditor.id);
+    if (index >= 0) {
+      data.auditors[index] = auditor;
+      console.log(`✓ Updated auditor: ${auditor.id}`);
+    } else {
+      data.auditors.push(auditor);
+      console.log(`✓ Created auditor: ${auditor.id}`);
+    }
+    
+    saveData(data);
+    return auditor;
+  } catch (error) {
+    console.error('Error saving auditor:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update auditor workload
+ * @param {string} auditorId
+ * @param {number} delta - Change in workload (+ or -)
+ * @returns {object|null} Updated auditor or null if not found
+ */
+export function updateAuditorWorkload(auditorId, delta) {
+  try {
+    const auditor = loadAuditor(auditorId);
+    if (!auditor) {
+      console.warn(`⚠️ Auditor not found: ${auditorId}. Workload update skipped (non-critical).`);
+      return null;
+    }
+    
+    auditor.currentWorkload += delta;
+    
+    if (auditor.currentWorkload < 0) {
+      console.warn(`Warning: Auditor workload negative: ${auditor.currentWorkload}`);
+      auditor.currentWorkload = 0;
+    }
+    
+    if (auditor.currentWorkload > auditor.maxCapacity) {
+      console.warn(`Warning: Auditor over capacity: ${auditor.currentWorkload}/${auditor.maxCapacity}`);
+    }
+    
+    return saveAuditor(auditor);
+  } catch (error) {
+    console.error('Error updating auditor workload:', error);
+    console.warn('⚠️ Continuing operation despite workload update failure');
+    return null;
+  }
+}
+
+// ===== ASSIGNMENT DATA =====
+
+/**
+ * Load assignment by case ID
+ * @param {string} caseId
+ * @returns {object} Assignment or null
+ */
+export function loadAssignment(caseId) {
+  try {
+    const data = loadData();
+    
+    if (!data.assignments) {
+      console.warn('No assignments in storage');
+      return null;
+    }
+    
+    return data.assignments.find(a => a.caseId === caseId) || null;
+  } catch (error) {
+    console.error('Error loading assignment:', error);
+    return null;
+  }
+}
+
+/**
+ * Load all assignments in a state
+ * @param {string} state - Assignment state (e.g., ASSIGNED_TO_AUDITOR)
+ * @param {string} region - Optional: filter by region
+ * @param {string} taxCenter - Optional: filter by tax center
+ * @returns {array} Array of assignments
+ */
+export function loadAssignmentsByState(state, region = null, taxCenter = null) {
+  try {
+    const data = loadData();
+    
+    if (!data.assignments) {
+      return [];
+    }
+    
+    let filtered = data.assignments.filter(a => a.currentState === state);
+    
+    if (region) {
+      filtered = filtered.filter(a => a.region === region);
+    }
+    
+    if (taxCenter) {
+      filtered = filtered.filter(a => a.taxCenter === taxCenter);
+    }
+    
+    console.log(`✓ Loaded ${filtered.length} assignments in state: ${state}`);
+    return filtered;
+  } catch (error) {
+    console.error('Error loading assignments by state:', error);
+    return [];
+  }
+}
+
+/**
+ * Load assignments for a user (team leader or auditor)
+ * @param {string} userId - Team leader or auditor ID
+ * @param {string} role - 'TEAM_LEADER' or 'AUDITOR'
+ * @returns {array} Array of assignments
+ */
+export function loadAssignmentsByUser(userId, role) {
+  try {
+    const data = loadData();
+    
+    if (!data.assignments) {
+      return [];
+    }
+    
+    // For team leader: look for assignments with current owner = userId and role = TEAM_LEADER
+    // For auditor: look for assignments with current owner = userId and role = AUDITOR
+    const filtered = data.assignments.filter(a =>
+      a.currentOwner === userId && a.currentOwnerRole === role
+    );
+    
+    console.log(`✓ Loaded ${filtered.length} assignments for ${role}: ${userId}`);
+    return filtered;
+  } catch (error) {
+    console.error('Error loading user assignments:', error);
+    return [];
+  }
+}
+
+/**
+ * Save assignment
+ * @param {object} assignment
+ * @returns {object} Saved assignment
+ */
+export function saveAssignment(assignment) {
+  try {
+    const data = loadData();
+    if (!data.assignments) {
+      data.assignments = [];
+    }
+    
+    // Update if exists, insert if new
+    const index = data.assignments.findIndex(a => a.caseId === assignment.caseId);
+    if (index >= 0) {
+      data.assignments[index] = assignment;
+      console.log(`✓ Updated assignment for case: ${assignment.caseId} → ${assignment.currentState}`);
+    } else {
+      data.assignments.push(assignment);
+      console.log(`✓ Created assignment for case: ${assignment.caseId}`);
+    }
+    
+    saveData(data);
+    return assignment;
+  } catch (error) {
+    console.error('Error saving assignment:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get assignment statistics
+ * @param {string} region - Optional
+ * @param {string} taxCenter - Optional
+ * @returns {object} Statistics
+ */
+export function getAssignmentStats(region = null, taxCenter = null) {
+  try {
+    const data = loadData();
+    if (!data.assignments) return null;
+    
+    let assignments = data.assignments;
+    
+    if (region) {
+      assignments = assignments.filter(a => a.region === region);
+    }
+    
+    if (taxCenter) {
+      assignments = assignments.filter(a => a.taxCenter === taxCenter);
+    }
+    
+    const stats = {
+      total: assignments.length,
+      byState: {
+        STORED: assignments.filter(a => a.currentState === 'STORED').length,
+        ASSIGNED_TO_TEAM_LEADER: assignments.filter(a => a.currentState === 'ASSIGNED_TO_TEAM_LEADER').length,
+        ASSIGNED_TO_AUDITOR: assignments.filter(a => a.currentState === 'ASSIGNED_TO_AUDITOR').length,
+        ACCEPTED_BY_AUDITOR: assignments.filter(a => a.currentState === 'ACCEPTED_BY_AUDITOR').length,
+        IN_EXECUTION: assignments.filter(a => a.currentState === 'IN_EXECUTION').length,
+        COMPLETED: assignments.filter(a => a.currentState === 'COMPLETED').length,
+        REALLOCATED: assignments.filter(a => a.currentState === 'REALLOCATED').length
+      }
+    };
+    
+    return stats;
+  } catch (error) {
+    console.error('Error getting assignment stats:', error);
+    return null;
+  }
+}
+
+// ===== DEFAULT DATA =====
+
+/**
+ * Get default team leaders for a tax center
+ * Used when no team leaders exist in storage
+ */
+function getDefaultTeamLeaders(region, taxCenter) {
+  const auditTypes = ['desk_audit', 'field_audit', 'comprehensive', 'transfer_pricing', 'single_issue', 'forensic'];
+  
+  return auditTypes.map((type, idx) =>
+    createTeamLeader({
+      id: `TL-${type.toUpperCase()}-${taxCenter.replace(/\s+/g, '-')}-001`,
+      region,
+      taxCenter,
+      auditType: type,
+      fullName: `Team Leader - ${type.replace(/_/g, ' ').toUpperCase()}`,
+      email: `tl.${type}@mor.gov.et`,
+      expertise: ['VAT', 'Revenue', 'Documentation'],
+      assignedAuditors: [],
+      currentWorkload: 0,
+      maxCapacity: 12,
+      yearsExperience: 10,
+      certifications: ['CPA'],
+      status: 'ACTIVE'
+    })
+  );
+}
+
+/**
+ * Initialize sample team leaders and auditors for testing
+ * WARNING: Use this only for development/testing
+ */
+export function initializeDefaultData(region, taxCenter) {
+  try {
+    const data = loadData();
+    
+    // Initialize team leaders if empty
+    if (!data.teamLeaders || data.teamLeaders.length === 0) {
+      const teamLeaders = getDefaultTeamLeaders(region, taxCenter);
+      data.teamLeaders = teamLeaders;
+      
+      // Initialize auditors for each team leader
+      data.auditors = [];
+      teamLeaders.forEach(tl => {
+        for (let i = 1; i <= 5; i++) {
+          const auditor = createAuditor({
+            id: `AUD-${tl.auditType.toUpperCase()}-${i.toString().padStart(3, '0')}`,
+            region,
+            taxCenter,
+            teamLeaderId: tl.id,
+            auditType: tl.auditType,
+            fullName: `Auditor ${i}`,
+            email: `auditor.${i}@mor.gov.et`,
+            seniority: i <= 2 ? 'Senior' : i <= 4 ? 'Mid' : 'Junior',
+            yearsExperience: (6 - i) * 2,
+            expertise: [
+              { area: 'VAT Compliance', level: i <= 2 ? 'Expert' : i <= 4 ? 'Advanced' : 'Intermediate' },
+              { area: 'Revenue Recognition', level: i <= 3 ? 'Advanced' : 'Intermediate' }
+            ],
+            sectorExperience: i % 2 === 0 ? ['Manufacturing', 'Retail'] : ['Technology', 'Financial Services'],
+            currentWorkload: 0,
+            maxCapacity: 6,
+            status: 'ACTIVE'
+          });
+          
+          data.auditors.push(auditor);
+          tl.assignedAuditors.push(auditor.id);
+        }
+      });
+      
+      saveData(data);
+      console.log('✓ Initialized default team leaders and auditors');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error initializing default data:', error);
+    return false;
+  }
+}
+
+console.log('✓ Assignment Data Layer loaded');

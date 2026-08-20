@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: bs-taxaudit-core-server-test
+
+  datasource:
+    # Connect to real PostgreSQL on port 5434
+    url: jdbc:postgresql://localhost:5434/itas_audit_test
+    username: itas_test
+    password: test_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/itas
+
+server:
+  port: 0
+
+logging:
+  level:
+    root: WARN
+    com.act.audit: DEBUG
+    org.springframework.test: INFO
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: INFO

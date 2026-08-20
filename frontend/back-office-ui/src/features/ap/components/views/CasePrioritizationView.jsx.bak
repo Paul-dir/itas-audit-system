@@ -1,0 +1,673 @@
+import React, { useState, useEffect } from 'react';
+import Card from '../Card';
+import Badge from '../Badge';
+import CaseDetailsModal from '../modals/CaseDetailsModal';
+import TreatmentPlanModal from '../modals/TreatmentPlanModal';
+import CapacityPanel from '../panels/CapacityPanel';
+import { loadData, saveData } from '../../utils/data';
+import { useAuth } from '../../context/AuthContext';
+import { getAllUsers } from '../../data/orgStructure';
+
+
+/**
+ * CasePrioritizationView - Tax Center Manager / Cascade Audit Team
+ * Displays mixed audit cases (Risk Engine + Approved Requests) for prioritization
+ * Allows case selection, details review, treatment plan attachment, and storage
+ */
+
+function CasePrioritizationView() {
+  const { getUserInfo } = useAuth();
+  const userInfo = getUserInfo();
+
+  const [allCases, setAllCases] = useState([]);
+  const [filteredCases, setFilteredCases] = useState([]);
+  const [selectedCases, setSelectedCases] = useState(new Set());
+  const [selectedDetailsId, setSelectedDetailsId] = useState(null);
+  
+  // Filters
+  const [filterRiskLevel, setFilterRiskLevel] = useState('All');
+  const [filterAuditType, setFilterAuditType] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Sorting & Pagination
+  const [sortBy, setSortBy] = useState('risk_score');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
+  // Modals
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showTreatmentModal, setShowTreatmentModal] = useState(false);
+  const [capacityConfig, setCapacityConfig] = useState(null);
+
+  // Load cases on component mount
+  useEffect(() => {
+    loadCasesForTaxCenter();
+    loadCapacityConfig();
+  }, []);
+
+  const loadCasesForTaxCenter = () => {
+    const data = loadData();
+    const userRegion = userInfo?.orgContext?.assignedRegion;
+    const userTaxCenter = userInfo?.orgContext?.assignedTaxCenter;
+    const isProcessOwner = userInfo?.role === 'process_owner';
+
+    // Load all cases for prioritization & tracking
+    const allCombinedCases = data.auditCases || [];
+
+    // Filter cases for Process Owner & Tax Center view
+    const userCases = allCombinedCases.filter(c => {
+      if (isProcessOwner) return true; // Process owner sees all cases (assigned & unassigned)
+      if (userRegion && userTaxCenter) {
+        return c.region === userRegion && c.taxCenter === userTaxCenter;
+      }
+      return false;
+    });
+
+    console.log('📊 CasePrioritizationView - Cases loaded:', {
+      total: userCases.length,
+      assigned: userCases.filter(c => c.status === 'ASSIGNED_TO_TEAM_LEADER' || c.status === 'ASSIGNED_TO_AUDITOR').length,
+      unassigned: userCases.filter(c => c.status === 'PENDING_PROCESS_OWNER' || !c.status).length
+    });
+
+    // Sort by risk score descending
+    userCases.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
+    setAllCases(userCases);
+  };
+
+  const loadCapacityConfig = () => {
+    const data = loadData();
+    const userRegion = userInfo?.orgContext?.assignedRegion;
+    const userTaxCenter = userInfo?.orgContext?.assignedTaxCenter;
+
+    if (!data.capacityConfigs) data.capacityConfigs = [];
+
+    const config = data.capacityConfigs.find(c =>
+      c.region === userRegion && c.taxCenter === userTaxCenter
+    );
+
+    if (config) {
+      setCapacityConfig(config);
+    } else {
+      // Create default capacity config
+      const defaultConfig = {
+        region: userRegion,
+        taxCenter: userTaxCenter,
+        fiscalYear: 2027,
+        totalStaff: 5,
+        hoursPerStaff: 2000,
+        totalCapacityHours: 10000,
+        remainingHours: 10000,
+        allocationByType: {
+          desk_audit: 2500,
+          field_audit: 2500,
+          comprehensive: 2000,
+          transfer_pricing: 1000,
+          single_issue: 1000,
+          forensic: 1000
+        },
+        configuredDate: new Date().toISOString(),
+        configuredBy: userInfo?.fullName || 'Tax Center Manager'
+      };
+      setCapacityConfig(defaultConfig);
+    }
+  };
+
+  // Apply filters and sorting
+  useEffect(() => {
+    let filtered = allCases;
+
+    if (filterRiskLevel !== 'All') {
+      filtered = filtered.filter(c => c.riskLevel === filterRiskLevel);
+    }
+
+    if (filterAuditType !== 'All') {
+      filtered = filtered.filter(c => c.auditType === filterAuditType);
+    }
+
+    if (searchTerm) {
+      filtered = filtered.filter(c =>
+        c.tin?.includes(searchTerm) ||
+        c.taxpayerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.id?.includes(searchTerm)
+      );
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      let aVal, bVal;
+      
+      if (sortBy === 'risk_score') {
+        aVal = a.riskScore || 0;
+        bVal = b.riskScore || 0;
+      } else if (sortBy === 'taxpayer_name') {
+        aVal = a.taxpayerName || '';
+        bVal = b.taxpayerName || '';
+      } else if (sortBy === 'revenue') {
+        aVal = a.revenueAtRisk || 0;
+        bVal = b.revenueAtRisk || 0;
+      } else if (sortBy === 'hours') {
+        aVal = a.estimatedHours || 0;
+        bVal = b.estimatedHours || 0;
+      }
+
+      if (sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+    setFilteredCases(sorted);
+    setCurrentPage(1);
+  }, [allCases, filterRiskLevel, filterAuditType, searchTerm, sortBy, sortOrder]);
+
+  // Get unique filter options
+  const getRiskLevels = () => ['All', 'Critical', 'High', 'Medium', 'Low'];
+  const getAuditTypes = () => ['All', ...new Set(allCases.map(c => c.auditType))];
+
+  // Get case by ID
+  const getCaseById = (caseId) => allCases.find(c => c.id === caseId);
+
+  // Get case rank (1-based index when sorted by risk score)
+  const getCaseRank = (caseId) => {
+    const sorted = [...allCases].sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
+    return sorted.findIndex(c => c.id === caseId) + 1;
+  };
+
+  // Toggle case selection
+  const toggleCaseSelection = (caseId) => {
+    const newSelected = new Set(selectedCases);
+    if (newSelected.has(caseId)) {
+      newSelected.delete(caseId);
+    } else {
+      newSelected.add(caseId);
+    }
+    setSelectedCases(newSelected);
+  };
+
+  // Select/Deselect all visible
+  const handleSelectAll = () => {
+    if (selectedCases.size === filteredCases.length) {
+      setSelectedCases(new Set());
+    } else {
+      const allIds = new Set(filteredCases.map(c => c.id));
+      setSelectedCases(allIds);
+    }
+  };
+
+  // Prioritize and Store cases for later assignment
+  const handleStoreSelectedCases = () => {
+    if (selectedCases.size === 0) {
+      alert('Please select at least one case');
+      return;
+    }
+
+    const data = loadData();
+    const userRegion = userInfo?.orgContext?.assignedRegion;
+    const userTaxCenter = userInfo?.orgContext?.assignedTaxCenter;
+    
+    // CRITICAL FIX: Only store cases for THIS tax center!
+    if (!userRegion || !userTaxCenter) {
+      alert('❌ No tax center assigned. Cannot store cases.');
+      return;
+    }
+    
+    // Get selected case IDs
+    const selectedCaseIds = Array.from(selectedCases);
+
+    let count = 0;
+    let skipped = 0;
+    
+    if (data.auditCases) {
+      data.auditCases.forEach(c => {
+        if (selectedCaseIds.includes(c.id)) {
+          // ✅ FIXED: Only store if case belongs to THIS tax center!
+          if (c.region === userRegion && c.taxCenter === userTaxCenter) {
+            c.storageStatus = 'STORED';
+            c.priorityRank = getCaseRank(c.id);
+            c.status = 'STORED_FOR_ASSIGNMENT';
+            count++;
+            console.log(`✅ Stored case ${c.id} for ${userTaxCenter}`);
+          } else {
+            skipped++;
+            console.warn(`⚠️ Skipped case ${c.id} (not in ${userTaxCenter})`);
+          }
+        }
+      });
+    }
+
+    // Save to localStorage
+    saveData(data);
+
+    // Reload cases
+    loadCasesForTaxCenter();
+    setSelectedCases(new Set());
+    
+    const message = skipped > 0 
+      ? `✅ Stored ${count} cases. ⚠️ Skipped ${skipped} cases (not in ${userTaxCenter}).`
+      : `✅ Successfully prioritized and stored ${count} cases for assignment.`;
+    
+    alert(message);
+  };
+
+  // Get statistics
+  const getStats = () => {
+    const riskLevels = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    const auditTypes = {};
+    let totalRevenue = 0;
+    let totalHours = 0;
+    
+    filteredCases.forEach(c => {
+      if (riskLevels.hasOwnProperty(c.riskLevel)) riskLevels[c.riskLevel]++;
+      auditTypes[c.auditType] = (auditTypes[c.auditType] || 0) + 1;
+      totalRevenue += c.revenueAtRisk || 0;
+      totalHours += c.estimatedHours || 0;
+    });
+
+    return { riskLevels, auditTypes, totalRevenue, totalHours };
+  };
+
+  // Pagination
+  const paginatedCases = filteredCases.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(filteredCases.length / itemsPerPage);
+  const stats = getStats();
+
+  const getRiskColor = (riskLevel) => {
+    const colors = {
+      'Critical': '#ff5252',
+      'High': '#ff9800',
+      'Medium': '#ffc107',
+      'Low': '#4caf50'
+    };
+    return colors[riskLevel] || '#999';
+  };
+
+  return (
+    <div style={{ padding: '24px', display: 'flex', gap: '24px', minHeight: 'calc(100vh - 100px)' }}>
+      {/* Main content area */}
+      <div style={{ flex: 1 }}>
+        <div className="detail-header">
+          <h2><i className="fas fa-sort-amount-down"></i> Case Prioritization</h2>
+          <Badge status={`${filteredCases.length} Cases`} className="director-approved" />
+        </div>
+
+        {/* Summary Info */}
+        <div style={{ background: '#e3f2fd', color: '#0c4a6e', padding: '16px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #1976d2' }}>
+          <strong style={{ color: '#0c4a6e' }}><i className="fas fa-info-circle"></i> Case Prioritization & Risk Profiling</strong>
+          <p style={{ color: '#0c4a6e', margin: '8px 0 0 0', fontSize: '13px', lineHeight: '1.6' }}>
+            View and prioritize audit cases from Risk Engine and approved requests. Select cases, attach treatment plans, and manage audit capacity.
+          </p>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="cards" style={{ marginBottom: '24px' }}>
+          <Card title="Total Cases" number={filteredCases.length} icon="fas fa-list-check" />
+          <Card title="Critical Risk" number={stats.riskLevels.Critical} icon="fas fa-exclamation-circle" />
+          <Card title="Revenue at Risk" number={`${(stats.totalRevenue / 1000000).toFixed(1)}M`} icon="fas fa-money-bill" />
+          <Card title="Est. Hours" number={stats.totalHours} icon="fas fa-clock" />
+        </div>
+
+        {/* Filters */}
+        <div style={{
+          background: '#1c2128',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          gap: '12px',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          <input
+            type="text"
+            placeholder="Search TIN, name, or case ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: '180px',
+              padding: '8px 12px',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              background: '#0f1419',
+              color: '#f0f6fc',
+              fontSize: '12px'
+            }}
+          />
+
+          <select value={filterRiskLevel} onChange={(e) => setFilterRiskLevel(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              background: '#0f1419',
+              color: '#f0f6fc',
+              fontSize: '12px'
+            }}>
+            {getRiskLevels().map(level => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+
+          <select value={filterAuditType} onChange={(e) => setFilterAuditType(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              background: '#0f1419',
+              color: '#f0f6fc',
+              fontSize: '12px'
+            }}>
+            {getAuditTypes().map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setFilterRiskLevel('All');
+              setFilterAuditType('All');
+            }}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              background: '#0f1419',
+              color: '#8b949e',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
+
+        {/* Actions */}
+        <div style={{
+          background: '#1a3a1a',
+          padding: '12px',
+          borderRadius: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          gap: '12px',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          <button
+            onClick={handleSelectAll}
+            style={{
+              padding: '8px 14px',
+              background: '#2196f3',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            <i className="fas fa-check-square"></i> {selectedCases.size === filteredCases.length ? 'Deselect' : 'Select'} All
+          </button>
+
+          {selectedCases.size > 0 && (
+            <button
+              onClick={handleStoreSelectedCases}
+              style={{
+                padding: '8px 14px',
+                background: '#ff9800',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                marginLeft: 'auto'
+              }}
+            >
+              <i className="fas fa-save"></i> Prioritize & Store {selectedCases.size} Cases
+            </button>
+          )}
+        </div>
+
+        {/* Sort Options */}
+        <div style={{
+          background: '#0f1419',
+          padding: '12px',
+          borderRadius: '8px',
+          marginBottom: '12px',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          fontSize: '12px',
+          color: '#8b949e'
+        }}>
+          <span>Sort by:</span>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+            style={{
+              padding: '4px 8px',
+              border: '1px solid #30363d',
+              borderRadius: '4px',
+              background: '#1c2128',
+              color: '#f0f6fc',
+              fontSize: '11px'
+            }}>
+            <option value="risk_score">Risk Score (Desc)</option>
+            <option value="taxpayer_name">Taxpayer Name</option>
+            <option value="revenue">Revenue at Risk</option>
+            <option value="hours">Estimated Hours</option>
+          </select>
+        </div>
+
+        {/* Cases Table */}
+        <div className="table-container" style={{ marginBottom: '24px' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCases.size === filteredCases.length && filteredCases.length > 0}
+                    onChange={handleSelectAll}
+                  />
+                </th>
+                <th>RANK</th>
+                <th>CASE ID</th>
+                <th>TIN</th>
+                <th>TAXPAYER</th>
+                <th>TYPE</th>
+                <th>RISK</th>
+                <th>STRENGTH</th>
+                <th>SOURCE</th>
+                <th>STATUS</th>
+                <th>REVENUE</th>
+                <th>HOURS</th>
+                <th style={{ width: '120px' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedCases.map(auditCase => {
+                const isAssignedToTL = auditCase.status === 'ASSIGNED_TO_TEAM_LEADER' || auditCase.assignedTeamLeader;
+                const isAssignedToAuditor = auditCase.status === 'ASSIGNED_TO_AUDITOR' || auditCase.assignedAuditor;
+                const isAssigned = isAssignedToTL || isAssignedToAuditor || auditCase.storageStatus === 'STORED';
+
+                return (
+                  <tr key={auditCase.id} style={{ background: isAssignedToAuditor ? 'rgba(16, 185, 129, 0.08)' : isAssignedToTL ? 'rgba(156, 39, 176, 0.08)' : 'inherit' }}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedCases.has(auditCase.id)}
+                        onChange={() => !isAssigned && toggleCaseSelection(auditCase.id)}
+                        disabled={isAssigned}
+                        style={{ opacity: isAssigned ? 0.5 : 1, cursor: isAssigned ? 'not-allowed' : 'pointer' }}
+                      />
+                    </td>
+                    <td><strong>{getCaseRank(auditCase.id)}</strong></td>
+                    <td><strong style={{ color: '#4caf50' }}>{auditCase.id?.substring(0, 15)}...</strong></td>
+                    <td>{auditCase.tin}</td>
+                    <td>{auditCase.taxpayerName}</td>
+                    <td><small>{auditCase.auditType}</small></td>
+                    <td>
+                      <span style={{
+                        background: getRiskColor(auditCase.riskLevel),
+                        color: '#fff',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                      }}>
+                        {auditCase.riskLevel}
+                      </span>
+                    </td>
+                    <td><small>{auditCase.riskStrength || 'N/A'}</small></td>
+                    <td>
+                      <span style={{
+                        background: auditCase.createdFrom === 'AUDIT_REQUEST' ? '#ff9800' : '#4a8fd9',
+                        color: '#fff',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                      }}>
+                        {auditCase.createdFrom === 'AUDIT_REQUEST' ? '🔔 Req' : '⚙️ Eng'}
+                      </span>
+                    </td>
+                    <td>
+                      {isAssignedToAuditor ? (
+                        <span style={{
+                          background: '#059669',
+                          color: '#fff',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          🔒 Auditor: {auditCase.assignedAuditor || 'Assigned'}
+                        </span>
+                      ) : isAssignedToTL ? (
+                        <span style={{
+                          background: '#9c27b0',
+                          color: '#fff',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          🔒 TL: {auditCase.assignedTeamLeader || 'Assigned'}
+                        </span>
+                      ) : (
+                        <span style={{
+                          background: '#4caf50',
+                          color: '#fff',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 'bold'
+                        }}>
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td><small>{((auditCase.revenueAtRisk || 0) / 1000000).toFixed(1)}M</small></td>
+                    <td><strong>{auditCase.estimatedHours}</strong></td>
+                    <td>
+                      <button
+                        onClick={() => {
+                          setSelectedDetailsId(auditCase.id);
+                          setShowDetailsModal(true);
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          background: '#2196f3',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 0',
+          fontSize: '12px',
+          color: '#8b949e'
+        }}>
+          <span>Showing {paginatedCases.length} of {filteredCases.length} cases</span>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #30363d',
+                  borderRadius: '4px',
+                  background: currentPage === page ? '#4a8fd9' : '#0f1419',
+                  color: currentPage === page ? '#fff' : '#8b949e',
+                  fontSize: '11px',
+                  cursor: 'pointer'
+                }}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right Sidebar - Capacity Panel */}
+      {capacityConfig && (
+        <CapacityPanel 
+          capacityConfig={capacityConfig}
+          onConfigure={() => alert('Capacity configuration modal - coming in next phase')}
+        />
+      )}
+
+      {/* Case Details Modal */}
+      <CaseDetailsModal
+        isOpen={showDetailsModal}
+        caseData={selectedDetailsId ? getCaseById(selectedDetailsId) : null}
+        onClose={() => setShowDetailsModal(false)}
+        onAttachPlan={(caseId) => {
+          setSelectedDetailsId(caseId);
+          setShowTreatmentModal(true);
+        }}
+      />
+
+      {/* Treatment Plan Modal */}
+      <TreatmentPlanModal
+        isOpen={showTreatmentModal}
+        caseId={selectedDetailsId}
+        onClose={() => setShowTreatmentModal(false)}
+        onSave={(plan) => {
+          loadCasesForTaxCenter();
+          alert('✅ Treatment plan saved successfully');
+        }}
+      />
+
+
+    </div>
+  );
+}
+
+export default CasePrioritizationView;
