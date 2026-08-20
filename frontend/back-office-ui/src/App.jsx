@@ -13,6 +13,7 @@ import TaxCenterDashboard from './features/ap/pages/taxcenter/TaxCenterDashboard
 import CaseManagement from './features/ap/pages/taxcenter/CaseManagement.jsx';
 import TeamLeaderDashboard from './features/ap/pages/teamleader/TeamLeaderDashboard.jsx';
 import AuditorDashboard from './features/ap/pages/auditor/AuditorDashboard.jsx';
+import CommitteeDashboard from './features/ap/pages/committee/CommitteeDashboard.jsx';
 import RiskAnalysisDashboard from './features/ap/pages/planning/RiskAnalysisDashboard.jsx';
 import RiskEngineDashboard from './features/ap/pages/riskengine/RiskEngineDashboard.jsx';
 import { Spinner } from './components/ui/index.jsx';
@@ -48,6 +49,10 @@ const PAGE_TITLES = {
     dashboard: { title: 'Auditor Dashboard', subtitle: 'Your active audit cases' },
     cases:     { title: 'My Cases',           subtitle: 'Cases assigned to you'   },
   },
+  committee: {
+    dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
+    reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
+  },
   senior_management: {
     dashboard: { title: 'Senior Management',  subtitle: 'Final approval of national audit plans' },
     approval:  { title: 'Plan Approval',      subtitle: 'Plans awaiting senior management approval' },
@@ -79,6 +84,7 @@ function RoleRouter({ user, view }) {
   }
   if (role === 'team_leader')      return <TeamLeaderDashboard view={view} />;
   if (role === 'auditor')          return <AuditorDashboard view={view} />;
+  if (role === 'committee')        return <CommitteeDashboard view={view} />;
 
   return (
     <div className="flex items-center justify-center h-64">

@@ -95,6 +95,19 @@ export const SEED_USERS = [
   // Auditors — OR-TC1
   { id: 'u-aud-or1a', name: 'Tolera Banti',    email: 'tolera.banti@mor.gov.et',      role: 'auditor', region: 'oromia', taxCenter: 'oromia-tc1', teamLeader: 'u-tl-or1a', password: 'password123' },
   { id: 'u-aud-or1b', name: 'Chaltu Bekele',   email: 'chaltu.bekele@mor.gov.et',     role: 'auditor', region: 'oromia', taxCenter: 'oromia-tc1', teamLeader: 'u-tl-or1a', password: 'password123' },
+
+  // Committee Members — AA-TC1 (Joint Audit & Transfer Pricing)
+  { id: 'u-com-aa1a', name: 'Committee Chair AA-TC1',      email: 'committee.chair.aa1@mor.gov.et',    role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit',       password: 'password123' },
+  { id: 'u-com-aa1b', name: 'Committee Member AA-TC1-TP',  email: 'committee.member.aa1tp@mor.gov.et',  role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'transfer_pricing', password: 'password123' },
+  
+  // Committee Members — AA-TC2 (Joint Audit)
+  { id: 'u-com-aa2a', name: 'Committee Chair AA-TC2',      email: 'committee.chair.aa2@mor.gov.et',    role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc2', auditType: 'joint_audit',       password: 'password123' },
+  
+  // Committee Members — AA-TC3 (Transfer Pricing)
+  { id: 'u-com-aa3a', name: 'Committee Member AA-TC3-TP',  email: 'committee.member.aa3tp@mor.gov.et',  role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc3', auditType: 'transfer_pricing', password: 'password123' },
+  
+  // Committee Members — OR-TC1 (Joint Audit)
+  { id: 'u-com-or1a', name: 'Committee Chair OR-TC1',      email: 'committee.chair.or1@mor.gov.et',    role: 'committee', region: 'oromia',      taxCenter: 'oromia-tc1',      auditType: 'joint_audit',       password: 'password123' },
 ];
 
 // ============================================================

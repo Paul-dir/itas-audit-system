@@ -5,15 +5,18 @@ import UserDirectory from '../components/UserDirectory.jsx';
 import { SEED_USERS } from '../data/seed.js';
 
 const DEMO_ACCOUNTS = [
-  { label: 'Planning Team',               email: 'planning.auditor1@mor.gov.et',  role: 'Audit Planning Team'   },
-  { label: 'Audit Director',              email: 'tesfaye.bekele@mor.gov.et',     role: 'Audit Director'        },
-  { label: 'Senior Management',           email: 'rahel.hailu@mor.gov.et',        role: 'Senior Management'     },
-  { label: 'Regional Director (Addis)',   email: 'getnet.alemu@mor.gov.et',       role: 'Regional Director'     },
-  { label: 'Regional Director (Oromia)',  email: 'gemechu.negash@mor.gov.et',     role: 'Regional Director'     },
-  { label: 'Tax Center Manager (AA-TC1)', email: 'mekdes.solomon@mor.gov.et',     role: 'Tax Center Manager'    },
-  { label: 'Tax Center Manager (AA-TC2)', email: 'dereje.worku@mor.gov.et',       role: 'Tax Center Manager'    },
-  { label: 'Team Leader',                 email: 'henok.belay@mor.gov.et',        role: 'Team Leader'           },
-  { label: 'Auditor',                     email: 'kidist.mehari@mor.gov.et',      role: 'Auditor'               },
+  { label: 'Planning Team',               email: 'planning.auditor1@mor.gov.et',        role: 'Audit Planning Team'   },
+  { label: 'Audit Director',              email: 'tesfaye.bekele@mor.gov.et',           role: 'Audit Director'        },
+  { label: 'Senior Management',           email: 'rahel.hailu@mor.gov.et',              role: 'Senior Management'     },
+  { label: 'Regional Director (Addis)',   email: 'getnet.alemu@mor.gov.et',             role: 'Regional Director'     },
+  { label: 'Regional Director (Oromia)',  email: 'gemechu.negash@mor.gov.et',           role: 'Regional Director'     },
+  { label: 'Tax Center Manager (AA-TC1)', email: 'mekdes.solomon@mor.gov.et',           role: 'Tax Center Manager'    },
+  { label: 'Tax Center Manager (AA-TC2)', email: 'dereje.worku@mor.gov.et',             role: 'Tax Center Manager'    },
+  { label: 'Team Leader',                 email: 'henok.belay@mor.gov.et',              role: 'Team Leader'           },
+  { label: 'Auditor',                     email: 'kidist.mehari@mor.gov.et',            role: 'Auditor'               },
+  { label: 'Committee Chair (AA-TC1)',    email: 'committee.chair.aa1@mor.gov.et',      role: 'Committee'             },
+  { label: 'Committee (AA-TC1, TP)',      email: 'committee.member.aa1tp@mor.gov.et',   role: 'Committee'             },
+  { label: 'Committee Chair (OR-TC1)',    email: 'committee.chair.or1@mor.gov.et',      role: 'Committee'             },
 ];
 
 export default function Login() {
