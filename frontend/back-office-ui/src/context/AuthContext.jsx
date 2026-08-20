@@ -20,9 +20,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (emailOrId, password) => {
-    const users = storage.get(STORE_KEYS.USERS, SEED_USERS);
+    // Always check SEED_USERS first (fresh data), then fall back to cached
+    const seedUsers = SEED_USERS;
+    const cachedUsers = storage.get(STORE_KEYS.USERS, SEED_USERS);
+    
+    // Merge seed users with cached (seed takes priority for updates)
+    const allUsers = [
+      ...seedUsers,
+      ...cachedUsers.filter(cu => !seedUsers.find(su => su.id === cu.id))
+    ];
+    
     // Find user by email or ID
-    const found = users.find(u => u.email === emailOrId || u.id === emailOrId);
+    const found = allUsers.find(u => u.email === emailOrId || u.id === emailOrId);
     
     if (found) {
       // Demo mode: Accept common password for all users
