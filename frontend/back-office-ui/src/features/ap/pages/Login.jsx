@@ -14,9 +14,11 @@ const DEMO_ACCOUNTS = [
   { label: 'Tax Center Manager (AA-TC2)', email: 'dereje.worku@mor.gov.et',             role: 'Tax Center Manager'    },
   { label: 'Team Leader',                 email: 'henok.belay@mor.gov.et',              role: 'Team Leader'           },
   { label: 'Auditor',                     email: 'kidist.mehari@mor.gov.et',            role: 'Auditor'               },
-  { label: 'Committee Chair (AA-TC1)',    email: 'committee.chair.aa1@mor.gov.et',      role: 'Committee'             },
-  { label: 'Committee (AA-TC1, TP)',      email: 'committee.member.aa1tp@mor.gov.et',   role: 'Committee'             },
-  { label: 'Committee Chair (OR-TC1)',    email: 'committee.chair.or1@mor.gov.et',      role: 'Committee'             },
+  { label: 'Committee Chair (AA)',        email: 'aa.committee1@mor.gov.et',             role: 'Committee'             },
+  { label: 'Committee Member (AA-2)',     email: 'aa-ara.joint_committee.2@mor.gov.et',  role: 'Committee'             },
+  { label: 'Committee Member (AA-3)',     email: 'aa-ara.joint_committee.3@mor.gov.et',  role: 'Committee'             },
+  { label: 'Committee Member (AA-4)',     email: 'aa-ara.joint_committee.4@mor.gov.et',  role: 'Committee'             },
+  { label: 'Committee Member (AA-5)',     email: 'aa-ara.joint_committee.5@mor.gov.et',  role: 'Committee'             },
 ];
 
 export default function Login() {
