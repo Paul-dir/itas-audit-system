@@ -44,8 +44,8 @@ export default function SeniorDashboard({ view }) {
 
   const cols = [
     { key: 'id', label: 'ID', render: v => <span className="font-mono text-xs text-gray-400 dark:text-gray-500">{v}</span> },
-    { key: 'name', label: 'Plan', render: (v, row) => (
-      <div><p className="font-medium text-sm text-gray-900 dark:text-white">{v}</p><p className="text-xs text-gray-400 dark:text-gray-500">FY {row.year}</p></div>
+    { key: 'planName', label: 'Plan', render: (v, row) => (
+      <div><p className="font-medium text-sm text-gray-900 dark:text-white">{v}</p><p className="text-xs text-gray-400 dark:text-gray-500">FY {row.planYear}</p></div>
     )},
     { key: 'totalCases', label: 'Cases', render: v => <span className="font-semibold tabular-nums">{v?.toLocaleString()}</span> },
     { key: 'status', label: 'Status', render: v => <PlanStatusBadge status={v} /> },
@@ -136,7 +136,7 @@ export default function SeniorDashboard({ view }) {
               </div>
               <div className="bg-purple-50 rounded-xl p-3">
                 <p className="text-xs text-gray-500 dark:text-slate-400">Fiscal Year</p>
-                <p className="text-xl font-bold text-purple-700">FY {reviewPlan.year}</p>
+                <p className="text-xl font-bold text-purple-700">FY {reviewPlan.planYear}</p>
               </div>
             </div>
             <DistributionTable distribution={reviewPlan.distribution} />
@@ -151,11 +151,11 @@ export default function SeniorDashboard({ view }) {
 
       {/* View plan modal */}
       {viewPlan && (
-        <Modal open={!!viewPlan} onClose={() => setViewPlan(null)} title={viewPlan.name} size="xl">
+        <Modal open={!!viewPlan} onClose={() => setViewPlan(null)} title={viewPlan.planName} size="xl">
           <div className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               <PlanStatusBadge status={viewPlan.status} />
-              <span className="text-xs text-gray-400 dark:text-slate-400">FY {viewPlan.year}</span>
+              <span className="text-xs text-gray-400 dark:text-slate-400">FY {viewPlan.planYear}</span>
               <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">{viewPlan.totalCases?.toLocaleString()} cases</span>
             </div>
             <Tabs

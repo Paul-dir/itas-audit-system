@@ -70,10 +70,10 @@ export default function DirectorDashboard({ view }) {
 
   const planCols = (showActions = true) => [
     { key: 'id', label: 'ID', render: v => <span className="font-mono text-xs text-gray-400 dark:text-gray-500">{v}</span> },
-    { key: 'name', label: 'Plan', render: (v, row) => (
+    { key: 'planName', label: 'Plan', render: (v, row) => (
       <div>
         <p className="font-medium text-sm text-gray-900 dark:text-white">{v}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.year}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.planYear}</p>
       </div>
     )},
     { key: 'totalCases', label: 'Cases', render: v => <span className="font-semibold tabular-nums">{v?.toLocaleString()}</span> },

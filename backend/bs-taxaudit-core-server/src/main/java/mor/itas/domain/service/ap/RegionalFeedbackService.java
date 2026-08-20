@@ -1,6 +1,7 @@
 package mor.itas.domain.service.ap;
 
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.model.ap.RegionalFeedback;
 import mor.itas.domain.model.ap.RegionalDeployment;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
@@ -52,7 +53,7 @@ public class RegionalFeedbackService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("AWAITING_REGIONAL_FEEDBACK")) {
+        if (!plan.getStatus().equals(PlanStatus.AWAITING_REGIONAL_FEEDBACK)) {
             throw new IllegalStateException("Plan must be in AWAITING_REGIONAL_FEEDBACK status. Current: " + plan.getStatus());
         }
 
@@ -71,7 +72,7 @@ public class RegionalFeedbackService {
 
         // If all regions submitted, update plan status
         if (allRegionsSubmitted) {
-            plan.setStatus("FEEDBACK_COLLECTED");
+            plan.setStatus(PlanStatus.FEEDBACK_COLLECTED);
             plan = planRepository.save(plan);
             addTimelineEntry(planId, "FEEDBACK_COLLECTED", actorId, 
                            "All regional feedback collected - ready for director review");
@@ -110,7 +111,7 @@ public class RegionalFeedbackService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("APPROVED_TO_REGIONS")) {
+        if (!plan.getStatus().equals(PlanStatus.APPROVED_TO_REGIONS)) {
             throw new IllegalStateException("Plan must be in APPROVED_TO_REGIONS status. Current: " + plan.getStatus());
         }
 
@@ -124,7 +125,7 @@ public class RegionalFeedbackService {
 
         // If all regions deployed, finalize the plan
         if (allRegionsDeployed) {
-            plan.setStatus("FINALIZED");
+            plan.setStatus(PlanStatus.FINALIZED);
             plan = planRepository.save(plan);
             addTimelineEntry(planId, "FINALIZED", actorId,
                            "All regions deployed - Plan finalized");

@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.DistributeApprovedPlanPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -46,7 +47,7 @@ public class DistributeApprovedPlanUseCase implements DistributeApprovedPlanPort
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan is FINAL_APPROVED
-        String status = plan.getStatus();
+        PlanStatus status = plan.getStatus();
         if (!"FINAL_APPROVED".equals(status)) {
             throw new IllegalStateException(
                 "Cannot distribute plan in status: " + status + ". " +

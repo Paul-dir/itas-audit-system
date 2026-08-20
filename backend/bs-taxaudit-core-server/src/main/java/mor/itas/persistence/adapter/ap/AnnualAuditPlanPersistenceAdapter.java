@@ -30,6 +30,11 @@ public class AnnualAuditPlanPersistenceAdapter implements AnnualAuditPlanReposit
     }
 
     @Override
+    public java.util.List<AnnualAuditPlan> findAll() {
+        return jpaRepository.findAll().stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
     public AnnualAuditPlan update(AnnualAuditPlan plan) {
         AnnualAuditPlanEntity entity = mapper.toEntity(plan);
         AnnualAuditPlanEntity updatedEntity = jpaRepository.save(entity);
@@ -38,7 +43,9 @@ public class AnnualAuditPlanPersistenceAdapter implements AnnualAuditPlanReposit
 
     @Override
     public java.util.List<AnnualAuditPlan> findByStatus(String status) {
-        return jpaRepository.findByStatus(status).stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
+        mor.itas.persistence.jpa.entity.ap.PlanStatusEnum statusEnum = 
+            mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.valueOf(status);
+        return jpaRepository.findByStatus(statusEnum).stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
     }
 
     @Override
@@ -48,6 +55,8 @@ public class AnnualAuditPlanPersistenceAdapter implements AnnualAuditPlanReposit
 
     @Override
     public java.util.List<AnnualAuditPlan> findByStatusAndYear(String status, Integer year) {
-        return jpaRepository.findByStatusAndYear(status, year).stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
+        mor.itas.persistence.jpa.entity.ap.PlanStatusEnum statusEnum = 
+            mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.valueOf(status);
+        return jpaRepository.findByStatusAndYear(statusEnum, year).stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
     }
 }

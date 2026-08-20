@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.GetTaxCenterAllocationPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.model.ap.RegionalAllocationDetail;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,8 +38,8 @@ public class GetTaxCenterAllocationUseCase implements GetTaxCenterAllocationPort
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan status
-        String status = plan.getStatus();
-        if (!isValidStatusForTaxCenterFeedback(status)) {
+        PlanStatus status = plan.getStatus();
+        if (!isValidStatusForTaxCenterFeedback(status.name())) {
             throw new IllegalStateException(
                 "Cannot get allocation for plan in status: " + status + ". " +
                 "Plan must be in DIRECTOR_APPROVED or AWAITING_REGIONAL_FEEDBACK status."

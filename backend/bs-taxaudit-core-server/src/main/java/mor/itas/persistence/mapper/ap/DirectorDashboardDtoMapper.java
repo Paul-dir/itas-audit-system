@@ -34,7 +34,7 @@ public class DirectorDashboardDtoMapper {
             .id(plan.getId().toString())
             .name(plan.getPlanName())
             .year(plan.getPlanYear())
-            .status(plan.getStatus())
+            .status(plan.getStatus().name())
             .totalCases(100L)  // Will be calculated properly in full implementation
             .createdAt(plan.getCreatedAt())
             .createdBy(plan.getCreatedBy())

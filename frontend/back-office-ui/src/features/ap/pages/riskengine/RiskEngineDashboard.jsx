@@ -587,7 +587,7 @@ export default function RiskEngineDashboard() {
                               <Badge color="green" size="sm">✓ Ready</Badge>
                             </div>
                             <p className="text-sm text-gray-500 dark:text-slate-400">
-                              FY {plan.year} · {totalCases} total cases across all regions
+                              FY {plan.planYear} · {totalCases} total cases across all regions
                             </p>
                             <p className="text-xs text-green-600 mt-1 font-medium">
                               ✓ No cases created yet - You can use this plan
@@ -622,11 +622,11 @@ export default function RiskEngineDashboard() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className="font-semibold text-gray-900 dark:text-white">{plan.name}</p>
+                              <p className="font-semibold text-gray-900 dark:text-white">{plan.planName}</p>
                               <Badge color="green" dot>Cases Created</Badge>
                             </div>
                             <p className="text-sm text-gray-500 dark:text-slate-400">
-                              FY {plan.year} · {planCases.length} cases created for your tax center
+                              FY {plan.planYear} · {planCases.length} cases created for your tax center
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
                               Cases created on {new Date(planCases[0]?.createdAt).toLocaleDateString()}
@@ -788,7 +788,7 @@ export default function RiskEngineDashboard() {
                   
                   return (
                     <option key={plan.id} value={plan.id}>
-                      {plan.name} - FY {plan.year} ({allocatedCases} cases allocated)
+                      {plan.planName} - FY {plan.planYear} ({allocatedCases} cases allocated)
                     </option>
                   );
                 })}

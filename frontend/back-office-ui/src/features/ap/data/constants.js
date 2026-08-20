@@ -4,9 +4,10 @@
 
 export const REGIONS = [
   { id: 'addis_ababa', name: 'Addis Ababa', code: 'AA' },
-  { id: 'amhara',      name: 'Amhara',      code: 'AM' },
-  { id: 'oromia',      name: 'Oromia',      code: 'OR' },
-  { id: 'snnpr',       name: 'SNNPR',       code: 'SN' },
+  { id: 'amhara',      name: 'Amhara',      code: 'BA' },
+  { id: 'oromia',      name: 'Oromia',      code: 'BB' },
+  { id: 'dire_dawa',   name: 'Dire Dawa',   code: 'AB' },
+  { id: 'snnpr',       name: 'SNNPR',       code: 'CA' },
   { id: 'somali',      name: 'Somali',      code: 'SO' },
 ];
 
@@ -17,19 +18,24 @@ export const TAX_CENTERS = {
     { id: 'addis_ababa-tc3', name: 'Addis Ababa TC3', shortName: 'AA-TC3' },
   ],
   amhara: [
-    { id: 'amhara-tc1', name: 'Amhara TC1', shortName: 'AM-TC1' },
-    { id: 'amhara-tc2', name: 'Amhara TC2', shortName: 'AM-TC2' },
-    { id: 'amhara-tc3', name: 'Amhara TC3', shortName: 'AM-TC3' },
+    { id: 'amhara-tc1', name: 'Amhara TC1', shortName: 'BA-TC1' },
+    { id: 'amhara-tc2', name: 'Amhara TC2', shortName: 'BA-TC2' },
+    { id: 'amhara-tc3', name: 'Amhara TC3', shortName: 'BA-TC3' },
   ],
   oromia: [
-    { id: 'oromia-tc1', name: 'Oromia TC1', shortName: 'OR-TC1' },
-    { id: 'oromia-tc2', name: 'Oromia TC2', shortName: 'OR-TC2' },
-    { id: 'oromia-tc3', name: 'Oromia TC3', shortName: 'OR-TC3' },
+    { id: 'oromia-tc1', name: 'Oromia TC1', shortName: 'BB-TC1' },
+    { id: 'oromia-tc2', name: 'Oromia TC2', shortName: 'BB-TC2' },
+    { id: 'oromia-tc3', name: 'Oromia TC3', shortName: 'BB-TC3' },
+  ],
+  dire_dawa: [
+    { id: 'dire_dawa-tc1', name: 'Dire Dawa TC1', shortName: 'AB-TC1' },
+    { id: 'dire_dawa-tc2', name: 'Dire Dawa TC2', shortName: 'AB-TC2' },
+    { id: 'dire_dawa-tc3', name: 'Dire Dawa TC3', shortName: 'AB-TC3' },
   ],
   snnpr: [
-    { id: 'snnpr-tc1', name: 'SNNPR TC1', shortName: 'SN-TC1' },
-    { id: 'snnpr-tc2', name: 'SNNPR TC2', shortName: 'SN-TC2' },
-    { id: 'snnpr-tc3', name: 'SNNPR TC3', shortName: 'SN-TC3' },
+    { id: 'snnpr-tc1', name: 'SNNPR TC1', shortName: 'CA-TC1' },
+    { id: 'snnpr-tc2', name: 'SNNPR TC2', shortName: 'CA-TC2' },
+    { id: 'snnpr-tc3', name: 'SNNPR TC3', shortName: 'CA-TC3' },
   ],
   somali: [
     { id: 'somali-tc1', name: 'Somali TC1', shortName: 'SO-TC1' },
@@ -40,10 +46,9 @@ export const TAX_CENTERS = {
 
 export const AUDIT_TYPES = [
   { id: 'desk_audit',       name: 'Desk Audit',        color: 'blue',   shortName: 'Desk'   },
-  { id: 'field_audit',      name: 'Field Audit',       color: 'green',  shortName: 'Field'  },
   { id: 'joint_audit',      name: 'Joint Audit',       color: 'purple', shortName: 'Joint'  },
-  { id: 'transfer_pricing', name: 'Transfer Pricing',  color: 'orange', shortName: 'T.Price'},
-  { id: 'comprehensive',    name: 'Comprehensive',     color: 'red',    shortName: 'Comp.'  },
+  { id: 'transfer_pricing', name: 'Transfer Pricing',  color: 'orange', shortName: 'TP'    },
+  { id: 'comprehensive',    name: 'Comprehensive',     color: 'red',    shortName: 'Comp'   },
   { id: 'issue_audit',      name: 'Issue Audit',       color: 'teal',   shortName: 'Issue'  },
 ];
 
@@ -108,4 +113,30 @@ export const getTaxCenterById = (id) => {
     if (found) return found;
   }
   return null;
+};
+
+/**
+ * Convert distribution from backend format (region codes like "AA") to frontend format (region IDs like "addis_ababa")
+ * Backend stores distribution as { "AA": { "desk_audit": 30, ... }, ... }
+ * Frontend expects { "addis_ababa": { "desk_audit": 30, ... }, ... }
+ */
+export const convertDistributionFromBackend = (backendDistribution) => {
+  if (!backendDistribution) return null;
+  
+  // Build code-to-id mapping
+  const codeToId = {};
+  REGIONS.forEach(r => {
+    codeToId[r.code] = r.id;
+  });
+  
+  // Transform distribution object keys from codes to IDs
+  const frontendDistribution = {};
+  Object.entries(backendDistribution).forEach(([code, auditTypes]) => {
+    const regionId = codeToId[code];
+    if (regionId) {
+      frontendDistribution[regionId] = auditTypes;
+    }
+  });
+  
+  return frontendDistribution;
 };

@@ -2,7 +2,10 @@ package mor.itas.application.usecase.ap;
 
 import mor.itas.application.port.inboundport.ap.PlanQueryPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
+import mor.itas.application.port.outboundport.repositoryport.ap.PlanAuditLogRepositoryPort;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanAllocation;
+import mor.itas.domain.model.ap.PlanAuditLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,7 @@ import java.util.UUID;
 public class PlanQueryUseCase implements PlanQueryPort {
 
     private final AnnualAuditPlanRepository planRepository;
+    private final PlanAuditLogRepositoryPort auditLogRepository;
 
     @Override
     public AnnualAuditPlan getPlanById(UUID planId) {
@@ -39,8 +43,8 @@ public class PlanQueryUseCase implements PlanQueryPort {
         if (statusFilter != null) {
             plans = planRepository.findByStatus(statusFilter);
         } else {
-            // If no status filter, return empty for now (no findAll available)
-            plans = List.of();
+            // If no status filter, return all plans
+            plans = planRepository.findAll();
         }
 
         // Apply fiscal year filter if provided
@@ -78,4 +82,65 @@ public class PlanQueryUseCase implements PlanQueryPort {
         stats.put("total", total);
         return stats;
     }
+
+    @Override
+    public List<?> getRegionalAllocations(UUID planId) {
+        AnnualAuditPlan plan = getPlanById(planId);
+        return plan.getAllocations().stream()
+            .filter(PlanAllocation::isRegionalAllocation)
+            .toList();
+    }
+
+    @Override
+    public List<?> getTaxCenterAllocations(UUID planId) {
+        AnnualAuditPlan plan = getPlanById(planId);
+        return plan.getAllocations().stream()
+            .filter(PlanAllocation::isTaxCenterAllocation)
+            .toList();
+    }
+
+    @Override
+    public List<?> getTaxCenterAllocationsByRegion(UUID planId, String regionCode) {
+        AnnualAuditPlan plan = getPlanById(planId);
+        return plan.getAllocations().stream()
+            .filter(a -> a.isTaxCenterAllocation() && 
+                    a.getRegionCode() != null && 
+                    a.getRegionCode().equals(regionCode))
+            .toList();
+    }
+
+    @Override
+    public List<?> getAuditLog(UUID planId) {
+        // Verify plan exists
+        getPlanById(planId);
+        // Return audit logs
+        return auditLogRepository.findByPlanIdOrderByCreatedAtDesc(planId);
+    }
+
+    @Override
+    public List<AnnualAuditPlan> getPlansByRegion(String regionCode) {
+        // Get all plans and filter to those with allocations for this region
+        List<AnnualAuditPlan> allPlans = planRepository.findAll();
+        
+        return allPlans.stream()
+            .filter(plan -> {
+                // Check if this plan has distribution for the region
+                Map<String, Map<String, Integer>> distribution = plan.getDistribution();
+                if (distribution == null) {
+                    return false;
+                }
+                
+                // Check if the region code exists in the distribution and has non-zero allocation
+                Map<String, Integer> regionDist = distribution.get(regionCode);
+                if (regionDist == null || regionDist.isEmpty()) {
+                    return false;
+                }
+                
+                // Check if any audit type has non-zero allocation
+                return regionDist.values().stream()
+                    .anyMatch(count -> count != null && count > 0);
+            })
+            .toList();
+    }
+
 }

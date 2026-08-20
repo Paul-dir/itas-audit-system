@@ -7,6 +7,7 @@ import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import { DistributionTable, TaxCenterDistributionTable } from '../shared/DistributionTable.jsx';
 import { AUDIT_TYPES, REGIONS, CASE_STATUS, getTaxCentersForRegion } from '../../data/constants.js';
 import PlanTimeline from '../shared/PlanTimeline.jsx';
+import { useEffect } from 'react';
 
 export default function RegionalDashboard({ view }) {
   const { state, actions, selectors } = useApp();
@@ -28,8 +29,32 @@ export default function RegionalDashboard({ view }) {
   // Case viewer for finalized plans
   const [casePlanFilter, setCasePlanFilter] = useState(null); // planId to filter cases
   const [caseSearch, setCaseSearch] = useState('');
+  const [regionalPlans, setRegionalPlans] = useState([]); // ✅ Plans fetched from backend for this region
+  const [plansLoading, setPlansLoading] = useState(false);
 
-  const allPlans = state.plans;
+  // ✅ Fetch plans for this region from backend on component mount
+  useEffect(() => {
+    const loadRegionalPlans = async () => {
+      setPlansLoading(true);
+      try {
+        const { default: planService } = await import('../../services/planService.js');
+        const plans = await planService.getPlansForRegion(region);
+        console.log(`✅ Loaded ${plans.length} plans for region ${region}`);
+        setRegionalPlans(plans);
+      } catch (error) {
+        console.error('❌ Failed to load regional plans:', error);
+        setRegionalPlans([]);
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+
+    if (region) {
+      loadRegionalPlans();
+    }
+  }, [region]);
+
+  const allPlans = regionalPlans; // ✅ Use backend-fetched regional plans instead of state.plans
   const awaitingFeedback = allPlans.filter(p => p.status === 'AWAITING_REGIONAL_FEEDBACK' && !p.regionalFeedback?.[region]);
   const submitted = allPlans.filter(p => p.status === 'AWAITING_REGIONAL_FEEDBACK' && p.regionalFeedback?.[region]);
   
@@ -375,10 +400,10 @@ export default function RegionalDashboard({ view }) {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-gray-900 dark:text-white">{plan.name}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{plan.planName}</p>
                         <PlanStatusBadge status={plan.status} />
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">FY {plan.year} · {planTotal.toLocaleString()} cases allocated to your region</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">FY {plan.planYear} · {planTotal.toLocaleString()} cases allocated to your region</p>
 
                       {/* Case stats (only when plan is FINALIZED and cases exist) */}
                       {plan.status === 'FINALIZED' && planCases.length > 0 && (

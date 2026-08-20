@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.ResubmitAmendedPlanPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -44,8 +45,8 @@ public class ResubmitAmendedPlanUseCase implements ResubmitAmendedPlanPort {
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan status
-        String status = plan.getStatus();
-        if (!isValidStatusForResubmission(status)) {
+        PlanStatus status = plan.getStatus();
+        if (!isValidStatusForResubmission(status.name())) {
             throw new IllegalStateException(
                 "Cannot resubmit plan in status: " + status + ". " +
                 "Plan must be in AMENDMENT_REQUIRED status."

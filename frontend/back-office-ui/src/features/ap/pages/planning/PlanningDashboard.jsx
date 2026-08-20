@@ -18,6 +18,7 @@ export default function PlanningDashboard({ view }) {
   const [confirmSubmit, setConfirmSubmit] = useState(null);
   const [amendmentEditPlan, setAmendmentEditPlan] = useState(null);
   const [activeTab, setActiveTab] = useState('plans');
+  const [error, setError] = useState(null);
 
   // Show full configuration page if view is 'plan-configuration'
   if (view === 'plan-configuration') {
@@ -117,9 +118,13 @@ export default function PlanningDashboard({ view }) {
   const plans = state.plans;
   const amendmentPlans = plans.filter(p => ['AMENDMENT_REQUIRED', 'SENIOR_MGMT_REJECTED'].includes(p.status));
 
-  const handleSubmit = (plan) => {
-    actions.submitToDirector(plan.id, user.id);
-    setConfirmSubmit(null);
+  const handleSubmit = async (plan) => {
+    try {
+      await actions.submitToDirector(plan.id, user.id);
+      setConfirmSubmit(null);
+    } catch (error) {
+      setError(`Failed to submit plan: ${error.message}`);
+    }
   };
 
   const handleAmendmentUpdate = (updatedPlan) => {
@@ -129,11 +134,11 @@ export default function PlanningDashboard({ view }) {
 
   const columns = [
     { key: 'id', label: 'Plan ID', render: (v) => <span className="font-mono text-xs text-gray-500 dark:text-slate-400">{v}</span> },
-    { key: 'name', label: 'Plan Name', render: (v, row) => (
+    { key: 'planName', label: 'Plan Name', render: (v, row) => (
       <div>
         <p className="font-medium text-gray-900 text-sm">{v}</p>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.year}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.planYear}</p>
           {row.riskBased && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-medium rounded-full"><Activity size={9} /> Risk-based</span>}
         </div>
       </div>
@@ -358,6 +363,7 @@ export default function PlanningDashboard({ view }) {
       )}
 
       {/* Modals */}
+      {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
       <CreatePlanModal open={showCreate} onClose={() => setShowCreate(false)} />
       {selectedPlan && <PlanDetailModal plan={selectors.getPlanById(selectedPlan.id)} onClose={() => setSelectedPlan(null)} />}
 

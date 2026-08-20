@@ -110,7 +110,7 @@ function RegionRow({ region, maxRisky, expanded, onToggle }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
-  const { loading, source, lastUpdated, national, byRegion, planDefaults, reload } = useRiskEngine();
+  const { loading, error, source, lastUpdated, national, byRegion, planDefaults, reload } = useRiskEngine();
   const [expandedRegion, setExpandedRegion] = useState(null);
 
   const maxRisky = byRegion.reduce((m, r) => Math.max(m, r.totalRisky), 0);
@@ -135,6 +135,31 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
     );
   }
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={22} className="text-red-600 dark:text-red-400" />
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Risk Engine Analysis</h2>
+        </div>
+        <Alert type="error" title="Backend Data Not Available">
+          <div className="space-y-2">
+            <p>{error}</p>
+            <p className="text-sm">The application requires backend data to function. Please ensure:</p>
+            <ul className="text-sm list-disc list-inside space-y-1">
+              <li>Backend server is running (http://localhost:8080)</li>
+              <li>Risk Engine API is accessible</li>
+              <li>Database connection is working</li>
+            </ul>
+          </div>
+        </Alert>
+        <Button variant="primary" icon={RefreshCw} onClick={reload}>
+          Retry Loading Data
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
@@ -143,14 +168,10 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
           <div className="flex items-center gap-2">
             <Activity size={22} className="text-blue-600 dark:text-blue-400" />
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Risk Engine Analysis</h2>
-            <Badge color={source === 'live' ? 'green' : 'yellow'} dot>
-              {source === 'live' ? 'Live Data' : 'Estimated'}
-            </Badge>
+            <Badge color="green" dot>Live Data</Badge>
           </div>
           <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
-            {source === 'live'
-              ? `Connected to Risk Engine · Updated ${lastUpdated?.toLocaleTimeString()}`
-              : 'Estimates based on configured risk parameters (live API unavailable)'}
+            Connected to Risk Engine · Updated {lastUpdated?.toLocaleTimeString()}
           </p>
         </div>
         <div className="flex gap-2 flex-shrink-0">
@@ -162,13 +183,6 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
           )}
         </div>
       </div>
-
-      {source === 'estimated' && (
-        <Alert type="info" title="Using estimated data">
-          The Risk Engine API is currently unreachable. Figures below are computed from your configured risk parameters.
-          Connect to the live API for real taxpayer risk data.
-        </Alert>
-      )}
 
       {/* ── National KPIs ── */}
       <div>
@@ -205,6 +219,36 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
             sub="audit_immediately + select_for_audit"
           />
         </div>
+      </div>
+
+      {/* ── Federal Level Summary Table ── */}
+      <div className="overflow-x-auto rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 p-4">
+        <h3 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-2">🏛️ Federal Level Summary</h3>
+        <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">Taxpayers with federal business license</p>
+        <table className="min-w-full text-xs">
+          <thead className="bg-blue-100 dark:bg-blue-900">
+            <tr>
+              <th className="px-3 py-2.5 text-left font-bold text-blue-900 dark:text-blue-100">Federal Level</th>
+              {(national?.byAuditType || []).map(a => (
+                <th key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100 whitespace-nowrap">{a.shortName}</th>
+              ))}
+              <th className="px-3 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100">Total</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-blue-950">
+            <tr>
+              <td className="px-3 py-2.5 font-bold text-blue-900 dark:text-blue-100">Federal Taxpayers</td>
+              {(national?.byAuditType || []).map(a => (
+                <td key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-200 tabular-nums">
+                  {fmt(a.count)}
+                </td>
+              ))}
+              <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 tabular-nums">
+                {fmt(national?.totalRisky)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* ── Risk Level Breakdown ── */}
@@ -317,7 +361,7 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
       {/* ── Data source note ── */}
       <p className="text-xs text-gray-400 dark:text-slate-400 flex items-center gap-1.5">
         <Info size={11} />
-        Data source: {source === 'live' ? 'MOR Risk Engine API (audit-ally-score.lovable.app) + Taxpayer Registration API' : 'Locally configured risk parameters (auditConfig.js)'}
+        Data source: MOR Risk Engine API (audit-ally-score.lovable.app) + Taxpayer Registration API
         {lastUpdated && ` · ${lastUpdated.toLocaleString()}`}
       </p>
     </div>

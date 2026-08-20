@@ -231,7 +231,7 @@ function RegionalDirectorView() {
             ) : (
               <>
                 <tr><td><strong>Plan ID</strong></td><td>{plan.id}</td></tr>
-                <tr><td><strong>Year</strong></td><td>{plan.year}</td></tr>
+                <tr><td><strong>Year</strong></td><td>{plan.planYear}</td></tr>
                 <tr><td><strong>National Total</strong></td><td>{plan.nationalTotal}</td></tr>
                 <tr><td><strong>Status</strong></td><td><Badge status={getStatusDisplay(plan.status)} className={getBadgeClass(plan.status)} /></td></tr>
                 <tr><td><strong>Regions</strong></td><td>{plan.allocations.length}</td></tr>

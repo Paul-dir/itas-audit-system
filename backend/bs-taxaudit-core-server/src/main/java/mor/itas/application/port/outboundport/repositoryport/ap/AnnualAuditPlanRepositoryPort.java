@@ -67,4 +67,15 @@ public interface AnnualAuditPlanRepositoryPort {
      * Count total plans
      */
     long count();
+
+    /**
+     * Check if a plan already exists for the given year
+     * Year is unique - only one plan per year allowed
+     */
+    boolean existsByYear(Integer year);
+
+    /**
+     * Check if a plan already exists for the given year and name
+     */
+    boolean existsByYearAndName(Integer year, String name);
 }

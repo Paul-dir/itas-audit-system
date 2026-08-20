@@ -101,7 +101,8 @@ export const SEED_USERS = [
 // Deterministic distribution helper
 // ============================================================
 const buildDistribution = (regionWeights) => {
-  const weights = { desk_audit: 0.30, field_audit: 0.25, joint_audit: 0.18, transfer_pricing: 0.10, comprehensive: 0.10, issue_audit: 0.07 };
+  // Weights updated to match 5 audit types (Field Audit removed)
+  const weights = { desk_audit: 0.35, joint_audit: 0.25, transfer_pricing: 0.15, comprehensive: 0.15, issue_audit: 0.10 };
   const dist = {};
   for (const [regionId, total] of Object.entries(regionWeights)) {
     dist[regionId] = {};
@@ -121,17 +122,25 @@ const buildDistribution = (regionWeights) => {
 };
 
 const buildTaxCenterDistribution = (regionId, regionDist) => {
+  if (!regionDist) return {}; // Safety check
+  
   const tcs = TAX_CENTERS[regionId];
+  if (!tcs || tcs.length === 0) return {}; // Safety check
+  
   const tcDist = {};
   for (const tcWeights of [{ w: 0.40, idx: 0 }, { w: 0.35, idx: 1 }, { w: 0.25, idx: 2 }]) {
     const tc = tcs[tcWeights.idx];
+    if (!tc) continue; // Skip if tax center doesn't exist
+    
     tcDist[tc.id] = {};
     if (tcWeights.idx < 2) {
-      AUDIT_TYPES.forEach(a => { tcDist[tc.id][a.id] = Math.round(regionDist[a.id] * tcWeights.w); });
+      AUDIT_TYPES.forEach(a => { 
+        tcDist[tc.id][a.id] = Math.round((regionDist[a.id] || 0) * tcWeights.w); 
+      });
     } else {
       AUDIT_TYPES.forEach(a => {
         const prev = (tcDist[tcs[0].id]?.[a.id] || 0) + (tcDist[tcs[1].id]?.[a.id] || 0);
-        tcDist[tc.id][a.id] = regionDist[a.id] - prev;
+        tcDist[tc.id][a.id] = (regionDist[a.id] || 0) - prev;
       });
     }
   }

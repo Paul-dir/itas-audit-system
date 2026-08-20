@@ -232,7 +232,7 @@ export default function CaseManagement() {
                   const isAssigned = planIsAssigned(plan.id);
                   return (
                     <option key={plan.id} value={plan.id}>
-                      {plan.name} - FY {plan.year} ({planCases.length} cases) {isAssigned ? '✓ Assigned' : '○ Pending'}
+                      {plan.planName} - FY {plan.planYear} ({planCases.length} cases) {isAssigned ? '✓ Assigned' : '○ Pending'}
                     </option>
                   );
                 })}

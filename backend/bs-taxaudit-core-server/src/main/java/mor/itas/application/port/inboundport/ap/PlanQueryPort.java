@@ -27,7 +27,34 @@ public interface PlanQueryPort {
     List<AnnualAuditPlan> getPlans(String statusFilter, Integer fiscalYearFilter, int page, int size);
 
     /**
+     * Get regional allocations for a plan
+     */
+    List<?> getRegionalAllocations(UUID planId);
+
+    /**
+     * Get tax center allocations for a plan
+     */
+    List<?> getTaxCenterAllocations(UUID planId);
+
+    /**
+     * Get tax center allocations by region
+     */
+    List<?> getTaxCenterAllocationsByRegion(UUID planId, String regionCode);
+
+    /**
+     * Get audit log for a plan
+     */
+    List<?> getAuditLog(UUID planId);
+
+    /**
      * Get plan statistics
      */
     Map<String, Long> getPlanStatistics();
+
+    /**
+     * Get all plans that have allocations for a specific region
+     * Returns only plans where the region has a non-zero allocation
+     * Used by Regional Directors to see only plans relevant to their region
+     */
+    List<AnnualAuditPlan> getPlansByRegion(String regionCode);
 }

@@ -1,5 +1,7 @@
 package mor.itas.engineadapter.usermanagement;
 
+import mor.itas.application.port.outboundport.usermanagement.UserManagementPort;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -13,7 +15,8 @@ import java.util.stream.Collectors;
  * - Tax Centers (308): Managers, Team Leaders, Auditors
  */
 @Component
-public class MockUserManagementAdapter {
+@Profile("mock")
+public class MockUserManagementAdapter implements UserManagementPort {
 
     private static final Map<String, Map<String, Object>> USERS = new HashMap<>();
 
@@ -178,5 +181,28 @@ public class MockUserManagementAdapter {
         stats.put("byType", USERS.values().stream()
             .collect(Collectors.groupingBy(u -> u.get("userType"), Collectors.counting())));
         return stats;
+    }
+
+    // ============= UserManagementPort Implementation =============
+
+    @Override
+    public String getUserRole(String userId) {
+        Map<String, Object> user = USERS.get(userId);
+        if (user != null) {
+            return (String) user.get("userType");
+        }
+        return "UNKNOWN";
+    }
+
+    @Override
+    public String getUserTaxCenter(String userId) {
+        Map<String, Object> user = USERS.get(userId);
+        if (user != null) {
+            String level = (String) user.get("assignedLevel");
+            if ("TAX_CENTER".equals(level)) {
+                return (String) user.get("assignedLocation");
+            }
+        }
+        return null;
     }
 }

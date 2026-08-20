@@ -36,8 +36,8 @@ server:
 
 logging:
   level:
-    root: INFO
+    root: WARN
     com.act.audit: DEBUG
-    org.springframework.test: DEBUG
+    org.springframework.test: INFO
     org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: INFO

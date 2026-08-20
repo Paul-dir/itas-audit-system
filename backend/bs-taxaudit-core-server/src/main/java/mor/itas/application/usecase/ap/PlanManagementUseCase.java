@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,7 +35,15 @@ public class PlanManagementUseCase {
         Integer planYear,
         String planName,
         List<RegionalAllocationDto> regionalAllocations,
+        Map<String, Map<String, Integer>> distribution,
         String actorId) {
+
+        // Validate that plan doesn't already exist for this year (year is unique)
+        if (planRepository.existsByYear(planYear)) {
+            throw new IllegalArgumentException(
+                String.format("A plan already exists for fiscal year %d. Each year can have only one audit plan.", planYear)
+            );
+        }
 
         // Create plan
         AnnualAuditPlan plan = new AnnualAuditPlan(
@@ -43,6 +52,9 @@ public class PlanManagementUseCase {
             planName,
             actorId
         );
+        
+        // Store distribution data
+        plan.setDistribution(distribution);
 
         // Add regional allocations (one per region)
         for (RegionalAllocationDto regional : regionalAllocations) {
@@ -70,7 +82,7 @@ public class PlanManagementUseCase {
      * LEVEL 1: Planning Team submits to Director
      */
     @Transactional
-    public AnnualAuditPlan submitToDirector(UUID planId, String actorId) {
+    public AnnualAuditPlan submitToDirector(UUID planId, String actorId) throws Exception {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
@@ -92,7 +104,7 @@ public class PlanManagementUseCase {
      * LEVEL 2: Director approves and routes forward (NO allocation changes)
      */
     @Transactional
-    public AnnualAuditPlan approveByDirector(UUID planId, String actorId, String reason) {
+    public AnnualAuditPlan approveByDirector(UUID planId, String actorId, String reason) throws Exception {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
@@ -114,7 +126,7 @@ public class PlanManagementUseCase {
      * LEVEL 2: Director submits to Regional Directors
      */
     @Transactional
-    public AnnualAuditPlan submitToRegionalDirectors(UUID planId, String actorId) {
+    public AnnualAuditPlan submitToRegionalDirectors(UUID planId, String actorId) throws Exception {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
@@ -136,7 +148,7 @@ public class PlanManagementUseCase {
      * LEVEL 3: Regional Director approves regional allocations
      */
     @Transactional
-    public AnnualAuditPlan approveByRegionalDirector(UUID planId, String actorId, String reason) {
+    public AnnualAuditPlan approveByRegionalDirector(UUID planId, String actorId, String reason) throws Exception {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
@@ -230,7 +242,7 @@ public class PlanManagementUseCase {
      * LEVEL 2: Director sends plan to Tax Centers
      */
     @Transactional
-    public AnnualAuditPlan sendToTaxCenters(UUID planId, String actorId) {
+    public AnnualAuditPlan sendToTaxCenters(UUID planId, String actorId) throws Exception {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
@@ -329,6 +341,14 @@ public class PlanManagementUseCase {
     public AnnualAuditPlan getPlanById(UUID planId) {
         return planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
+    }
+
+    /**
+     * Get all plans
+     */
+    @Transactional(readOnly = true)
+    public List<AnnualAuditPlan> getAllPlans() {
+        return planRepository.findAll();
     }
 
     /**

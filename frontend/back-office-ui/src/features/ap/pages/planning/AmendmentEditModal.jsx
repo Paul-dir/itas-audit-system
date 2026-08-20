@@ -188,7 +188,7 @@ export default function AmendmentEditModal({ plan, open, onClose, onUpdate }) {
                   <div className="grid grid-cols-2 gap-4 pt-2">
                     <div>
                       <p className="text-sm font-medium text-gray-600 dark:text-slate-400">FY</p>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{workingPlan.year}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{workingPlan.planYear}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Cases</p>

@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.SubmitTaxCenterFeedbackPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.model.ap.TaxCenterFeedback;
 import mor.itas.domain.service.ap.TaxCenterFeedbackService;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +52,8 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan status
-        String status = plan.getStatus();
-        if (!isValidStatusForFeedbackSubmission(status)) {
+        PlanStatus status = plan.getStatus();
+        if (!isValidStatusForFeedbackSubmission(status.name())) {
             throw new IllegalStateException(
                 "Cannot submit feedback for plan in status: " + status + ". " +
                 "Plan must be in ALLOCATED or AWAITING_REGIONAL_FEEDBACK status."

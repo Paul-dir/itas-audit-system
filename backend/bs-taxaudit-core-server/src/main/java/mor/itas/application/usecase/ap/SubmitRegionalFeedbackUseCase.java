@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.SubmitRegionalFeedbackPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.service.ap.RegionalFeedbackAggregationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,8 +47,8 @@ public class SubmitRegionalFeedbackUseCase implements SubmitRegionalFeedbackPort
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan status
-        String status = plan.getStatus();
-        if (!isValidStatusForFeedbackSubmission(status)) {
+        PlanStatus status = plan.getStatus();
+        if (!isValidStatusForFeedbackSubmission(status.name())) {
             throw new IllegalStateException(
                 "Cannot submit feedback for plan in status: " + status + ". " +
                 "Plan must be in ALLOCATED or AWAITING_DIRECTOR_REVIEW status."

@@ -42,7 +42,7 @@ function AuditTeamView() {
   const handleViewDetails = (planId) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
-    let msg = `Plan: ${plan.id}\nYear: ${plan.year}\nStatus: ${plan.status}\nTotal: ${plan.nationalTotal}\n\nAllocations:\n`;
+    let msg = `Plan: ${plan.id}\nYear: ${plan.planYear}\nStatus: ${plan.status}\nTotal: ${plan.nationalTotal}\n\nAllocations:\n`;
     plan.allocations.forEach(a => {
       msg += `${a.region}: ${a.total} (Desk:${a.desk}, Field:${a.field}, TP:${a.tp}, Issue:${a.issue})\n`;
     });
@@ -120,7 +120,7 @@ function AuditTeamView() {
               plans.map(plan => (
                 <tr key={plan.id}>
                   <td>{plan.id}</td>
-                  <td>{plan.year}</td>
+                  <td>{plan.planYear}</td>
                   <td>
                     <Badge status={getStatusDisplay(plan.status)} className={getBadgeClass(plan.status)} />
                   </td>

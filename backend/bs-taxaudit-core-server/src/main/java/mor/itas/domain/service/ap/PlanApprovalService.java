@@ -2,6 +2,7 @@ package mor.itas.domain.service.ap;
 
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -39,7 +40,7 @@ public class PlanApprovalService {
             .orElseThrow(() -> new IllegalArgumentException("Plan not found with id: " + planId));
         
         // Business rule: Can only approve plans awaiting director review
-        if (!"SUBMITTED_TO_DIRECTOR".equals(plan.getStatus())) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR)) {
             throw new IllegalStateException(
                 "Plan cannot be approved. Current status: " + plan.getStatus() + 
                 ". Plan must be in SUBMITTED_TO_DIRECTOR status."
@@ -47,7 +48,7 @@ public class PlanApprovalService {
         }
         
         // Update plan status
-        plan.setStatus("DIRECTOR_APPROVED");
+        plan.setStatus(PlanStatus.DIRECTOR_APPROVED);
         
         // Save and return
         return planRepository.update(plan);
@@ -68,16 +69,15 @@ public class PlanApprovalService {
             .orElseThrow(() -> new IllegalArgumentException("Plan not found with id: " + planId));
         
         // Business rule: Can only reject plans awaiting director review
-        if (!"SUBMITTED_TO_DIRECTOR".equals(plan.getStatus())) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR)) {
             throw new IllegalStateException(
                 "Plan cannot be rejected. Current status: " + plan.getStatus() + 
                 ". Plan must be in SUBMITTED_TO_DIRECTOR status."
             );
         }
         
-        // Update plan status and set rejection reason in director comment
-        plan.setStatus("DIRECTOR_REJECTED");
-        plan.setDirectorComment("REJECTED: " + reason);
+        // Update plan status 
+        plan.setStatus(PlanStatus.REVISION_REQUESTED);
         
         // Save and return
         return planRepository.update(plan);
@@ -98,16 +98,15 @@ public class PlanApprovalService {
             .orElseThrow(() -> new IllegalArgumentException("Plan not found with id: " + planId));
         
         // Business rule: Can only request amendments for plans awaiting director review
-        if (!"SUBMITTED_TO_DIRECTOR".equals(plan.getStatus())) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR)) {
             throw new IllegalStateException(
                 "Cannot request amendment. Current status: " + plan.getStatus() + 
                 ". Plan must be in SUBMITTED_TO_DIRECTOR status."
             );
         }
         
-        // Update plan status and store feedback
-        plan.setStatus("AMENDMENT_REQUIRED");
-        plan.setAmendmentComment(feedback);
+        // Update plan status 
+        plan.setStatus(PlanStatus.AMENDMENT_REQUIRED);
         
         // Save and return
         return planRepository.update(plan);

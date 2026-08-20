@@ -3,6 +3,7 @@ package mor.itas.application.usecase.ap;
 import mor.itas.application.port.inboundport.ap.SubmitToSeniorManagementPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -42,8 +43,8 @@ public class SubmitToSeniorManagementUseCase implements SubmitToSeniorManagement
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         // Validate plan status - should be SUBMITTED_TO_DIRECTOR (after amendment)
-        String status = plan.getStatus();
-        if (!isValidStatusForManagementSubmission(status)) {
+        PlanStatus status = plan.getStatus();
+        if (!isValidStatusForManagementSubmission(status.name())) {
             throw new IllegalStateException(
                 "Cannot submit to management. Plan status: " + status + ". " +
                 "Plan must be SUBMITTED_TO_DIRECTOR (after amendment) or DIRECTOR_APPROVED"

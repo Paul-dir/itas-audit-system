@@ -99,4 +99,14 @@ public class AnnualAuditPlanRepositoryImpl implements AnnualAuditPlanRepositoryP
     public long count() {
         return jpaRepository.count();
     }
+
+    @Override
+    public boolean existsByYear(Integer year) {
+        return jpaRepository.findByYear(year).size() > 0;
+    }
+
+    @Override
+    public boolean existsByYearAndName(Integer year, String name) {
+        return jpaRepository.findByYearAndName(year, name).isPresent();
+    }
 }

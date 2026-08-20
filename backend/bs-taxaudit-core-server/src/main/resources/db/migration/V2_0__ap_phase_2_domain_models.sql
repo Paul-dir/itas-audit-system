@@ -10,7 +10,8 @@
 -- 4. Tax Center Manager: Provides feedback on their tax center allocation
 
 -- Enum type for plan status (custom PostgreSQL ENUM)
-CREATE TYPE IF NOT EXISTS ap_plan_status AS ENUM (
+DROP TYPE IF EXISTS ap_plan_status;
+CREATE TYPE ap_plan_status AS ENUM (
     'DRAFT',
     'SUBMITTED_TO_DIRECTOR',
     'DIRECTOR_APPROVED',

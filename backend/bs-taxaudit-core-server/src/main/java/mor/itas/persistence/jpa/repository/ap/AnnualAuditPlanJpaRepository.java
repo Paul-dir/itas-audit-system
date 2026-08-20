@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,11 @@ public interface AnnualAuditPlanJpaRepository extends JpaRepository<AnnualAuditP
            @Param("status") PlanStatusEnum status,
            @Param("year") Integer year,
            Pageable pageable);
+    
+    /**
+     * Check if a plan already exists for the given year and name
+     */
+    Optional<AnnualAuditPlanEntity> findByYearAndName(Integer year, String name);
 }
 
 

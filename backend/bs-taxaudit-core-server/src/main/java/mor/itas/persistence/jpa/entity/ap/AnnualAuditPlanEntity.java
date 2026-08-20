@@ -1,9 +1,12 @@
 package mor.itas.persistence.jpa.entity.ap;
 
 import jakarta.persistence.*;
+import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.JdbcTypeCode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -69,6 +72,14 @@ public class AnnualAuditPlanEntity {
     // Tax Center Phase
     @Column(name = "sent_to_tax_center_at")
     private OffsetDateTime sentToTaxCenterAt;
+
+    // Distribution Data Storage
+    @Column(name = "distribution_json")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Map<String, Integer>> distribution;  // {region_id: {audit_type_id: count}}
+
+    @Column(name = "sent_to_regions_at")
+    private OffsetDateTime sentToRegionsAt;
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
@@ -228,6 +239,22 @@ public class AnnualAuditPlanEntity {
 
     public void setSentToTaxCenterAt(OffsetDateTime sentToTaxCenterAt) {
         this.sentToTaxCenterAt = sentToTaxCenterAt;
+    }
+
+    public Map<String, Map<String, Integer>> getDistribution() {
+        return distribution;
+    }
+
+    public void setDistribution(Map<String, Map<String, Integer>> distribution) {
+        this.distribution = distribution;
+    }
+
+    public OffsetDateTime getSentToRegionsAt() {
+        return sentToRegionsAt;
+    }
+
+    public void setSentToRegionsAt(OffsetDateTime sentToRegionsAt) {
+        this.sentToRegionsAt = sentToRegionsAt;
     }
 
     public OffsetDateTime getUpdatedAt() {

@@ -18,10 +18,23 @@ public class AnnualAuditPlanUseCase {
 
     @Transactional
     public AnnualAuditPlan createPlan(CreatePlanRequest request, String actorId) {
-        AnnualAuditPlan plan = new AnnualAuditPlan(request.getYear(), request.getName(), actorId);
+        // Generate UUID for the plan FIRST so allocations can reference it
+        java.util.UUID planId = java.util.UUID.randomUUID();
+        AnnualAuditPlan plan = new AnnualAuditPlan(planId, request.getPlanYear(), request.getPlanName(), actorId);
 
-        Map<String, Integer> quotas = riskEnginePort.fetchSuggestedQuotas();
-        quotas.forEach(plan::addAllocation);
+        // Add regional allocations from request
+        if (request.getRegionalAllocations() != null) {
+            request.getRegionalAllocations().forEach(ra -> {
+                mor.itas.domain.model.ap.PlanAllocation allocation = new mor.itas.domain.model.ap.PlanAllocation(
+                    java.util.UUID.randomUUID(),
+                    plan.getId(),
+                    null,  // No tax center code for regional allocations
+                    ra.getRegionCode(),
+                    ra.getProposedCount()
+                );
+                plan.addAllocation(allocation);
+            });
+        }
 
         return repository.save(plan);
     }
@@ -41,7 +54,7 @@ public class AnnualAuditPlanUseCase {
             throw new SecurityException("User does not have permission to edit feedback for tax center: " + allocation.getTaxCenterCode());
         }
             
-        allocation.submitLocalFeedback(adjustedCount, justification);
+        allocation.submitFeedback(adjustedCount, justification);
         
         return repository.update(plan);
     }

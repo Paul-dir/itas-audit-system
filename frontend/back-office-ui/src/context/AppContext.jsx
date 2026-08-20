@@ -27,23 +27,52 @@ export function AppProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const SEED_VERSION = 'v5-auditors-added'; // Change this to force re-seed
-    const seeded = storage.get(STORE_KEYS.SEEDED);
-    if (seeded !== SEED_VERSION) {
-      storage.set(STORE_KEYS.USERS, SEED_USERS);
-      storage.set(STORE_KEYS.PLANS, SEED_PLANS);
-      storage.set(STORE_KEYS.CASES, []);
-      storage.set(STORE_KEYS.SEEDED, SEED_VERSION);
-    }
-    dispatch({
-      type: 'LOAD',
-      payload: {
-        users: storage.get(STORE_KEYS.USERS, SEED_USERS),
-        plans: storage.get(STORE_KEYS.PLANS, SEED_PLANS),
-        cases: storage.get(STORE_KEYS.CASES, []),
-      },
-    });
-    setReady(true);
+    const initializeData = async () => {
+      try {
+        // Load users from local storage (seed data)
+        const SEED_VERSION = 'v5-auditors-added';
+        const seeded = storage.get(STORE_KEYS.SEEDED);
+        if (seeded !== SEED_VERSION) {
+          storage.set(STORE_KEYS.USERS, SEED_USERS);
+          storage.set(STORE_KEYS.PLANS, SEED_PLANS);
+          storage.set(STORE_KEYS.CASES, []);
+          storage.set(STORE_KEYS.SEEDED, SEED_VERSION);
+        }
+
+        // Fetch plans from backend API
+        const { default: planService } = await import('../features/ap/services/planService.js');
+        let plansFromBackend = [];
+        try {
+          plansFromBackend = await planService.getPlans();
+          console.log('✅ Loaded plans from backend:', plansFromBackend.length);
+        } catch (error) {
+          console.error('⚠️ Failed to fetch plans from backend, using local data:', error);
+          plansFromBackend = storage.get(STORE_KEYS.PLANS, SEED_PLANS);
+        }
+
+        dispatch({
+          type: 'LOAD',
+          payload: {
+            users: storage.get(STORE_KEYS.USERS, SEED_USERS),
+            plans: plansFromBackend,
+            cases: storage.get(STORE_KEYS.CASES, []),
+          },
+        });
+      } catch (error) {
+        console.error('Error initializing data:', error);
+        dispatch({
+          type: 'LOAD',
+          payload: {
+            users: SEED_USERS,
+            plans: SEED_PLANS,
+            cases: [],
+          },
+        });
+      }
+      setReady(true);
+    };
+
+    initializeData();
   }, []);
 
   useEffect(() => {
@@ -70,21 +99,38 @@ export function AppProvider({ children }) {
         // Call backend API
         const createdPlan = await planService.createPlan(data, data.createdBy);
         
-        // Ensure plan meets UI expectations with local timeline logic
-        const plan = {
-          id: createdPlan.id,
-          ...data,
-          status: createdPlan.status || 'DRAFT',
-          createdAt: createdPlan.createdAt || new Date().toISOString(),
-          directorComment: '',
-          revisions: [],
-          regionalFeedback: {},
-          seniorComment: '',
-          amendmentComment: '',
-          timeline: [{ status: createdPlan.status || 'DRAFT', actor: data.createdBy, comment: 'Plan created via Backend API', timestamp: new Date().toISOString() }],
-        };
-        dispatch({ type: 'CREATE_PLAN', payload: plan });
-        return plan;
+        // Store the distribution data that was sent (frontend keeps this)
+        createdPlan.distribution = data.distribution;
+        
+        // Reload all plans from backend to ensure consistency
+        try {
+          const allPlans = await planService.getPlans();
+          // Add distribution back to all plans
+          allPlans.forEach(plan => {
+            if (plan.id === createdPlan.id) {
+              plan.distribution = data.distribution;
+            }
+          });
+          dispatch({
+            type: 'LOAD',
+            payload: {
+              ...state,
+              plans: allPlans,
+            },
+          });
+        } catch (error) {
+          // If reload fails, at least add the created plan to local state
+          const plan = {
+            id: createdPlan.id,
+            ...data,
+            status: createdPlan.status || 'DRAFT',
+            createdAt: createdPlan.createdAt || new Date().toISOString(),
+            distribution: data.distribution,
+          };
+          dispatch({ type: 'CREATE_PLAN', payload: plan });
+        }
+        
+        return createdPlan;
       } catch (error) {
         console.error("Error creating plan:", error);
         throw error;
@@ -97,12 +143,41 @@ export function AppProvider({ children }) {
     },
 
     // ── Planning Team → Director ───────────────────────────────────────────
-    submitToDirector: (planId, actorId) => {
-      const plan = getPlan(planId);
-      if (plan) dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline(plan, 'SUBMITTED_TO_DIRECTOR', actorId, 'Submitted for director review'),
-      });
+    submitToDirector: async (planId, actorId) => {
+      try {
+        const { default: planService } = await import('../features/ap/services/planService.js');
+        // Call backend API
+        const updatedPlan = await planService.submitToDirector(planId, actorId);
+        
+        // Reload all plans from backend to ensure consistency
+        try {
+          const allPlans = await planService.getPlans();
+          dispatch({
+            type: 'LOAD',
+            payload: {
+              ...state,
+              plans: allPlans,
+            },
+          });
+        } catch (error) {
+          // If reload fails, at least update the submitted plan
+          const plan = getPlan(planId);
+          if (plan) {
+            dispatch({
+              type: 'UPDATE_PLAN',
+              payload: {
+                ...plan,
+                status: updatedPlan.status || 'SUBMITTED_TO_DIRECTOR',
+              },
+            });
+          }
+        }
+        
+        return updatedPlan;
+      } catch (error) {
+        console.error("Error submitting plan to Director:", error);
+        throw error;
+      }
     },
 
     // ── Director actions ───────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Tabs, Button, Badge, Alert } from '../../../../components/ui/index.jsx';
 import { DistributionTable } from '../shared/DistributionTable.jsx';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
@@ -8,10 +8,48 @@ import { CheckCircle, MessageSquare, MapPin } from 'lucide-react';
 
 export default function PlanDetailModal({ plan, onClose }) {
   const [tab, setTab] = useState('overview');
-  if (!plan) return null;
+  const [freshPlan, setFreshPlan] = useState(plan);
 
-  const feedbackCount = Object.keys(plan.regionalFeedback || {}).length;
-  const pendingRegions = REGIONS.filter(r => !plan.regionalFeedback?.[r.id]);
+  // Fetch fresh plan data from backend to ensure distribution is up-to-date
+  useEffect(() => {
+    if (!plan?.id) {
+      console.log('⚠️ [PlanDetailModal] No plan ID, skipping fetch');
+      return;
+    }
+    
+    const loadFreshPlan = async () => {
+      try {
+        const { default: planService } = await import('../../services/planService.js');
+        console.log('🔄 [PlanDetailModal] Attempting to fetch fresh plan from backend:', plan.id);
+        const updated = await planService.getPlanById(plan.id);
+        
+        if (updated) {
+          console.log('✅ [PlanDetailModal] Fresh plan fetched successfully');
+          console.log('📊 [PlanDetailModal] Backend distribution:', updated?.distribution);
+          console.log('🔍 [PlanDetailModal] Distribution type:', typeof updated?.distribution);
+          console.log('🔍 [PlanDetailModal] Distribution keys:', Object.keys(updated?.distribution || {}));
+          setFreshPlan(updated);
+        } else {
+          console.warn('⚠️ [PlanDetailModal] Backend returned null/empty plan, using prop data');
+          console.log('📝 [PlanDetailModal] Using prop plan with distribution:', plan?.distribution);
+          setFreshPlan(plan);
+        }
+      } catch (error) {
+        console.error('❌ [PlanDetailModal] Failed to fetch fresh plan:', error.message);
+        console.log('📝 [PlanDetailModal] Falling back to prop plan');
+        console.log('📊 [PlanDetailModal] Prop plan distribution:', plan?.distribution);
+        setFreshPlan(plan);
+      }
+    };
+    
+    loadFreshPlan();
+  }, [plan?.id, plan]);
+
+  const displayPlan = freshPlan || plan;
+  if (!displayPlan) return null;
+
+  const feedbackCount = Object.keys(displayPlan.regionalFeedback || {}).length;
+  const pendingRegions = REGIONS.filter(r => !displayPlan.regionalFeedback?.[r.id]);
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -21,22 +59,22 @@ export default function PlanDetailModal({ plan, onClose }) {
   ];
 
   return (
-    <Modal open={!!plan} onClose={onClose} title={plan.name} size="xl">
+    <Modal open={!!displayPlan} onClose={onClose} title={displayPlan.planName} size="xl">
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <PlanStatusBadge status={plan.status} />
-          <span className="text-xs text-gray-400 dark:text-slate-400">ID: {plan.id}</span>
-          <span className="text-xs text-gray-400 dark:text-slate-400">FY {plan.year}</span>
+          <PlanStatusBadge status={displayPlan.status} />
+          <span className="text-xs text-gray-400 dark:text-slate-400">ID: {displayPlan.id}</span>
+          <span className="text-xs text-gray-400 dark:text-slate-400">FY {displayPlan.planYear}</span>
           <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">
-            {plan.totalCases?.toLocaleString()} cases
+            {displayPlan.totalCases?.toLocaleString()} cases
           </span>
         </div>
 
-        {plan.description && <p className="text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>}
+        {displayPlan.description && <p className="text-sm text-gray-600 dark:text-slate-400">{displayPlan.description}</p>}
 
-        {plan.directorComment && (
-          <Alert type={plan.status === 'REVISION_REQUESTED' ? 'warning' : 'info'} title="Director's Note">
-            {plan.directorComment}
+        {displayPlan.directorComment && (
+          <Alert type={displayPlan.status === 'REVISION_REQUESTED' ? 'warning' : 'info'} title="Director's Note">
+            {displayPlan.directorComment}
           </Alert>
         )}
 
@@ -48,28 +86,28 @@ export default function PlanDetailModal({ plan, onClose }) {
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-3 dark:bg-slate-700">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200">Plan Summary</h4>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Year</span><span className="font-medium dark:text-white">FY {plan.year}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Total Cases</span><span className="font-medium text-blue-700 dark:text-blue-400">{plan.totalCases?.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Year</span><span className="font-medium dark:text-white">FY {displayPlan.planYear}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Total Cases</span><span className="font-medium text-blue-700 dark:text-blue-400">{displayPlan.totalCases?.toLocaleString()}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Regions</span><span className="font-medium dark:text-white">{REGIONS.length}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Status</span><PlanStatusBadge status={plan.status} /></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Created</span><span className="text-xs text-gray-600 dark:text-slate-400">{new Date(plan.createdAt).toLocaleDateString()}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Status</span><PlanStatusBadge status={displayPlan.status} /></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-slate-400">Created</span><span className="text-xs text-gray-600 dark:text-slate-400">{new Date(displayPlan.createdAt).toLocaleDateString()}</span></div>
                 </div>
               </div>
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-3 dark:bg-slate-700">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200">Regional Progress</h4>
-                {plan.status === 'AWAITING_REGIONAL_FEEDBACK' && (
+                {displayPlan.status === 'AWAITING_REGIONAL_FEEDBACK' && (
                   <div className="space-y-1.5">
                     {REGIONS.map(r => (
                       <div key={r.id} className="flex items-center justify-between text-xs">
                         <span className="text-gray-600 dark:text-slate-400">{r.name}</span>
-                        {plan.regionalFeedback?.[r.id]
+                        {displayPlan.regionalFeedback?.[r.id]
                           ? <span className="text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={12} /> Done</span>
                           : <span className="text-orange-500 dark:text-orange-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" /> Pending</span>}
                       </div>
                     ))}
                   </div>
                 )}
-                {plan.status !== 'AWAITING_REGIONAL_FEEDBACK' && (
+                {displayPlan.status !== 'AWAITING_REGIONAL_FEEDBACK' && (
                   <p className="text-xs text-gray-400 dark:text-slate-400">Regional feedback step not reached yet.</p>
                 )}
               </div>
@@ -79,7 +117,7 @@ export default function PlanDetailModal({ plan, onClose }) {
           {tab === 'distribution' && (
             <div className="space-y-3">
               <p className="text-sm text-gray-500 dark:text-slate-400">Case distribution by region and audit type</p>
-              <DistributionTable distribution={plan.distribution} />
+              <DistributionTable distribution={displayPlan.distribution} />
             </div>
           )}
 
@@ -89,7 +127,7 @@ export default function PlanDetailModal({ plan, onClose }) {
                 <Alert type="info">No regional feedback submitted yet.</Alert>
               )}
               {REGIONS.map(region => {
-                const fb = plan.regionalFeedback?.[region.id];
+                const fb = displayPlan.regionalFeedback?.[region.id];
                 return (
                   <div key={region.id} className="border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden">
                     <div className={`flex items-center justify-between px-4 py-3 ${fb ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
@@ -114,7 +152,7 @@ export default function PlanDetailModal({ plan, onClose }) {
           )}
 
           {tab === 'timeline' && (
-            <PlanTimeline plan={plan} />
+            <PlanTimeline plan={displayPlan} />
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 package mor.itas.engineadapter.taxpayer;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
  * Phase 1 mock implementation - will be replaced with real Taxpayer Service API in Phase 2+
  */
 @Component
+@Profile("mock")
 public class MockTaxpayerAdapter {
 
     private static final Map<String, Map<String, Object>> TAXPAYERS = new HashMap<>();

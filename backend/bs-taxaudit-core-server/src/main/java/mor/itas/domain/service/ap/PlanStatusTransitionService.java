@@ -1,6 +1,7 @@
 package mor.itas.domain.service.ap;
 
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.model.ap.PlanTimeline;
 import mor.itas.domain.model.ap.PlanRevision;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
@@ -41,16 +42,16 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("DRAFT")) {
+        if (!plan.getStatus().equals(PlanStatus.DRAFT)) {
             throw new IllegalStateException("Can only submit DRAFT plans. Current status: " + plan.getStatus());
         }
 
         // Update status
-        plan.setStatus("SUBMITTED_TO_DIRECTOR");
+        plan.setStatus(PlanStatus.SUBMITTED_TO_DIRECTOR);
         plan = planRepository.save(plan);
 
         // Add timeline entry
-        addTimelineEntry(planId, "SUBMITTED_TO_DIRECTOR", actorId, "Submitted for director review");
+        addTimelineEntry(planId, PlanStatus.SUBMITTED_TO_DIRECTOR.name(), actorId, "Submitted for director review");
 
         return plan;
     }
@@ -63,15 +64,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("SUBMITTED_TO_DIRECTOR") && !plan.getStatus().equals("REVISION_REQUESTED")) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR) && !plan.getStatus().equals(PlanStatus.REVISION_REQUESTED)) {
             throw new IllegalStateException("Cannot approve plan in status: " + plan.getStatus());
         }
 
-        plan.setStatus("DIRECTOR_APPROVED");
-        plan.setDirectorComment(comment);
+        plan.setStatus(PlanStatus.DIRECTOR_APPROVED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "DIRECTOR_APPROVED", actorId, comment != null ? comment : "Approved");
+        addTimelineEntry(planId, PlanStatus.DIRECTOR_APPROVED.name(), actorId, comment != null ? comment : "Approved");
 
         return plan;
     }
@@ -84,15 +84,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("SUBMITTED_TO_DIRECTOR")) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR)) {
             throw new IllegalStateException("Can only request revision from SUBMITTED_TO_DIRECTOR status");
         }
 
-        plan.setStatus("REVISION_REQUESTED");
-        plan.setDirectorComment(comment);
+        plan.setStatus(PlanStatus.REVISION_REQUESTED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "REVISION_REQUESTED", actorId, comment);
+        addTimelineEntry(planId, PlanStatus.REVISION_REQUESTED.name(), actorId, comment);
         addRevisionEntry(planId, comment, "revision", actorId);
 
         return plan;
@@ -108,14 +107,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("DIRECTOR_APPROVED")) {
+        if (!plan.getStatus().equals(PlanStatus.DIRECTOR_APPROVED)) {
             throw new IllegalStateException("Can only send DIRECTOR_APPROVED plans to regions. Current status: " + plan.getStatus());
         }
 
-        plan.setStatus("AWAITING_REGIONAL_FEEDBACK");
+        plan.setStatus(PlanStatus.AWAITING_REGIONAL_FEEDBACK);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "AWAITING_REGIONAL_FEEDBACK", actorId, "Sent to all regions for feedback");
+        addTimelineEntry(planId, PlanStatus.AWAITING_REGIONAL_FEEDBACK.name(), actorId, "Sent to all regions for feedback");
 
         return plan;
     }
@@ -128,15 +127,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("FEEDBACK_COLLECTED")) {
+        if (!plan.getStatus().equals(PlanStatus.FEEDBACK_COLLECTED)) {
             throw new IllegalStateException("Can only send amendments from FEEDBACK_COLLECTED status");
         }
 
-        plan.setStatus("AMENDMENT_REQUIRED");
-        plan.setAmendmentComment(comment);
+        plan.setStatus(PlanStatus.AMENDMENT_REQUIRED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "AMENDMENT_REQUIRED", actorId, comment);
+        addTimelineEntry(planId, PlanStatus.AMENDMENT_REQUIRED.name(), actorId, comment);
         addRevisionEntry(planId, comment, "amendment", actorId);
 
         return plan;
@@ -152,14 +150,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("AMENDMENT_REQUIRED") && !plan.getStatus().equals("DIRECTOR_APPROVED")) {
+        if (!plan.getStatus().equals(PlanStatus.AMENDMENT_REQUIRED) && !plan.getStatus().equals(PlanStatus.DIRECTOR_APPROVED)) {
             throw new IllegalStateException("Can only submit plans in AMENDMENT_REQUIRED or DIRECTOR_APPROVED status. Current: " + plan.getStatus());
         }
 
-        plan.setStatus("SUBMITTED_TO_SENIOR_MGMT");
+        plan.setStatus(PlanStatus.SUBMITTED_TO_SENIOR_MGMT);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "SUBMITTED_TO_SENIOR_MGMT", actorId, "Submitted for senior management approval");
+        addTimelineEntry(planId, PlanStatus.SUBMITTED_TO_SENIOR_MGMT.name(), actorId, "Submitted for senior management approval");
 
         return plan;
     }
@@ -172,15 +170,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("SUBMITTED_TO_SENIOR_MGMT")) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_SENIOR_MGMT)) {
             throw new IllegalStateException("Only plans in SUBMITTED_TO_SENIOR_MGMT status can be approved. Current: " + plan.getStatus());
         }
 
-        plan.setStatus("SENIOR_MGMT_APPROVED");
-        plan.setSeniorComment(comment);
+        plan.setStatus(PlanStatus.SENIOR_MGMT_APPROVED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "SENIOR_MGMT_APPROVED", actorId, comment != null ? comment : "Approved");
+        addTimelineEntry(planId, PlanStatus.SENIOR_MGMT_APPROVED.name(), actorId, comment != null ? comment : "Approved");
 
         return plan;
     }
@@ -193,15 +190,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("SUBMITTED_TO_SENIOR_MGMT")) {
+        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_SENIOR_MGMT)) {
             throw new IllegalStateException("Only plans in SUBMITTED_TO_SENIOR_MGMT status can be rejected");
         }
 
-        plan.setStatus("SENIOR_MGMT_REJECTED");
-        plan.setSeniorComment(comment);
+        plan.setStatus(PlanStatus.SENIOR_MGMT_REJECTED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "SENIOR_MGMT_REJECTED", actorId, comment);
+        addTimelineEntry(planId, PlanStatus.SENIOR_MGMT_REJECTED.name(), actorId, comment);
         addRevisionEntry(planId, comment, "senior_rejection", actorId);
 
         return plan;
@@ -215,14 +211,14 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("SENIOR_MGMT_APPROVED")) {
+        if (!plan.getStatus().equals(PlanStatus.SENIOR_MGMT_APPROVED)) {
             throw new IllegalStateException("Only SENIOR_MGMT_APPROVED plans can be sent to regions. Current: " + plan.getStatus());
         }
 
-        plan.setStatus("APPROVED_TO_REGIONS");
+        plan.setStatus(PlanStatus.APPROVED_TO_REGIONS);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "APPROVED_TO_REGIONS", actorId, "Approved plan sent to all regions - awaiting regional deployment");
+        addTimelineEntry(planId, PlanStatus.APPROVED_TO_REGIONS.name(), actorId, "Approved plan sent to all regions - awaiting regional deployment");
 
         return plan;
     }
@@ -235,10 +231,10 @@ public class PlanStatusTransitionService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        plan.setStatus("FINALIZED");
+        plan.setStatus(PlanStatus.FINALIZED);
         plan = planRepository.save(plan);
 
-        addTimelineEntry(planId, "FINALIZED", actorId, "Plan finalized");
+        addTimelineEntry(planId, PlanStatus.FINALIZED.name(), actorId, "Plan finalized");
 
         return plan;
     }

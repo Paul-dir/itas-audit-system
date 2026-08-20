@@ -26,6 +26,12 @@ public interface AnnualAuditPlanRepository {
     Optional<AnnualAuditPlan> findById(UUID id);
 
     /**
+     * Find all plans
+     * @return list of all plans
+     */
+    List<AnnualAuditPlan> findAll();
+
+    /**
      * Update an existing plan
      * @param plan the plan to update
      * @return the updated plan

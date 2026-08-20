@@ -61,12 +61,67 @@ public class PlanQueryController {
     }
 
     /**
+     * 7.3 Get regional allocations for a plan
+     */
+    @GetMapping("/{planId}/regional-allocations")
+    public ResponseEntity<GenericResponse<Object>> getRegionalAllocations(@PathVariable UUID planId) {
+        List<?> allocations = planQueryPort.getRegionalAllocations(planId);
+        return ResponseEntity.ok(GenericResponse.success(allocations));
+    }
+
+    /**
+     * 7.4 Get tax center allocations for a plan
+     */
+    @GetMapping("/{planId}/tax-center-allocations")
+    public ResponseEntity<GenericResponse<Object>> getTaxCenterAllocations(@PathVariable UUID planId) {
+        List<?> allocations = planQueryPort.getTaxCenterAllocations(planId);
+        return ResponseEntity.ok(GenericResponse.success(allocations));
+    }
+
+    /**
+     * 7.5 Get tax center allocations by region
+     */
+    @GetMapping("/{planId}/tax-center-allocations/region/{regionCode}")
+    public ResponseEntity<GenericResponse<Object>> getTaxCenterAllocationsByRegion(
+            @PathVariable UUID planId,
+            @PathVariable String regionCode) {
+        List<?> allocations = planQueryPort.getTaxCenterAllocationsByRegion(planId, regionCode);
+        return ResponseEntity.ok(GenericResponse.success(allocations));
+    }
+
+    /**
+     * 7.6 Get audit log for a plan
+     */
+    @GetMapping("/{planId}/audit-log")
+    public ResponseEntity<GenericResponse<Object>> getAuditLog(@PathVariable UUID planId) {
+        List<?> auditLog = planQueryPort.getAuditLog(planId);
+        return ResponseEntity.ok(GenericResponse.success(auditLog));
+    }
+
+    /**
      * 7.7 Get plan statistics
      */
     @GetMapping("/stats")
     public ResponseEntity<GenericResponse<Object>> getPlanStatistics() {
         Map<String, Long> stats = planQueryPort.getPlanStatistics();
         return ResponseEntity.ok(GenericResponse.success(stats));
+    }
+
+    /**
+     * 7.8 Get plans for a specific region (Regional Director view)
+     * Only returns plans with allocations for that region
+     */
+    @GetMapping("/region/{regionCode}")
+    public ResponseEntity<GenericResponse<Object>> getPlansByRegion(
+            @PathVariable String regionCode) {
+        
+        List<AnnualAuditPlan> plans = planQueryPort.getPlansByRegion(regionCode);
+        
+        var plansResponse = plans.stream()
+            .map(dtoMapper::toPlanResponse)
+            .toList();
+        
+        return ResponseEntity.ok(GenericResponse.success(plansResponse, plansResponse.size(), (long) plansResponse.size()));
     }
 
     // ==================== REQUEST DTOs ====================

@@ -3,6 +3,7 @@ package mor.itas.api.dto.response.ap;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,9 @@ public class PlanResponse {
     private List<AllocationResponse> regionalAllocations;
     private List<AllocationResponse> taxCenterAllocations;
     
+    // Distribution data (audit type breakdown by region)
+    private Map<String, Map<String, Integer>> distribution;
+
     // Metadata
     private Long version;
 
@@ -217,6 +221,14 @@ public class PlanResponse {
 
     public void setTaxCenterAllocations(List<AllocationResponse> taxCenterAllocations) {
         this.taxCenterAllocations = taxCenterAllocations;
+    }
+
+    public Map<String, Map<String, Integer>> getDistribution() {
+        return distribution;
+    }
+
+    public void setDistribution(Map<String, Map<String, Integer>> distribution) {
+        this.distribution = distribution;
     }
 
     public Long getVersion() {

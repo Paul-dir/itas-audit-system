@@ -1,8 +1,10 @@
 package mor.itas.persistence.mapper.ap;
 
 import mor.itas.domain.model.ap.AnnualAuditPlan;
+import mor.itas.domain.model.ap.AuditCase;
 import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.api.dto.response.ap.AllocationResponse;
+import mor.itas.api.dto.response.ap.AuditCaseResponse;
 import mor.itas.api.dto.response.ap.PlanResponse;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +30,9 @@ public class ApResponseDtoMapper {
         response.setCreatedBy(plan.getCreatedBy());
         response.setCreatedAt(plan.getCreatedAt());
         response.setVersion(plan.getVersion());
+        
+        // Set distribution data
+        response.setDistribution(plan.getDistribution());
         
         // Separate allocations into regional and tax center
         List<AllocationResponse> regionalAllocations = plan.getAllocations().stream()
@@ -67,5 +72,27 @@ public class ApResponseDtoMapper {
         }
         
         return response;
+    }
+
+    public AuditCaseResponse toAuditCaseResponse(AuditCase auditCase) {
+        if (auditCase == null) return null;
+        
+        return AuditCaseResponse.builder()
+            .id(auditCase.getId())
+            .planId(auditCase.getPlanId())
+            .allocationId(auditCase.getAllocationId())
+            .caseNumber(auditCase.getCaseNumber())
+            .taxpayerId(auditCase.getTaxpayerId())
+            .auditType(auditCase.getAuditType())
+            .riskScore(auditCase.getRiskScore())
+            .status(auditCase.getStatus())
+            .assignedTeamLeaderId(auditCase.getAssignedTeamLeaderId())
+            .assignedAuditorId(auditCase.getAssignedAuditorId())
+            .createdBy(auditCase.getCreatedBy())
+            .createdAt(auditCase.getCreatedAt())
+            .startedAt(auditCase.getStartedAt())
+            .completedAt(auditCase.getCompletedAt())
+            .updatedAt(auditCase.getUpdatedAt())
+            .build();
     }
 }

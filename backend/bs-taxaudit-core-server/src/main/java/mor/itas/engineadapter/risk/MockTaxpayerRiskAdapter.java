@@ -1,5 +1,6 @@
 package mor.itas.engineadapter.risk;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
  * Phase 1 mock implementation - will be replaced with real Risk Engine API in Phase 2+
  */
 @Component
+@Profile("mock")
 public class MockTaxpayerRiskAdapter {
 
     private static final Map<String, Map<String, Object>> RISK_PROFILES = new HashMap<>();

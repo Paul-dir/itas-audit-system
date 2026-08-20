@@ -44,7 +44,9 @@ public class AnnualAuditPlan {
     // Tax Center phase
     private OffsetDateTime sentToTaxCenterAt;
     
-    // Relationships
+    // Distribution data (audit type breakdown by region)
+    private Map<String, Map<String, Integer>> distribution;
+    private OffsetDateTime sentToRegionsAt;
     private List<PlanAllocation> allocations;
     
     // Metadata
@@ -349,6 +351,22 @@ public class AnnualAuditPlan {
     
     public void setSentToTaxCenterAt(OffsetDateTime sentToTaxCenterAt) {
         this.sentToTaxCenterAt = sentToTaxCenterAt;
+    }
+    
+    public Map<String, Map<String, Integer>> getDistribution() {
+        return distribution;
+    }
+    
+    public void setDistribution(Map<String, Map<String, Integer>> distribution) {
+        this.distribution = distribution;
+    }
+    
+    public OffsetDateTime getSentToRegionsAt() {
+        return sentToRegionsAt;
+    }
+    
+    public void setSentToRegionsAt(OffsetDateTime sentToRegionsAt) {
+        this.sentToRegionsAt = sentToRegionsAt;
     }
     
     public OffsetDateTime getUpdatedAt() {

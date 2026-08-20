@@ -22,7 +22,7 @@ public class PlanAuditLogMapper {
         }
 
         PlanAuditLog log = new PlanAuditLog(
-            entity.getPlanId(),
+            entity.getAnnualPlan().getId(),
             entity.getAction(),
             entity.getActorId(),
             entity.getActorRole(),

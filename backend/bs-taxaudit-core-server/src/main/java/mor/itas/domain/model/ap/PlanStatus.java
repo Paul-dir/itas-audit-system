@@ -18,14 +18,54 @@ public enum PlanStatus {
     SUBMITTED_TO_DIRECTOR,
     
     /**
+     * Director requested revision of the plan
+     */
+    REVISION_REQUESTED,
+    
+    /**
      * Director approved plan, ready to send to Regional Directors
      */
     DIRECTOR_APPROVED,
     
     /**
+     * Plan awaiting regional feedback collection
+     */
+    AWAITING_REGIONAL_FEEDBACK,
+    
+    /**
+     * Regional feedback collection complete
+     */
+    FEEDBACK_COLLECTED,
+    
+    /**
+     * Amendment required based on feedback
+     */
+    AMENDMENT_REQUIRED,
+    
+    /**
      * Plan submitted to Regional Directors, waiting for Regional approval
      */
     SUBMITTED_TO_REGIONAL,
+    
+    /**
+     * Plan submitted to Senior Management for approval
+     */
+    SUBMITTED_TO_SENIOR_MGMT,
+    
+    /**
+     * Senior Management approved plan
+     */
+    SENIOR_MGMT_APPROVED,
+    
+    /**
+     * Senior Management rejected plan
+     */
+    SENIOR_MGMT_REJECTED,
+    
+    /**
+     * Approved plan sent to regions for deployment
+     */
+    APPROVED_TO_REGIONS,
     
     /**
      * Regional Director approved plan, ready to send to Tax Centers

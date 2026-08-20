@@ -23,7 +23,7 @@ const emptyDistribution = () => {
 };
 
 export default function CreatePlanModal({ open, onClose }) {
-  const { actions } = useApp();
+  const { actions, state } = useApp();
   const { user } = useAuth();
   const { planDefaults, source } = useRiskEngine();
 
@@ -59,23 +59,56 @@ export default function CreatePlanModal({ open, onClose }) {
   }, []);
 
   const handleCreate = async () => {
-    if (!form.name.trim()) { setError('Plan name is required'); return; }
-    if (totalCases === 0) { setError('Please distribute at least some cases across regions'); return; }
+    console.log('📝 Handling plan creation...');
+    console.log('   Form name:', form.name);
+    console.log('   Form name (trimmed):', form.name?.trim());
+    console.log('   Form name length:', form.name?.length);
+    console.log('   Total cases:', totalCases);
+    
+    if (!form.name || !form.name.trim()) { 
+      setError('Plan name is required and cannot be empty');
+      console.error('❌ Plan name is empty!');
+      return; 
+    }
+    if (form.name.trim().length < 3) { 
+      setError('Plan name must be at least 3 characters long');
+      console.error('❌ Plan name too short:', form.name);
+      return; 
+    }
+    
+    // Check if a plan already exists for this year (year must be unique)
+    const yearExists = state.plans.some(p => p.planYear === form.year);
+    if (yearExists) {
+      setError(`A plan for fiscal year ${form.year} already exists. Each fiscal year can have only one national audit plan.`);
+      console.error('❌ Plan already exists for year:', form.year);
+      return;
+    }
+    
+    if (totalCases === 0) { 
+      setError('Please distribute at least some cases across regions');
+      console.error('❌ No cases distributed!');
+      return; 
+    }
+    
+    console.log('✅ All validations passed, creating plan...');
     setLoading(true);
     try {
-      await actions.createPlan({
+      const planData = {
         ...form,
         year: parseInt(form.year),
         distribution,
         totalCases,
         createdBy: user.id,
         riskBased: usedDefaults || form.riskBased,
-      });
+      };
+      console.log('📦 Plan data to send:', planData);
+      
+      await actions.createPlan(planData);
       setLoading(false);
       handleClose();
     } catch (err) {
       console.error(err);
-      setError('Failed to create plan. Ensure backend is running.');
+      setError(err.message || 'Failed to create plan. Ensure backend is running.');
       setLoading(false);
     }
   };

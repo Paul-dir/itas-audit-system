@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CreatePlanRequest - Request DTO for creating an Annual Audit Plan
@@ -24,6 +25,10 @@ public class CreatePlanRequest {
     @Valid
     private List<RegionalAllocationRequest> regionalAllocations;
 
+    // Distribution breakdown by region and audit type
+    // Format: { "addis_ababa": { "desk_audit": 30000, "joint_audit": 12000, ... }, ... }
+    private Map<String, Map<String, Integer>> distribution;
+
     // Constructors
     public CreatePlanRequest() {
     }
@@ -32,6 +37,13 @@ public class CreatePlanRequest {
         this.planYear = planYear;
         this.planName = planName;
         this.regionalAllocations = regionalAllocations;
+    }
+
+    public CreatePlanRequest(Integer planYear, String planName, List<RegionalAllocationRequest> regionalAllocations, Map<String, Map<String, Integer>> distribution) {
+        this.planYear = planYear;
+        this.planName = planName;
+        this.regionalAllocations = regionalAllocations;
+        this.distribution = distribution;
     }
 
     // Getters and Setters
@@ -57,6 +69,14 @@ public class CreatePlanRequest {
 
     public void setRegionalAllocations(List<RegionalAllocationRequest> regionalAllocations) {
         this.regionalAllocations = regionalAllocations;
+    }
+
+    public Map<String, Map<String, Integer>> getDistribution() {
+        return distribution;
+    }
+
+    public void setDistribution(Map<String, Map<String, Integer>> distribution) {
+        this.distribution = distribution;
     }
 
     @Override

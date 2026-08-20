@@ -63,6 +63,9 @@ public class PlanMapper {
         // Map Tax Center phase
         plan.setSentToTaxCenterAt(entity.getSentToTaxCenterAt());
 
+        // Map distribution data
+        plan.setDistribution(entity.getDistribution());
+
         // Map metadata
         plan.setUpdatedAt(entity.getUpdatedAt());
         plan.setVersion(entity.getVersion());
@@ -117,6 +120,11 @@ public class PlanMapper {
 
         // Map Tax Center phase
         entity.setSentToTaxCenterAt(domain.getSentToTaxCenterAt());
+
+        // Map distribution data
+        if (domain.getDistribution() != null) {
+            entity.setDistribution(domain.getDistribution());
+        }
 
         // Map metadata
         entity.setUpdatedAt(domain.getUpdatedAt());

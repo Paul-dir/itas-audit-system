@@ -54,6 +54,9 @@ public class PlanResponseMapper {
         // Tax center phase
         response.setSentToTaxCenterAt(plan.getSentToTaxCenterAt());
 
+        // Distribution data
+        response.setDistribution(plan.getDistribution());
+
         // Metadata
         response.setUpdatedAt(plan.getUpdatedAt());
         response.setVersion(plan.getVersion());
