@@ -1,6 +1,6 @@
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card } from '../../../../components/Card.jsx';
-import { Badge } from '../../../../components/Badge.jsx';
+import Card from '../../../../components/Card.jsx';
+import Badge from '../../../../components/Badge.jsx';
 import { AlertCircle, CheckCircle2, FileText } from 'lucide-react';
 
 export default function CommitteeDashboard({ view }) {
