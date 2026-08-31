@@ -108,6 +108,16 @@ public class ApAuditCaseEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    // ── TP-Specific Child Entities ────────────────────────────────────────────
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpRiskAssessmentEntity tpRiskAssessment;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpWorkingHypothesisEntity tpWorkingHypothesis;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpAuditPlanEntity tpAuditPlan;
+
     // ── Constructors ──────────────────────────────────────────────────────────
     public ApAuditCaseEntity() {
     }
@@ -191,4 +201,13 @@ public class ApAuditCaseEntity {
 
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessment; }
+    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessment = tpRiskAssessment; }
+
+    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypothesis; }
+    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypothesis = tpWorkingHypothesis; }
+
+    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlan; }
+    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlan = tpAuditPlan; }
 }
