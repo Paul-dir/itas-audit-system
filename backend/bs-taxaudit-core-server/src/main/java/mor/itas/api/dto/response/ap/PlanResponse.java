@@ -47,6 +47,12 @@ public class PlanResponse {
     // Distribution data (audit type breakdown by region)
     private Map<String, Map<String, Integer>> distribution;
 
+    // Amendment
+    private String amendmentComment;
+
+    // Regional feedback (submitted regions + defaults for pending)
+    private Map<String, Object> regionalFeedback;
+
     // Metadata
     private Long version;
 
@@ -237,5 +243,21 @@ public class PlanResponse {
 
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    public String getAmendmentComment() {
+        return amendmentComment;
+    }
+
+    public void setAmendmentComment(String amendmentComment) {
+        this.amendmentComment = amendmentComment;
+    }
+
+    public Map<String, Object> getRegionalFeedback() {
+        return regionalFeedback;
+    }
+
+    public void setRegionalFeedback(Map<String, Object> regionalFeedback) {
+        this.regionalFeedback = regionalFeedback;
     }
 }

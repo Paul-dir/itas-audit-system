@@ -7,15 +7,15 @@
  * - Risk analysis dashboard data
  */
 
-const API_BASE_URL = 'http://localhost:8080/api/v1/backoffice/ap';
+const API_BASE_URL = '/api/v1/backoffice/ap';
 
 /**
  * Get pre-filled plan data with risk-based case distribution
- * Endpoint: GET /plans/pre-filled-data
+ * Endpoint: GET /plans/workflow/pre-filled-data
  */
 export async function getPreFilledPlanData(actorId = 'planning-team-demo') {
   try {
-    const response = await fetch(`${API_BASE_URL}/plans/pre-filled-data`, {
+    const response = await fetch(`${API_BASE_URL}/plans/workflow/pre-filled-data`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -37,11 +37,11 @@ export async function getPreFilledPlanData(actorId = 'planning-team-demo') {
 
 /**
  * Get risk analysis dashboard data
- * Endpoint: GET /plans/risk-analysis/dashboard
+ * Endpoint: GET /plans/workflow/risk-analysis/dashboard
  */
 export async function getRiskAnalysisDashboard(actorId = 'admin-001') {
   try {
-    const response = await fetch(`${API_BASE_URL}/plans/risk-analysis/dashboard`, {
+    const response = await fetch(`${API_BASE_URL}/plans/workflow/risk-analysis/dashboard`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

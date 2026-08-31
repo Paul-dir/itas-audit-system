@@ -78,11 +78,17 @@ export const ROLES = {
 };
 
 export const CASE_STATUS = {
-  PENDING:     { id: 'PENDING',     label: 'Pending Assignment', color: 'gray'   },
-  ASSIGNED:    { id: 'ASSIGNED',    label: 'Assigned',           color: 'blue'   },
-  IN_PROGRESS: { id: 'IN_PROGRESS', label: 'In Progress',        color: 'yellow' },
-  COMPLETED:   { id: 'COMPLETED',   label: 'Completed',          color: 'green'  },
-  CLOSED:      { id: 'CLOSED',      label: 'Closed',             color: 'teal'   },
+  // Frontend-canonical statuses (used in UI logic)
+  PENDING:                    { id: 'PENDING',                    label: 'Pending Assignment',      color: 'gray'   },
+  ASSIGNED:                   { id: 'ASSIGNED',                   label: 'Assigned',                color: 'blue'   },
+  IN_PROGRESS:                { id: 'IN_PROGRESS',                label: 'In Progress',             color: 'yellow' },
+  COMPLETED:                  { id: 'COMPLETED',                  label: 'Completed',               color: 'green'  },
+  CLOSED:                     { id: 'CLOSED',                     label: 'Closed',                  color: 'teal'   },
+
+  // Backend-canonical statuses (returned by the API)
+  PENDING_ASSIGNMENT:         { id: 'PENDING_ASSIGNMENT',         label: 'Pending Assignment',      color: 'gray'   },
+  ASSIGNED_TO_TEAM_LEADER:    { id: 'ASSIGNED_TO_TEAM_LEADER',    label: 'Assigned to Team Leader', color: 'blue'   },
+  ASSIGNED_TO_COMMITTEE:      { id: 'ASSIGNED_TO_COMMITTEE',      label: 'Assigned to Committee',   color: 'purple' },
 };
 
 export const SECTORS = [
@@ -116,27 +122,72 @@ export const getTaxCenterById = (id) => {
 };
 
 /**
+ * Map backend audit type identifiers to frontend audit type IDs.
+ * Backend cascade stores: DESK_AUDIT, JOINT_AUDIT, TRANSFER_PRICING, COMPREHENSIVE_AUDIT, ISSUE_AUDIT
+ * Frontend constants use:  desk_audit, joint_audit, transfer_pricing, comprehensive, issue_audit
+ */
+export const BACKEND_AUDIT_TYPE_TO_FRONTEND = {
+  'DESK_AUDIT':          'desk_audit',
+  'JOINT_AUDIT':         'joint_audit',
+  'TRANSFER_PRICING':    'transfer_pricing',
+  'COMPREHENSIVE_AUDIT': 'comprehensive',
+  'ISSUE_AUDIT':         'issue_audit',
+};
+
+export const FRONTEND_AUDIT_TYPE_TO_BACKEND = {
+  'desk_audit':       'DESK_AUDIT',
+  'joint_audit':      'JOINT_AUDIT',
+  'transfer_pricing': 'TRANSFER_PRICING',
+  'comprehensive':    'COMPREHENSIVE_AUDIT',
+  'issue_audit':      'ISSUE_AUDIT',
+};
+
+/**
+ * Committee-managed audit types
+ */
+export const COMMITTEE_AUDIT_TYPES = new Set(['JOINT_AUDIT', 'TRANSFER_PRICING']);
+
+/**
+ * Normalize a backend case status to a simple frontend status for tab filtering.
+ */
+export const normalizeBackendStatus = (backendStatus) => {
+  switch (backendStatus) {
+    case 'PENDING_ASSIGNMENT':      return 'PENDING';
+    case 'ASSIGNED_TO_TEAM_LEADER': return 'ASSIGNED';
+    case 'ASSIGNED_TO_COMMITTEE':   return 'ASSIGNED';
+    case 'IN_PROGRESS':             return 'IN_PROGRESS';
+    case 'COMPLETED':               return 'COMPLETED';
+    case 'CLOSED':                  return 'COMPLETED';
+    default:                        return backendStatus || 'PENDING';
+  }
+};
+
+/**
+ * Get the audit type definition matching a backend or frontend id.
+ */
+export const getAuditTypeDef = (id) => {
+  if (!id) return null;
+  // Try direct match first
+  const direct = AUDIT_TYPES.find(at => at.id === id);
+  if (direct) return direct;
+  // Try mapping from backend to frontend id
+  const frontendId = BACKEND_AUDIT_TYPE_TO_FRONTEND[id];
+  return frontendId ? AUDIT_TYPES.find(at => at.id === frontendId) : null;
+};
+
+/**
  * Convert distribution from backend format (region codes like "AA") to frontend format (region IDs like "addis_ababa")
  * Backend stores distribution as { "AA": { "desk_audit": 30, ... }, ... }
  * Frontend expects { "addis_ababa": { "desk_audit": 30, ... }, ... }
  */
 export const convertDistributionFromBackend = (backendDistribution) => {
   if (!backendDistribution) return null;
-  
-  // Build code-to-id mapping
   const codeToId = {};
-  REGIONS.forEach(r => {
-    codeToId[r.code] = r.id;
-  });
-  
-  // Transform distribution object keys from codes to IDs
+  REGIONS.forEach(r => { codeToId[r.code] = r.id; });
   const frontendDistribution = {};
   Object.entries(backendDistribution).forEach(([code, auditTypes]) => {
     const regionId = codeToId[code];
-    if (regionId) {
-      frontendDistribution[regionId] = auditTypes;
-    }
+    if (regionId) frontendDistribution[regionId] = auditTypes;
   });
-  
   return frontendDistribution;
 };

@@ -5,6 +5,7 @@ import mor.itas.persistence.jpa.entity.ap.PlanStatusEnum;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -49,6 +50,13 @@ public interface AnnualAuditPlanJpaRepository extends JpaRepository<AnnualAuditP
      * Check if a plan already exists for the given year and name
      */
     Optional<AnnualAuditPlanEntity> findByYearAndName(Integer year, String name);
+
+    /**
+     * Directly update plan status without loading entity (avoids optimistic locking race condition)
+     */
+    @Modifying
+    @Query("UPDATE AnnualAuditPlanEntity p SET p.status = :status WHERE p.id = :planId")
+    int updateStatus(@Param("planId") UUID planId, @Param("status") PlanStatusEnum status);
 }
 
 

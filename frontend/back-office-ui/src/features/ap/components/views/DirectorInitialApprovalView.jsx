@@ -32,14 +32,14 @@ function DirectorInitialApprovalView() {
   const [showSubmitToRegionsForm, setShowSubmitToRegionsForm] = useState(false);
   const [submitNotes, setSubmitNotes] = useState('');
 
-  const auditTypes = ['desk_audit', 'field_audit', 'joint_audit', 'transfer_pricing', 'comprehensive', 'issue_audit'];
+  // ✅ BACKEND AUDIT TYPES (from backend distribution data)
   const auditTypeLabels = {
-    desk_audit: 'Desk Audit',
-    field_audit: 'Field Audit',
-    joint_audit: 'Joint Audit',
-    transfer_pricing: 'Transfer Pricing',
-    comprehensive: 'Comprehensive',
-    issue_audit: 'Issue Audit'
+    DESK_AUDIT: 'Desk Audit',
+    COMPREHENSIVE_AUDIT: 'Comprehensive Audit',
+    FIELD_AUDIT: 'Field Audit',
+    JOINT_AUDIT: 'Joint Audit',
+    TRANSFER_PRICING: 'Transfer Pricing',
+    ISSUE_AUDIT: 'Issue Audit'
   };
 
   const loadPlans = () => {
@@ -74,9 +74,10 @@ function DirectorInitialApprovalView() {
     switch(activeTab) {
       case 'pending':
         // Show all plans in approval workflow (not yet submitted to regions)
+        // ✅ Use correct backend status values: DIRECTOR_APPROVED (not APPROVED_BY_DIRECTOR)
         return plans.filter(p => 
           p.status === 'SUBMITTED_TO_DIRECTOR' || 
-          p.status === 'APPROVED_BY_DIRECTOR' ||
+          p.status === 'DIRECTOR_APPROVED' ||
           p.status === 'AWAITING_REGIONAL_FEEDBACK'
         );
       case 'feedback':
@@ -125,8 +126,8 @@ function DirectorInitialApprovalView() {
     // ✅ EXECUTE ACTION
     switch(actionType) {
       case 'approve':
-        // Director approves initial plan
-        plan.status = 'APPROVED_BY_DIRECTOR';
+        // Director approves initial plan - use correct backend status DIRECTOR_APPROVED
+        plan.status = 'DIRECTOR_APPROVED';
         plan.directorApprovalDate = new Date().toISOString();
         plan.approvalHistory = plan.approvalHistory || [];
         plan.approvalHistory.push({
@@ -209,9 +210,9 @@ function DirectorInitialApprovalView() {
     const plan = updatedData.plans.find(p => p.id === selectedPlan);
     if (!plan) return;
 
-    // ✅ Allow submission if plan is APPROVED_BY_DIRECTOR
-    if (plan.status !== 'APPROVED_BY_DIRECTOR') {
-      alert(`❌ Cannot submit! Current status: ${plan.status}\n\nPlans must be APPROVED_BY_DIRECTOR to submit to regions.`);
+    // ✅ Allow submission if plan is DIRECTOR_APPROVED
+    if (plan.status !== 'DIRECTOR_APPROVED') {
+      alert(`❌ Cannot submit! Current status: ${plan.status}\n\nPlans must be DIRECTOR_APPROVED to submit to regions.`);
       return;
     }
 
@@ -381,41 +382,66 @@ function DirectorInitialApprovalView() {
                 </div>
               </div>
 
-              {/* Audit Type Allocations */}
+              {/* Regional Distribution Breakdown */}
               <div className="bg-panel dark:bg-panel border border-border dark:border-border rounded-lg p-4">
-                <h3 className="text-text-hi dark:text-text-hi font-bold mb-3">Audit Type Allocations</h3>
+                <h3 className="text-text-hi dark:text-text-hi font-bold mb-3">Distribution Summary (by Region & Audit Type)</h3>
                 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-ink dark:bg-ink">
-                      <tr>
-                        <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Audit Type</th>
-                        <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Count</th>
-                        <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">% of Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border dark:divide-border">
-                      {auditTypes.map(type => {
-                        const count = planDetails.auditTypeAllocation?.[type] || 0;
-                        const percent = planDetails.totalCases > 0 ? ((count / planDetails.totalCases) * 100).toFixed(1) : 0;
-                        return (
-                          <tr key={type}>
-                            <td className="p-2 text-text-hi dark:text-text-hi font-bold text-xs">
-                              {auditTypeLabels[type]}
-                            </td>
-                            <td className="p-2 text-center text-text-mid dark:text-text-mid">{count}</td>
-                            <td className="p-2 text-center text-text-mid dark:text-text-mid">{percent}%</td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="bg-ink dark:bg-ink font-bold">
-                        <td className="p-2 text-text-hi dark:text-text-hi">TOTAL</td>
-                        <td className="p-2 text-center text-text-hi dark:text-text-hi">{planDetails.totalCases}</td>
-                        <td className="p-2 text-center text-text-hi dark:text-text-hi">100%</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                {planDetails.distribution && Object.keys(planDetails.distribution).length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-ink dark:bg-ink">
+                        <tr>
+                          <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Region</th>
+                          {/* Get unique audit types from distribution */}
+                          {Array.from(new Set(
+                            Object.values(planDetails.distribution || {}).flatMap(r => Object.keys(r || {}))
+                          )).map(auditType => (
+                            <th key={auditType} className="text-center p-2 text-text-hi dark:text-text-hi font-bold">
+                              {auditTypeLabels[auditType] || auditType}
+                            </th>
+                          ))}
+                          <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border dark:divide-border">
+                        {Object.entries(planDetails.distribution).map(([region, auditTypes]) => {
+                          const regionTotal = Object.values(auditTypes || {}).reduce((sum, count) => sum + (count || 0), 0);
+                          const uniqueAuditTypes = Array.from(new Set(
+                            Object.values(planDetails.distribution || {}).flatMap(r => Object.keys(r || {}))
+                          ));
+                          
+                          return (
+                            <tr key={region}>
+                              <td className="p-2 text-text-hi dark:text-text-hi font-bold text-xs">{region}</td>
+                              {uniqueAuditTypes.map(auditType => (
+                                <td key={auditType} className="p-2 text-center text-text-mid dark:text-text-mid">
+                                  {auditTypes?.[auditType] || 0}
+                                </td>
+                              ))}
+                              <td className="p-2 text-center text-text-hi dark:text-text-hi font-bold">{regionTotal}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-ink dark:bg-ink font-bold">
+                          <td className="p-2 text-text-hi dark:text-text-hi">TOTAL</td>
+                          {Array.from(new Set(
+                            Object.values(planDetails.distribution || {}).flatMap(r => Object.keys(r || {}))
+                          )).map(auditType => {
+                            const total = Object.values(planDetails.distribution || {}).reduce((sum, r) => sum + (r?.[auditType] || 0), 0);
+                            return (
+                              <td key={auditType} className="p-2 text-center text-text-hi dark:text-text-hi">
+                                {total}
+                              </td>
+                            );
+                          })}
+                          <td className="p-2 text-center text-text-hi dark:text-text-hi">{planDetails.totalCases}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-text-mid dark:text-text-mid text-sm">No distribution data available</p>
+                )}
               </div>
 
               {/* Regional Feedback (if available) */}
@@ -574,7 +600,7 @@ function DirectorInitialApprovalView() {
                     </>
                   )}
 
-                  {activeTab === 'pending' && planDetails.status === 'APPROVED_BY_DIRECTOR' && (
+                  {activeTab === 'pending' && planDetails.status === 'DIRECTOR_APPROVED' && (
                     <button
                       onClick={() => setShowSubmitToRegionsForm(true)}
                       className="w-full py-3 px-4 rounded font-bold bg-success dark:bg-success text-white hover:bg-success/80 dark:hover:bg-success/80 transition-all flex items-center justify-center gap-2"

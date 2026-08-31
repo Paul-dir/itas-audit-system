@@ -44,6 +44,20 @@ public class PlanAllocationEntity {
     @Column(name = "tc_justification", columnDefinition = "TEXT")
     private String tcJustification;
 
+    @Column(name = "tc_adjusted_allocations", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private com.fasterxml.jackson.databind.JsonNode tcAdjustedAllocations;  // Per-audit-type adjustments from tax center
+
+    @Column(name = "allocation_by_audit_type", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private com.fasterxml.jackson.databind.JsonNode allocationByAuditType;  // Original per-audit-type breakdown from regional director
+
+    @Column(name = "tc_original_count")
+    private Integer tcOriginalCount;  // Original proposed count before adjustments
+
+    @Column(name = "tc_adjustment_reason", length = 500)
+    private String tcAdjustmentReason;  // E.g., "Q3 staffing shortage"
+
     @Column(name = "tc_feedback_submitted", nullable = false)
     private Boolean tcFeedbackSubmitted = false;
 
@@ -142,6 +156,38 @@ public class PlanAllocationEntity {
 
     public void setTcJustification(String tcJustification) {
         this.tcJustification = tcJustification;
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode getTcAdjustedAllocations() {
+        return tcAdjustedAllocations;
+    }
+
+    public void setTcAdjustedAllocations(com.fasterxml.jackson.databind.JsonNode tcAdjustedAllocations) {
+        this.tcAdjustedAllocations = tcAdjustedAllocations;
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode getAllocationByAuditType() {
+        return allocationByAuditType;
+    }
+
+    public void setAllocationByAuditType(com.fasterxml.jackson.databind.JsonNode allocationByAuditType) {
+        this.allocationByAuditType = allocationByAuditType;
+    }
+
+    public Integer getTcOriginalCount() {
+        return tcOriginalCount;
+    }
+
+    public void setTcOriginalCount(Integer tcOriginalCount) {
+        this.tcOriginalCount = tcOriginalCount;
+    }
+
+    public String getTcAdjustmentReason() {
+        return tcAdjustmentReason;
+    }
+
+    public void setTcAdjustmentReason(String tcAdjustmentReason) {
+        this.tcAdjustmentReason = tcAdjustmentReason;
     }
 
     public Boolean getTcFeedbackSubmitted() {

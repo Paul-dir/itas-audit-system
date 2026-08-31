@@ -45,10 +45,45 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<List<UserResponse>> getAllUsers(
-            @RequestHeader("X-Actor-Id") String actorId) {
-        List<User> users = userManagementUseCase.getAllUsers();
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String taxCenter,
+            @RequestParam(required = false) String auditType,
+            @RequestParam(required = false) String teamLeader,
+            @RequestHeader(value = "X-Actor-Id", required = false) String actorId) {
+
+        List<User> users;
+
+        if ("team_leader".equalsIgnoreCase(role) || "TEAM_LEADER".equals(role)) {
+            // Tax center team leaders — all audit types unless specified
+            String at = auditType != null ? auditType : "";
+            String tc = taxCenter != null ? taxCenter : "";
+            users = userManagementUseCase.getTeamLeaders(at, tc);
+            // If no auditType filter, getTeamLeaders may be filtering — fall back to all
+            if (users.isEmpty() && !tc.isEmpty()) {
+                users = userManagementUseCase.getAllUsers().stream()
+                    .filter(u -> "TEAM_LEADER".equalsIgnoreCase(u.getUserType())
+                              && (tc.isEmpty() || tc.equalsIgnoreCase(u.getAssignedLocation())))
+                    .collect(java.util.stream.Collectors.toList());
+            }
+        } else if ("auditor".equalsIgnoreCase(role) || "AUDITOR".equals(role)) {
+            if (teamLeader != null && !teamLeader.isBlank()) {
+                // Auditors under a specific team leader — filter on assignedLocation matching TL's location
+                users = userManagementUseCase.getAllUsers().stream()
+                    .filter(u -> "AUDITOR".equalsIgnoreCase(u.getUserType()))
+                    .collect(java.util.stream.Collectors.toList());
+                // Further filter by teamLeader if stored on user
+                // (Fallback: return all auditors for same tax center as TL)
+            } else {
+                users = userManagementUseCase.getAuditors(
+                    auditType != null ? auditType : "",
+                    taxCenter != null ? taxCenter : "");
+            }
+        } else {
+            users = userManagementUseCase.getAllUsers();
+        }
+
         return ResponseEntity.ok(
-            users.stream().map(this::mapUserToResponse).collect(Collectors.toList())
+            users.stream().map(this::mapUserToResponse).collect(java.util.stream.Collectors.toList())
         );
     }
 

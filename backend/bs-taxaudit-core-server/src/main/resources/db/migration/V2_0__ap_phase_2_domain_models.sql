@@ -1,33 +1,17 @@
 -- Phase II: AP Cluster - Domain Models Implementation
 -- Creates tables for Annual Audit Plan workflow with regional-level allocations
--- 
--- ALLOCATION STRUCTURE (REGIONAL-LEVEL):
--- 1. Regional Allocations: Planning Team creates (proposedCount from Risk Engine)
---    tax_center_code IS NULL, region_code is set
--- 2. Director: Routes/approves regional allocations (NO modifications)
--- 3. Regional Director: Divides regional allocations into tax center allocations
---    Creates new allocations with tax_center_code and same region_code
--- 4. Tax Center Manager: Provides feedback on their tax center allocation
 
--- Enum type for plan status (custom PostgreSQL ENUM)
+-- Drop old V1 tables if they exist (from old schema)
+DROP TABLE IF EXISTS ap_plan_allocations CASCADE;
+DROP TABLE IF EXISTS ap_annual_audit_plans CASCADE;
 DROP TYPE IF EXISTS ap_plan_status;
-CREATE TYPE ap_plan_status AS ENUM (
-    'DRAFT',
-    'SUBMITTED_TO_DIRECTOR',
-    'DIRECTOR_APPROVED',
-    'SUBMITTED_TO_REGIONAL',
-    'REGIONAL_APPROVED',
-    'SENT_TO_TAX_CENTERS',
-    'TC_FEEDBACK_SUBMITTED',
-    'FINALIZED'
-);
 
 -- Annual Audit Plans Table - Main aggregate root
 CREATE TABLE IF NOT EXISTS ap_annual_audit_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_year INTEGER NOT NULL,
     plan_name VARCHAR(256) NOT NULL,
-    status ap_plan_status NOT NULL DEFAULT 'DRAFT',
+    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',  -- Store as VARCHAR for JPA compatibility
     
     -- Planning Team Phase
     created_by VARCHAR(64) NOT NULL,
@@ -49,6 +33,14 @@ CREATE TABLE IF NOT EXISTS ap_annual_audit_plans (
     
     -- Tax Center Phase
     sent_to_tax_center_at TIMESTAMPTZ,
+    
+    -- Distribution Data (JSON storage for frontend)
+    distribution_json JSONB,
+    
+    -- Regions routing
+    sent_to_regions_at TIMESTAMPTZ,
+    sent_to_regions_by VARCHAR(64),
+    regions_received_count INTEGER DEFAULT 0,
     
     -- Metadata
     updated_at TIMESTAMPTZ,

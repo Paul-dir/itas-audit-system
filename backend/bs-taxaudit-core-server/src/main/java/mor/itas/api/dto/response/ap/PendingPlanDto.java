@@ -56,4 +56,39 @@ public class PendingPlanDto {
      */
     @JsonProperty("description")
     private String description;
+
+    /**
+     * Submission metadata - Who submitted and when
+     */
+    @JsonProperty("submittedToDirectorBy")
+    private String submittedToDirectorBy;
+    
+    @JsonProperty("submittedToDirectorAt")
+    private OffsetDateTime submittedToDirectorAt;
+
+    /**
+     * Director approval metadata (if already approved)
+     */
+    @JsonProperty("directorApprovedBy")
+    private String directorApprovedBy;
+    
+    @JsonProperty("directorApprovedAt")
+    private OffsetDateTime directorApprovedAt;
+    
+    @JsonProperty("directorApprovalReason")
+    private String directorApprovalReason;
+
+    /**
+     * Amendment comment from Director (if plan is in AMENDMENT_REQUIRED status)
+     */
+    @JsonProperty("amendmentComment")
+    private String amendmentComment;
+
+    /**
+     * Regional feedback map - submitted regions have actual data,
+     * pending regions have default plan distribution values.
+     * Structure: { regionCode: { auditType: { totalRequested, totalCapacity, ... } } }
+     */
+    @JsonProperty("regionalFeedback")
+    private Map<String, Object> regionalFeedback;
 }

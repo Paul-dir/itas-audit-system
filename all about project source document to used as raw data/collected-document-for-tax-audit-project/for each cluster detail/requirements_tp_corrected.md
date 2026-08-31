@@ -25,7 +25,7 @@ The Transfer Pricing Audit lifecycle includes: detailed risk assessment, plannin
 - **Process_Owner**: Manager responsible for planning, review, and approval decisions in the TP audit
 - **TP_Audit_Team**: Auditors who execute detailed assessment, field work, analysis, and report for TP audit type
 - **Review_Committee**: Group responsible for reviewing TP cases at planning stage for approval
-- **Team_Leader**: Officer with authority to escalate potential fraud findings
+- **Team_Leader**: Officer with authority to perform the first-level review/approval of the draft TP audit report (FR-04.5-20) and to escalate potential fraud findings [role expanded — see Requirement 32 correction note]
 - **Authorized_Official**: Final approver before notice issuance
 - **Controlled_Transaction**: Transaction between related parties subject to transfer pricing requirements
 - **Transfer_Pricing_Method**: Established approach per MoR proclamations and OECD guidelines (e.g., CUP, Resale Price, Cost Plus, Profit Split, Transactional Net Margin)
@@ -234,17 +234,23 @@ This architectural approach enables:
 2. THE Accounting_Assessment SHALL record: accounting methods used, financial reporting methods, documented accounting policies, financial record review results, revenue reporting procedures and observations, expense reporting procedures and observations, related-party transaction reporting procedures and observations, and auditor findings
 3. THE System SHALL link Accounting_Assessment findings to: identified risk areas, transaction audit trail procedures, and subsequent detailed testing
 
-### Requirement 12: Support Transaction Audit Trail Capability with Multiple Source Integration
+### Requirement 12: Support Transaction Audit Trail Capability with Prioritized Source Fallback [CORRECTED]
 
-**User Story:** As an auditor, I want to trace controlled transactions from multiple sources to their recorded reporting, so that I can verify transaction completeness and accuracy in transfer pricing.
+> **Correction note:** FR-04.5-10 specifies a conditional priority order, not a flat list of equally-available sources: e-invoicing is the primary source; the Cash Register Machine is a fallback used specifically for sales data when e-invoicing is not functional; everything else is done manually by accessing the taxpayer's system directly. The original version of this requirement listed all four sources as interchangeable options with no ordering or scope restriction. This version restores the source's conditional logic.
+
+**User Story:** As an auditor, I want to trace controlled transactions from the appropriate source given system availability, so that I can verify transaction completeness and accuracy in transfer pricing using the correct fallback method.
 
 #### Acceptance Criteria
 
-1. WHEN conducting transaction testing, THE System SHALL support Transaction_Audit_Trail creation with source integration
-2. THE Transaction_Audit_Trail SHALL support transaction sources: Ministry_e-Invoicing_System, Cash_Register_Machine, Taxpayer_Accounting_Systems, and Manual_Entry (reusable abstraction: EInvoicingProvider, CashRegisterProvider, TaxpayerAccountingProvider interface-based integration)
-3. EACH Transaction_Audit_Trail record SHALL contain: transaction source system, transaction details, invoice reference, ledger posting, taxpayer identification, related party identification, transaction date, transaction amount, audit trail result (MATCHED, DISCREPANCY, INCOMPLETE), and integration result (source reference)
-4. WHERE a transaction is matched, THE System SHALL record matching verification and auditor sign-off
-5. WHERE a discrepancy is identified, THE System SHALL record: discrepancy type, discrepancy description, amount variance, related finding, and investigation status
+1. WHEN conducting transaction testing, THE System SHALL support Transaction_Audit_Trail creation with source integration, applying the following priority order (FR-04.5-10):
+   - **PRIMARY**: WHERE the Ministry e-Invoicing system is functional for the taxpayer, THE System SHALL perform the audit trail within the MoR e-invoicing system
+   - **FALLBACK (sales data only)**: WHERE e-invoicing is NOT functional, THE System SHALL perform the audit trail using the Cash Register Machine, limited to sales data
+   - **MANUAL**: FOR data not covered by e-invoicing or the Cash Register Machine (e.g., non-sales transactions, or any data when neither automated source is available), THE System SHALL enable the auditor to conduct the audit trail manually by accessing the taxpayer's system directly
+2. THE System SHALL record which source tier (PRIMARY, FALLBACK, MANUAL) was used for each Transaction_Audit_Trail record and the reason for using a fallback tier (e.g., E_INVOICING_NOT_FUNCTIONAL)
+3. THE integration SHALL be implemented via reusable interface abstractions (EInvoicingProvider, CashRegisterProvider, TaxpayerAccountingProvider) so source-tier selection logic is not hard-coded against a single provider
+4. EACH Transaction_Audit_Trail record SHALL contain: transaction source system, source tier used, transaction details, invoice reference, ledger posting, taxpayer identification, related party identification, transaction date, transaction amount, audit trail result (MATCHED, DISCREPANCY, INCOMPLETE), and integration result (source reference)
+5. WHERE a transaction is matched, THE System SHALL record matching verification and auditor sign-off
+6. WHERE a discrepancy is identified, THE System SHALL record: discrepancy type, discrepancy description, amount variance, related finding, and investigation status
 
 ### Requirement 13: Enable Auditor to Select and Audit Samples with Reproducibility
 
@@ -303,8 +309,9 @@ This architectural approach enables:
 2. THE Fact_Statement SHALL document: taxpayer business profile, organizational structure, related party relationships and identification, controlled transactions overview, transaction accounting treatment, industry and market context, supporting evidence summary, facts established through audit, documented questions for taxpayer, and supporting audit record references
 3. THE Fact_Statement versioning SHALL track: version number, status (DRAFT, SUBMITTED_TO_TAXPAYER, TAXPAYER_REVIEW, AMENDED, FINAL), author/preparer, creation date, modification date, and modification description
 4. THE Fact_Statement status progression SHALL be: DRAFT → SUBMITTED_TO_TAXPAYER → TAXPAYER_REVIEW → AMENDED (if needed) → FINAL
-5. THE System SHALL NOT allow deletion or overwriting of previous Fact_Statement versions; version history SHALL be preserved
-6. THE System SHALL record: which version is current, when each version was created/finalized, and by whom
+5. WHEN Fact_Statement transitions to SUBMITTED_TO_TAXPAYER, THE System SHALL notify the Taxpayer (FR-04.5.2-03; see Requirement 55 notification catalog) [ADDED]
+6. THE System SHALL NOT allow deletion or overwriting of previous Fact_Statement versions; version history SHALL be preserved
+7. THE System SHALL record: which version is current, when each version was created/finalized, and by whom
 
 ### Requirement 18: Taxpayer Reviews Fact Statement and Provides Comments
 
@@ -495,16 +502,21 @@ This architectural approach enables:
 6. THE System SHALL support post-exit-conference amendments to the report with amendment tracking and rationale documentation
 7. THE System SHALL link Audit_Report to: Risk_Assessment, Audit_Plan, Fact_Statement, all analysis workpapers, and supporting evidence
 
-### Requirement 32: Process Owner Reviews Transfer Pricing Audit Report
+### Requirement 32: Team Leader and Process Owner Sequentially Review Transfer Pricing Audit Report [CORRECTED]
 
-**User Story:** As a Process Owner, I want to review the TP audit report, so that I can assess accuracy, completeness, and appropriateness of conclusions before approval.
+> **Correction note:** The source requirements contain two review-role statements for the drafted audit report: FR-04.5-20 states the auditor "submit[s] to audit team leader for review," while FR-04.5.2-09/FR-04.5.2-10 state the report is submitted to and approved by the "transfer pricing audit process owner." The original version of this requirement named only the Process Owner as reviewer, silently dropping the Team Leader review step required by FR-04.5-20. This version reconciles both source statements as sequential review steps (Team Leader first, then Process Owner), consistent with the multi-step approval chain FR-04.5-21 also describes ("routed... until final approval is obtained by the authorized official"). Team_Leader's authority is correspondingly expanded in the Glossary/Requirement 57 beyond fraud escalation to include this first-level report review.
+
+**User Story:** As a Team Leader, I want to perform the first review of the draft TP audit report, and as a Process Owner, I want to perform the subsequent review, so that the report is validated at each required level before it proceeds toward final approval.
 
 #### Acceptance Criteria
 
-1. WHEN Audit_Report is submitted, THE System SHALL notify Process_Owner of review requirement
-2. THE System SHALL enable Process_Owner to: APPROVE_REPORT, REQUEST_REVISIONS, or REJECT_REPORT with documented comments
-3. THE System SHALL record Process_Owner review: reviewer identification, review date, decision, and comments
-4. IF revisions are requested, THE System SHALL record revision requirements and return Audit_Report to TP Audit Team for modification
+1. WHEN Audit_Report is submitted by the TP Audit Team, THE System SHALL notify the Team_Leader of the first-level review requirement (FR-04.5-20)
+2. THE System SHALL enable Team_Leader to: APPROVE_REPORT, REQUEST_REVISIONS, or REJECT_REPORT with documented comments
+3. IF the Team_Leader requests revisions or rejects, THE System SHALL record the requirements and return Audit_Report to the TP Audit Team for modification
+4. WHEN the Team_Leader approves, THE System SHALL forward Audit_Report to the Process_Owner and notify the Process_Owner of the second-level review requirement (FR-04.5.2-09)
+5. THE System SHALL enable Process_Owner to: APPROVE_REPORT, REQUEST_REVISIONS, or REJECT_REPORT with documented comments (FR-04.5.2-10)
+6. IF the Process_Owner requests revisions or rejects, THE System SHALL record the requirements and return Audit_Report to the TP Audit Team for modification
+7. THE System SHALL record EACH review step (Team_Leader, Process_Owner) separately: reviewer identification, reviewer role, review date, decision, report version reviewed, and comments
 
 ### Requirement 33: Route Audit Report Through Review and Approval Workflow Until Final Approval
 
@@ -519,7 +531,9 @@ This architectural approach enables:
 5. WHEN all required approvals are obtained, THE System SHALL transition report status to APPROVED and unlock notice generation
 6. THE System SHALL prevent notice generation until all required approvals are recorded
 
-### Requirement 34: Process Owner Sends Approved Audit Report to Taxpayer with Signature Option
+### Requirement 34: Process Owner Sends Approved Audit Report to Taxpayer with Signature Option [CORRECTED]
+
+> **Correction note:** FR-04.5-22 explicitly states that if the taxpayer "fails to raise objection within the approved period of time, the tax intelligence and fraud investigation process will be triggered." The original version of point 6 below instead had the System send a reminder, extend the deadline once, and then proceed directly to notice generation on non-response — the opposite of the source behavior. This version restores the fraud-investigation trigger on non-response as the source specifies.
 
 **User Story:** As a Process Owner, I want to send the approved audit report to the taxpayer with signature capability, so that I can formally communicate audit findings and obtain taxpayer acknowledgment.
 
@@ -528,9 +542,10 @@ This architectural approach enables:
 1. WHEN Audit_Report is fully approved, THE System SHALL enable sending the report to Taxpayer
 2. THE System SHALL provide report to Taxpayer with: transmission date, auditor contact, case reference, reporting period, and signature/acknowledgment request
 3. THE Taxpayer SHALL be able to: SIGN_REPORT (electronic signature or confirmation), OBJECT_TO_REPORT (with supporting rationale), or DEFER_RESPONSE within configured response deadline (default: 30 days from receipt)
-4. IF Taxpayer signs the report, THE System SHALL: record signature/confirmation, timestamp, record TP audit phase completion status, and trigger transition toward Notice phase
-5. IF Taxpayer object, THE System SHALL: record objection, objection rationale, supporting evidence, objection date, and maintain audit status for potential further discussion before notice
-6. IF no response within deadline, THE System SHALL: send reminder notification, extend deadline once (if configured), and after final deadline, proceed with notice generation
+4. IF Taxpayer signs the report (i.e., agrees) within the approved period, THE System SHALL: record signature/confirmation, timestamp, record TP audit phase completion status, and trigger transition toward the Audit Completion process (FR-04.5-22)
+5. IF Taxpayer raises an objection within the approved period, THE System SHALL: record objection, objection rationale, supporting evidence, objection date, and maintain audit status for potential further discussion before notice
+6. IF the Taxpayer fails to raise an objection (or sign) within the approved period of time, THE System SHALL create a Fraud_Investigation_Referral and trigger the "Intelligence and Tax Fraud Investigation" sub-process (FR-04.5-22) — the System SHALL NOT proceed directly to notice generation on non-response
+7. THE System SHALL record the referral: case reference, reason (NO_RESPONSE_WITHIN_DEADLINE), referral date, and referred-to team/person, consistent with the referral pattern in Requirement 45/51
 
 ---
 
@@ -778,6 +793,7 @@ This architectural approach enables:
    - Plan approval completed
    - Information request issued
    - Document requested
+   - Fact statement submitted to taxpayer [ADDED — required by FR-04.5.2-03]
    - Report ready for review
    - Report submitted to taxpayer
    - Notice generated
@@ -813,7 +829,7 @@ This architectural approach enables:
    - **TP_Audit_Team**: risk assessment creation/modification, planning activities, field work procedures, document upload, information request issuance, analysis procedures, report draft preparation, case-specific actions
    - **Process_Owner**: planning review/approval, report review/approval, taxpayer report delivery authorization, assessment notice authorization, case-specific management decisions
    - **Review_Committee**: planning meeting participation and case approval decisions
-   - **Team_Leader**: fraud indicator assessment, investigation referral authorization
+   - **Team_Leader**: first-level draft audit report review/approval (FR-04.5-20), fraud indicator assessment, investigation referral authorization
    - **Authorized_Official**: assessment notice finalization, signature authorization
    - **Taxpayer**: own case information access, information request response, fact statement review, report signoff, assessment response, objection submission
 
@@ -951,3 +967,86 @@ THE System SHALL handle and provide appropriate error messages/logging for:
 - Invalid objection format (validation error with correction guidance)
 - Stale report version on save (optimistic locking conflict)
 - Invalid approval transition (authorization/state error)
+
+---
+
+## Appendix: FR Traceability Matrix and Change Log
+
+This appendix maps each Requirement in this document back to its source functional requirement(s), notes its Mandatory (M) / Preferred (P) priority where the source specifies one, and flags where a Requirement extends beyond the literal FR text. It exists so gaps and elaborations are visible rather than silent.
+
+**Legend**: ✅ Direct match · 🔧 Corrected in this revision · 📈 Elaborated beyond literal FR text · ⚠️ Source FRs conflict with each other · ❌ Gap — no corresponding requirement
+
+| Requirement | Source FR(s) | Priority | Status | Note |
+|---|---|---|---|---|
+| 1 — Detailed Risk Assessment | FR-04.5-05 | M | ✅ | |
+| 2 — Taxpayer Submits Info/Evidence | FR-04.5-06 | M | 📈 | Document type list (org charts, related-party agreements, etc.) is elaborated beyond the FR's one-line statement |
+| 3 — Working Hypothesis / Revenue at Risk | FR-04.5-07 | M | ✅ | |
+| 4 — Review Committee Planning Meeting | FR-04.5-08 | M | ✅ | |
+| *(none)* | FR-04.5.1-04 | M | ❌ | Still not covered by any requirement in this document — see General Note below |
+| 5 — Materiality | FR-04.5.1-01 | M | ✅ | |
+| 6 — Industry Research | FR-04.5.1-02 | M | ✅ | |
+| 7 — Audit Sampling Method | FR-04.5.1-03 | M | ✅ | |
+| 8 — Prepare Audit Plan | FR-04.5.1-05 | M | ✅ | |
+| 9 — PO Reviews/Approves Plan | FR-04.5.1-06 | M | ✅ | |
+| 10 — PO Reviews Prep Results | FR-04.5.1-07 (possible duplicate: FR-04.5.2-11) | M | ⚠️ | FR-04.5.1-07 and FR-04.5.2-11 are word-for-word identical in the source. This may be a source duplication (one review gate, implemented once here) or two distinct gates (end of planning vs. end of execution). Only one gate is implemented; confirm against the business process before build |
+| 11 — Assess Accounting/Reporting Methods | FR-04.5-09 | M | ✅ | |
+| 12 — Transaction Audit Trail | FR-04.5-10 | M | 🔧 | Conditional source-priority logic restored in this revision |
+| 13 — Sample Selection | FR-04.5-11 | M | ✅ | |
+| 14 — Information Request Approval Workflow | FR-04.5-17 | M | 📈 | Covers "obtain approval for request"; the FR's separate clause "upload information obtained to the system" is only loosely covered (see Requirement 54 general document-archive linkage) — no dedicated acceptance criterion for auditor-side uploads distinct from taxpayer submissions |
+| 15 — Info/Document Requests incl. Interviews/Site Visits | FR-04.5.2-01 | M | ✅ | |
+| 16 — Taxpayer Submits Info via Interview/Tour/Visit | FR-04.5.2-02 | M | ✅ | |
+| 17 — Draft Fact Statement | FR-04.5.2-03 | M | 🔧 | Missing taxpayer-notification step added in this revision |
+| 18 — Taxpayer Reviews Fact Statement | FR-04.5.2-04 | M | ✅ | |
+| 19 — Taxpayer Submits Explanation of Differences | FR-04.5.2-05 | **P** (only Preferred-marked item in this FR block) | ✅ | Priority not distinguished from Mandatory items elsewhere in this document — see General Note below |
+| 20 — Structured Discussions with Taxpayer | FR-04.5.2-06 | M | ✅ | FR says "prepare discussion"; Requirement frames this as documenting discussions that occurred — minor framing difference, not corrected here as it doesn't change system behavior |
+| 21 — Audit Support Tools / 3rd-Party Data | FR-04.5-37 | M | ✅ | Positioned in Phase 3 (Field Work) rather than near the end of the FR list where FR-04.5-37 appears; a deliberate regrouping, not an error |
+| 22 — Automatic Ratio Analysis | FR-04.5-12 | M | ✅ | |
+| 23 — Auto-Select Cost/Expense Types | FR-04.5-13 | M | ✅ | |
+| 24 — Compare to Benchmarks/Comparables | FR-04.5-14 | M | ✅ | |
+| 25 — Cross-Border Transaction Assessment | FR-04.5-15 | M | ✅ | |
+| 26 — Customs Valuation Matching | FR-04.5-16 | M | 📈 | Extensively elaborated (data import, matching, discrepancy reporting, provider abstraction) — reasonable build-level detail, not literally specified at this depth in the FR |
+| 27 — Automatic TP Analysis | FR-04.5-18 | M | ✅ | |
+| 28 — Determine/Apply TP Methods | FR-04.5-19 | M | 📈 | The specific five-method list (CUP/RPM/CPM/PSM/TNMM) is the document's addition; the FR only says "linking to international market databases subject to the proclamations and directives" |
+| 29 — Select TP Method for Transaction | FR-04.5.2-07 | M | ✅ | Some overlap with Requirement 28 — FR-04.5-19 (general method capability) vs. FR-04.5.2-07 (per-transaction selection) are distinguishable but closely related |
+| 30 — Arm's-Length Price/Profit Range | FR-04.5.2-08 | M | ✅ | |
+| 31 — Draft Report / Exit Conference | FR-04.5-20 (partial) | M | ✅ | |
+| **32 — Team Leader then PO Review Report** | **FR-04.5-20, FR-04.5.2-09, FR-04.5.2-10** | **M** | **🔧 ⚠️** | **Original version named only Process Owner as reviewer, dropping the Team Leader review FR-04.5-20 requires. Source FRs conflict on this point; this revision treats them as sequential steps** |
+| 33 — Route Through Approval Workflow | FR-04.5-21 | M | ✅ | |
+| **34 — PO Sends Report to Taxpayer for Signoff** | **FR-04.5-22** | **M** | **🔧** | **Non-response previously proceeded to notice generation; corrected to trigger fraud investigation referral per the source** |
+| 35 — Generate Audit Notice | FR-04.5-23 | M | ✅ | |
+| 36 — Dynamic Notice Variables | FR-04.5-24 | M | 📈 | Variable list and `{{syntax}}` are the document's own design choice, not specified in the FR |
+| 37 — Unique Notice Reference Number | FR-04.5-25 | M | ✅ | |
+| 38 — Notify Taxpayer of Notice | FR-04.5-26 | M | ✅ | |
+| 39 — Notice Printing (Individual/Batch) | FR-04.5-27 | M | ✅ | |
+| 40 — Undelivered Notice Handling | FR-04.5-28 | M | ✅ | |
+| 41 — List of Taxpayers Being Audited | FR-04.5-29 | M | ✅ | |
+| 42 — Store Notice Copies in Taxpayer Record | FR-04.5-30, FR-04.5-31 | M | ✅ | |
+| 43 — Email Notices | FR-04.5-32 | M | ✅ | |
+| 44 — Taxpayer Accepts/Objects to Assessment | FR-04.5-33 | M | ✅ | |
+| 45 — Fraud Escalation During Assessment Review | FR-04.5-34 | M | ✅ | |
+| 46 — Authorized Official Sends Assessment Notice | FR-04.5-35 | M | ✅ | |
+| 47 — Taxpayer Confirms Receipt | FR-04.5-36 | M | ✅ | |
+| 48 — Taxpayer Response Lifecycle | *(not explicitly stated)* | — | 📈 | Elaboration of FR-04.5-33; no distinct source FR |
+| 49 — Objection Must Reference Notice + Evidence | *(not explicitly stated)* | — | 📈 | Elaboration; no distinct source FR |
+| 50 — Objection Review Workflow | *(not explicitly stated)* | — | 📈 | Elaboration of FR-04.5-34; no distinct source FR |
+| 51 — Investigation Referral Integration Point | *(not explicitly stated)* | — | 📈 | Inferred from fraud-trigger mentions in FR-04.5-22/34; no distinct source FR |
+| 52 — Audit Closure Validation | *(not explicitly stated)* | — | 📈 | No source FR defines closure criteria; invented for completeness |
+| 53 — Audit History | *(infrastructure, implied)* | — | 📈 | Cross-cutting; not a discrete FR |
+| 54 — Document Archive | *(infrastructure, implied)* | — | 📈 | Cross-cutting; not a discrete FR |
+| 55 — Notification Infrastructure | *(infrastructure, implied)* | — | 🔧 | Fact-statement notification trigger (FR-04.5.2-03) added in this revision |
+| 56 — External Integration Abstractions | *(infrastructure, implied)* | — | 📈 | Cross-cutting; not a discrete FR |
+| 57 — Authorization Controls | *(infrastructure, implied)* | — | 🔧 | Team_Leader authority updated to reflect corrected Requirement 32 |
+| 58 — Management Reporting | FR-04.5-38 | M | ✅ | |
+
+**General note on priority tracking**: the source FR table marks each item (M) or (P). Only FR-04.5.2-05 (→ Requirement 19) carries a (P) in this batch; every other sourced FR is (M). This document does not otherwise distinguish Mandatory from Preferred requirements in its acceptance-criteria language (all use "SHALL"). If Preferred/optional scope needs to be visible to implementers or prioritized separately in delivery planning, each Requirement heading should carry an explicit `(M)` / `(P)` tag — not yet done in this revision.
+
+### Change Log (this revision)
+
+1. **Requirement 32** — corrected reviewer role: added Team Leader as first-level reviewer (FR-04.5-20) ahead of Process Owner review (FR-04.5.2-09/10), resolving a source-FR conflict that the original silently resolved in favor of Process Owner only.
+2. **Requirement 34** — corrected non-response behavior: now triggers a Fraud_Investigation_Referral per FR-04.5-22 instead of proceeding to notice generation.
+3. **Requirement 12** — corrected transaction audit trail sourcing to restore the conditional e-invoicing → Cash Register Machine (sales data only) → manual fallback logic specified in FR-04.5-10.
+4. **Requirement 55** (and **Requirement 17**) — added the missing "fact statement submitted to taxpayer" notification trigger required by FR-04.5.2-03.
+5. **Glossary / Requirement 57** — updated Team_Leader's defined authority to include first-level report review, consistent with the Requirement 32 correction.
+6. **Appendix added** — full FR traceability matrix and this change log, to make remaining elaborations (📈) and the one unresolved source ambiguity (Requirement 10, ⚠️) visible rather than silent.
+
+**Not changed in this revision** (flagged in the matrix above but left as-is): FR-04.5.1-04 (Process Owner review of transfer pricing referral-case strength) remains uncovered by any requirement in this document — flagged as a gap (❌) in the traceability matrix rather than fixed. Also left as-is: Requirements 2, 21, 26, 28, 36, and 48–52's extensions beyond literal FR text (reasonable elaborations); Requirement 10's unresolved duplicate-FR ambiguity; and the document-wide lack of per-requirement M/P priority tags.

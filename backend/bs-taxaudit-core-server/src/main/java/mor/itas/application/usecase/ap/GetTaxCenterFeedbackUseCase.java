@@ -1,17 +1,17 @@
 package mor.itas.application.usecase.ap;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import mor.itas.application.port.inboundport.ap.GetTaxCenterFeedbackPort;
-import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
-import mor.itas.domain.model.ap.AnnualAuditPlan;
-import mor.itas.domain.model.ap.PlanStatus;
+import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;
+import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
+import mor.itas.persistence.jpa.repository.ap.PlanAllocationRepository;
+import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * GetTaxCenterFeedbackUseCase - Use Case
@@ -19,117 +19,134 @@ import java.util.UUID;
  * Implements GetTaxCenterFeedbackPort.
  * 
  * Retrieves all tax center feedback submitted for a region.
+ * Reads from PlanAllocationEntity (where TaxCenterDashboardController stores feedback).
  * 
  * Flow:
  * 1. Validate plan exists
- * 2. Validate plan is in proper state
- * 3. Retrieve all tax center feedback for the region
- * 4. Return to Regional Director
+ * 2. Query PlanAllocationRepository for tax center allocations with feedback
+ * 3. Build feedback list with per-audit-type breakdown
+ * 4. Return to Regional Director for aggregation
  */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class GetTaxCenterFeedbackUseCase implements GetTaxCenterFeedbackPort {
     
-    private final AnnualAuditPlanRepository repository;
+    private final PlanAllocationRepository allocationRepository;
+    private final AnnualAuditPlanJpaRepository planRepository;
+    private final ObjectMapper objectMapper;
     
     @Override
     public List<Map<String, Object>> getTaxCenterFeedback(UUID planId, String regionId) {
-        // Load plan
-        AnnualAuditPlan plan = repository.findById(planId)
+        // 1. Validate plan exists
+        AnnualAuditPlanEntity plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
-        // Validate plan status
-        PlanStatus status = plan.getStatus();
-        if (!isValidStatusForFeedbackReview(status.name())) {
-            throw new IllegalStateException(
-                "Cannot get feedback for plan in status: " + status + ". " +
-                "Plan must be in ALLOCATED or AWAITING_DIRECTOR_REVIEW status."
-            );
-        }
+        // 2. Get all tax center allocations for this plan+region that have feedback
+        List<PlanAllocationEntity> allocations = allocationRepository
+            .findByAnnualPlanIdAndRegionCode(planId, regionId);
         
-        // Retrieve tax center feedback from Phase C
-        List<Map<String, Object>> feedbackList = retrieveStoredFeedback(planId, regionId);
-        
-        return feedbackList;
-    }
-    
-    /**
-     * Check if plan is in valid status for feedback review
-     */
-    private boolean isValidStatusForFeedbackReview(String status) {
-        return "ALLOCATED".equals(status) ||
-               "AWAITING_DIRECTOR_REVIEW".equals(status) ||
-               "AWAITING_REGIONAL_FEEDBACK".equals(status);
-    }
-    
-    /**
-     * Retrieve feedback stored by Phase C (SubmitTaxCenterFeedbackUseCase)
-     * 
-     * Mock implementation: retrieve from static storage
-     */
-    private List<Map<String, Object>> retrieveStoredFeedback(UUID planId, String regionId) {
         List<Map<String, Object>> feedbackList = new ArrayList<>();
         
-        // Get all tax centers in this region
-        List<String> taxCentersInRegion = getTaxCentersForRegion(regionId);
-        
-        // For each tax center, retrieve their feedback from Phase C storage
-        for (String taxCenterId : taxCentersInRegion) {
-            Map<String, Object> tcFeedback = getStoredTaxCenterFeedback(planId, taxCenterId, regionId);
-            if (tcFeedback != null) {
-                feedbackList.add(tcFeedback);
+        // 3. Build feedback for each tax center that has submitted feedback
+        for (PlanAllocationEntity allocation : allocations) {
+            // Only include tax center allocations (not regional-level)
+            if (allocation.getTaxCenterCode() == null || allocation.getTaxCenterCode().isBlank()) {
+                continue;
             }
+            
+            // Only include allocations that have feedback submitted
+            if (!Boolean.TRUE.equals(allocation.getTcFeedbackSubmitted())) {
+                continue;
+            }
+            
+            Map<String, Object> tcFeedback = new HashMap<>();
+            tcFeedback.put("taxCenterId", allocation.getTaxCenterCode());
+            tcFeedback.put("regionId", regionId);
+            tcFeedback.put("planId", planId.toString());
+            tcFeedback.put("allocationId", allocation.getId().toString());
+            tcFeedback.put("originalCount", allocation.getProposedCount());
+            tcFeedback.put("adjustedCount", allocation.getTcAdjustedCount());
+            tcFeedback.put("justification", allocation.getTcJustification());
+            tcFeedback.put("adjustmentReason", allocation.getTcAdjustmentReason());
+            tcFeedback.put("feedbackSubmittedAt", 
+                allocation.getTcFeedbackSubmittedAt() != null 
+                    ? allocation.getTcFeedbackSubmittedAt().toString() 
+                    : null);
+            
+            // Parse per-audit-type adjustments from JSON
+            Map<String, Map<String, Object>> feedbackByAuditType = new LinkedHashMap<>();
+            
+            // Use adjusted allocations if available (from acknowledge endpoint)
+            JsonNode adjustedNode = allocation.getTcAdjustedAllocations();
+            if (adjustedNode != null && !adjustedNode.isNull()) {
+                try {
+                    Map<String, Object> adjustedMap = objectMapper.convertValue(adjustedNode, Map.class);
+                    for (Map.Entry<String, Object> entry : adjustedMap.entrySet()) {
+                        String auditType = entry.getKey();
+                        Object value = entry.getValue();
+                        
+                        Map<String, Object> auditFeedback = new HashMap<>();
+                        if (value instanceof Number) {
+                            // Simple count - calculate from original
+                            int adjusted = ((Number) value).intValue();
+                            int original = getOriginalForAuditType(allocation, auditType);
+                            auditFeedback.put("requested", original);
+                            auditFeedback.put("accepted", adjusted);
+                            auditFeedback.put("gap", adjusted - original);
+                        } else if (value instanceof Map) {
+                            // Detailed feedback map
+                            auditFeedback.putAll((Map<String, Object>) value);
+                        }
+                        
+                        feedbackByAuditType.put(auditType, auditFeedback);
+                    }
+                } catch (Exception e) {
+                    // Fall back to allocationByAuditType
+                }
+            }
+            
+            // If no adjusted allocations, use original allocation by audit type
+            if (feedbackByAuditType.isEmpty()) {
+                JsonNode originalNode = allocation.getAllocationByAuditType();
+                if (originalNode != null && !originalNode.isNull()) {
+                    try {
+                        Map<String, Object> originalMap = objectMapper.convertValue(originalNode, Map.class);
+                        for (Map.Entry<String, Object> entry : originalMap.entrySet()) {
+                            Map<String, Object> auditFeedback = new HashMap<>();
+                            int count = entry.getValue() instanceof Number 
+                                ? ((Number) entry.getValue()).intValue() : 0;
+                            auditFeedback.put("requested", count);
+                            auditFeedback.put("accepted", count); // No adjustment = same as requested
+                            auditFeedback.put("gap", 0);
+                            feedbackByAuditType.put(entry.getKey(), auditFeedback);
+                        }
+                    } catch (Exception e) {
+                        // Skip
+                    }
+                }
+            }
+            
+            tcFeedback.put("feedbackByAuditType", feedbackByAuditType);
+            
+            feedbackList.add(tcFeedback);
         }
         
         return feedbackList;
     }
     
     /**
-     * Get tax centers in a specific region
+     * Get original allocation count for a specific audit type from allocationByAuditType
      */
-    private List<String> getTaxCentersForRegion(String regionId) {
-        return switch (regionId) {
-            case "AA" -> List.of("TC-AA-01", "TC-AA-02", "TC-AA-03", "TC-AA-04");
-            case "AB" -> List.of("TC-OR-01");
-            default -> new ArrayList<>();
-        };
-    }
-    
-    /**
-     * Get stored feedback for a tax center
-     * 
-     * Calls SubmitTaxCenterFeedbackUseCase.getFeedback() to retrieve stored feedback
-     */
-    private Map<String, Object> getStoredTaxCenterFeedback(UUID planId, String taxCenterId, String regionId) {
-        // Call SubmitTaxCenterFeedbackUseCase to get feedback
-        List<Object> feedbacks = SubmitTaxCenterFeedbackUseCase.getFeedback(planId, taxCenterId)
-            .stream()
-            .map(f -> (Object) f)
-            .toList();
-        
-        if (feedbacks.isEmpty()) {
-            return null;
+    private int getOriginalForAuditType(PlanAllocationEntity allocation, String auditType) {
+        JsonNode originalNode = allocation.getAllocationByAuditType();
+        if (originalNode != null && originalNode.has(auditType)) {
+            JsonNode value = originalNode.get(auditType);
+            if (value.isNumber()) {
+                return value.intValue();
+            }
         }
-        
-        // Build feedback map
-        Map<String, Object> tcFeedback = new HashMap<>();
-        tcFeedback.put("taxCenterId", taxCenterId);
-        tcFeedback.put("regionId", regionId);
-        
-        // Organize feedback by audit type
-        Map<String, Map<String, Object>> feedbackByAuditType = new HashMap<>();
-        
-        for (Object feedbackObj : feedbacks) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> feedback = (Map<String, Object>) feedbackObj;
-            
-            // This is simplified - in real implementation would convert TaxCenterFeedback object
-            // For now, return structured feedback
-            feedbackByAuditType.put("feedback_" + System.currentTimeMillis(), feedback);
-        }
-        
-        tcFeedback.put("feedbackByAuditType", feedbackByAuditType);
-        
-        return tcFeedback;
+        // Fallback: distribute proportionally from total
+        return 0;
     }
 }

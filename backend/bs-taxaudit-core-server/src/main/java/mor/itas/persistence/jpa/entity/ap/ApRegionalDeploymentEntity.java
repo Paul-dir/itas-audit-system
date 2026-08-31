@@ -5,14 +5,15 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * ApRegionalDeploymentEntity - JPA Entity for ap_regional_deployments table
+ * ApRegionalDeploymentEntity - JPA Entity for ap_regional_tc_deployments table
  * Tracks when regional directors deploy plans to their tax centers
+ * (This is different from director sending to regions - see RegionalDeploymentEntity)
  */
 @Entity
-@Table(name = "ap_regional_deployments", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"plan_id", "region_id"}, name = "unique_regional_deployment")
+@Table(name = "ap_regional_tc_deployments", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"plan_id", "region_id"}, name = "unique_regional_tc_deployment")
 }, indexes = {
-    @Index(name = "idx_ap_regional_deployments_plan_id", columnList = "plan_id")
+    @Index(name = "idx_ap_regional_tc_deployments_plan_id", columnList = "plan_id")
 })
 public class ApRegionalDeploymentEntity {
 

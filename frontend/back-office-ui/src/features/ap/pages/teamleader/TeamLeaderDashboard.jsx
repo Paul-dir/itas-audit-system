@@ -1,246 +1,193 @@
-import { useState, useMemo } from 'react';
-import { Package, Users, CheckCircle, Clock, Filter, Search, Send, Eye } from 'lucide-react';
-import { useApp } from '../../../../context/AppContext.jsx';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Package, Users, CheckCircle, Clock, Search, Send, Eye, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../../../components/ui/index.jsx';
-import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
+import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
+
+const API = '/api/v1/backoffice/ap/cases';
+
+const riskColors = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
+
+function getRiskLevel(score) {
+  if (score >= 80) return 'CRITICAL';
+  if (score >= 60) return 'HIGH';
+  if (score >= 40) return 'MEDIUM';
+  return 'LOW';
+}
+
+function mapCase(c) {
+  const frontendStatus = c.frontendStatus || normalizeBackendStatus(c.status);
+  const riskLevel = getRiskLevel(c.riskScore || 0);
+  const auditDef = getAuditTypeDef(c.auditType);
+  return {
+    ...c,
+    id: c.id || c.caseNumber,
+    taxpayerName: c.taxpayerName || c.taxpayerId,
+    tin: c.taxpayerId,
+    sector: c.sector || 'Unknown',
+    riskLevel,
+    auditTypeDef: auditDef,
+    frontendStatus,
+    isCommittee: c.isCommitteeCase || COMMITTEE_AUDIT_TYPES.has(c.auditType),
+  };
+}
 
 export default function TeamLeaderDashboard() {
-  const { state, actions, selectors } = useApp();
   const { user } = useAuth();
-  
-  const [selectedCases, setSelectedCases] = useState([]);
-  const [viewCaseModal, setViewCaseModal] = useState(null);
+  const isCommitteeUser = user?.isJointCommittee === true || user?.role === 'committee';
+
+  const [cases, setCases]         = useState([]);
+  const [auditors, setAuditors]   = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [selected, setSelected]   = useState([]);
+  const [tab, setTab]             = useState('pending');
+  const [searchQ, setSearchQ]     = useState('');
+  const [filterAT, setFilterAT]   = useState('ALL');
+  const [viewCase, setViewCase]   = useState(null);
   const [assignModal, setAssignModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterPriority, setFilterPriority] = useState('ALL');
-  const [selectedYear, setSelectedYear] = useState('ALL'); // NEW: Year selection
-  const [tab, setTab] = useState('pending');
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignResult, setAssignResult]   = useState(null);
 
-  // Get cases assigned to this team leader
-  const myCases = selectors.getCasesForTeamLeader(user.id) || [];
-
-  // Get auditors assigned to THIS team leader only
-  const myAuditors = useMemo(() => {
-    return state.users.filter(u => 
-      u.role === 'auditor' && 
-      u.teamLeader === user.id
-    );
-  }, [state.users, user.id]);
-  
-  // Get available years from plans associated with this team leader's cases
-  const availableYears = useMemo(() => {
-    const years = [...new Set(myCases.map(c => {
-      const plan = state.plans.find(p => p.id === c.planId);
-      return plan?.year;
-    }).filter(Boolean))].sort((a, b) => b - a);
-    return years;
-  }, [myCases, state.plans]);
-
-  // Filter by year
-  const yearFilteredCases = useMemo(() => {
-    if (selectedYear === 'ALL') return myCases;
-    return myCases.filter(c => {
-      const plan = state.plans.find(p => p.id === c.planId);
-      return plan?.year === parseInt(selectedYear);
-    });
-  }, [myCases, selectedYear, state.plans]);
-
-  // Check if this is a joint committee member
-  const isJointCommittee = user.isJointCommittee === true;
-
-  // Filter cases
-  const filteredCases = useMemo(() => {
-    return yearFilteredCases.filter(c => {
-      // Tab filter
-      if (tab === 'pending' && c.status !== 'ASSIGNED') return false;
-      if (tab === 'in_progress' && c.status !== 'IN_PROGRESS') return false;
-      if (tab === 'completed' && !['COMPLETED', 'CLOSED'].includes(c.status)) return false;
-
-      // Status filter
-      if (filterStatus !== 'ALL' && c.status !== filterStatus) return false;
-
-      // Priority filter
-      if (filterPriority !== 'ALL' && c.priority !== filterPriority) return false;
-
-      // Search query
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        return (
-          c.taxpayerName?.toLowerCase().includes(q) ||
-          c.tin?.toLowerCase().includes(q) ||
-          c.sector?.toLowerCase().includes(q)
-        );
+  // ── Fetch cases assigned to this TL / committee member ──────────────────────
+  const fetchCases = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const param = isCommitteeUser ? `committeeId=${user.id}` : `teamLeader=${user.id}`;
+      const r = await fetch(`${API}?${param}`, {
+        headers: { 'X-Actor-Id': user.id }
+      });
+      if (r.ok) {
+        const res = await r.json();
+        setCases((res.data || []).map(mapCase));
       }
+    } catch (e) { console.error('fetchCases', e); }
+    finally { setLoading(false); }
+  }, [user?.id, isCommitteeUser]);
 
+  // ── Fetch auditors under this TL ────────────────────────────────────────────
+  const fetchAuditors = useCallback(async () => {
+    if (!user?.id || isCommitteeUser) return;
+    try {
+      const r = await fetch(`/api/v1/backoffice/ap/users?role=auditor&teamLeader=${user.id}`, {
+        headers: { 'X-Actor-Id': user.id }
+      });
+      if (r.ok) { const res = await r.json(); setAuditors(res.data || res || []); }
+    } catch (e) { console.error('fetchAuditors', e); }
+  }, [user?.id, isCommitteeUser]);
+
+  useEffect(() => { fetchCases(); fetchAuditors(); }, [fetchCases, fetchAuditors]);
+
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return cases.filter(c => {
+      // For TL: pending = ASSIGNED_TO_TEAM_LEADER, in_progress = IN_PROGRESS
+      if (tab === 'pending'     && c.frontendStatus !== 'ASSIGNED')    return false;
+      if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS') return false;
+      if (tab === 'completed'   && !['COMPLETED','CLOSED'].includes(c.frontendStatus)) return false;
+      if (filterAT !== 'ALL' && c.auditTypeDef?.id !== filterAT) return false;
+      if (searchQ) {
+        const q = searchQ.toLowerCase();
+        return c.taxpayerName?.toLowerCase().includes(q) || c.tin?.toLowerCase().includes(q);
+      }
       return true;
     });
-  }, [yearFilteredCases, tab, filterStatus, filterPriority, searchQuery]);
+  }, [cases, tab, filterAT, searchQ]);
 
-  // Statistics
   const stats = useMemo(() => ({
-    total: yearFilteredCases.length,
-    pending: yearFilteredCases.filter(c => c.status === 'ASSIGNED').length,
-    inProgress: yearFilteredCases.filter(c => c.status === 'IN_PROGRESS').length,
-    completed: yearFilteredCases.filter(c => ['COMPLETED', 'CLOSED'].includes(c.status)).length,
-  }), [yearFilteredCases]);
-
-  // Toggle case selection
-  const toggleCaseSelection = (caseId) => {
-    setSelectedCases(prev => {
-      if (prev.includes(caseId)) {
-        return prev.filter(id => id !== caseId);
-      } else {
-        return [...prev, caseId];
-      }
-    });
-  };
-
-  // Select all filtered cases
-  const toggleSelectAll = () => {
-    const selectableCases = filteredCases.filter(c => c.status === 'ASSIGNED');
-    if (selectedCases.length === selectableCases.length) {
-      setSelectedCases([]);
-    } else {
-      setSelectedCases(selectableCases.map(c => c.id));
-    }
-  };
-
-  // Open assignment modal
-  const openAssignModal = () => {
-    if (selectedCases.length === 0) {
-      alert('Please select at least one case to assign.');
-      return;
-    }
-
-    if (myAuditors.length === 0) {
-      alert('⚠️ No Auditors Available\n\nYou do not have any auditors in your team yet.\n\nPlease contact your Tax Center Manager.');
-      return;
-    }
-
-    setAssignModal(true);
-  };
-
-  // Assign cases to auditors (load balanced)
-  const handleAssignToAuditors = () => {
-    if (selectedCases.length === 0 || myAuditors.length === 0) return;
-
-    let assignedCount = 0;
-
-    // Calculate current workload for each auditor
-    const auditorWorkload = myAuditors.map(auditor => ({
-      auditor,
-      count: state.cases.filter(c => 
-        c.assignedAuditor === auditor.id && 
-        c.status !== 'COMPLETED'
-      ).length
-    }));
-
-    // Assign each selected case to the least loaded auditor
-    selectedCases.forEach(caseId => {
-      // Find least loaded auditor
-      const leastLoaded = auditorWorkload.reduce((min, curr) => 
-        curr.count < min.count ? curr : min
-      );
-
-      // Assign case
-      actions.assignCaseToAuditor(caseId, leastLoaded.auditor.id);
-      
-      // Update local workload tracking
-      leastLoaded.count++;
-      assignedCount++;
-    });
-
-    alert(`✅ Success!\n\n${assignedCount} case(s) assigned to auditors.\n\nCases automatically distributed based on workload balancing.`);
-    
-    setSelectedCases([]);
-    setAssignModal(false);
-  };
-
-  const riskColors = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
-  const priorityColors = { HIGH: 'red', MEDIUM: 'yellow', NORMAL: 'blue', LOW: 'gray' };
+    total:      cases.length,
+    pending:    cases.filter(c => c.frontendStatus === 'ASSIGNED').length,
+    inProgress: cases.filter(c => c.frontendStatus === 'IN_PROGRESS').length,
+    completed:  cases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
+  }), [cases]);
 
   const tabs = [
-    { id: 'pending', label: 'Pending Assignment', count: stats.pending },
-    { id: 'in_progress', label: 'In Progress', count: stats.inProgress },
-    { id: 'completed', label: 'Completed', count: stats.completed },
+    { id:'pending',     label: isCommitteeUser ? 'Assigned to Committee' : 'Pending Auditor Assignment', count: stats.pending     },
+    { id:'in_progress', label: 'In Progress',   count: stats.inProgress },
+    { id:'completed',   label: 'Completed',     count: stats.completed  },
   ];
+
+  // ── Selection ────────────────────────────────────────────────────────────────
+  const selectableInTab = filtered.filter(c => c.frontendStatus === 'ASSIGNED');
+  const toggleAll = () => setSelected(prev =>
+    prev.length === selectableInTab.length ? [] : selectableInTab.map(c => c.id));
+  const toggle = id => setSelected(prev =>
+    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  // ── Assign to auditors ───────────────────────────────────────────────────────
+  const handleAssignAuditors = async () => {
+    if (!selected.length || !auditors.length) return;
+    setAssignLoading(true);
+    setAssignResult(null);
+
+    try {
+      // Load-balance: track current count assigned per auditor this session
+      const workload = auditors.map(a => ({ auditor: a, count: cases.filter(c => c.assignedAuditorId === (a.userId||a.id)).length }));
+      const assignments = selected.map(caseId => {
+        const min = workload.reduce((a, b) => b.count < a.count ? b : a);
+        min.count++;
+        return { caseId, auditorId: min.auditor.userId || min.auditor.id };
+      });
+
+      const r = await fetch(`${API}/bulk-assign-auditor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id },
+        body: JSON.stringify({ assignments }),
+      });
+      const res = await r.json();
+      const d = res.data || res;
+      setAssignResult({ status: d.status, assigned: d.assigned, failed: d.failed });
+      await fetchCases();
+      setSelected([]);
+      setAssignModal(false);
+    } catch (e) {
+      setAssignResult({ status: 'ERROR', message: e.message });
+    } finally { setAssignLoading(false); }
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {isJointCommittee ? 'Joint Committee Dashboard' : 'Team Leader Dashboard'}
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {isJointCommittee 
-            ? `Managing joint audit cases for ${user.taxCenter?.replace(/-/g, ' ').toUpperCase()}`
-            : `Manage and assign cases to your audit team - ${AUDIT_TYPES.find(at => at.id === user.auditType)?.name || user.auditType}`
-          }
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {isCommitteeUser ? 'Joint Committee Dashboard' : 'Team Leader Dashboard'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {loading ? 'Loading cases…' : `${stats.total} cases assigned to you`}
+          </p>
+        </div>
+        <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>Refresh</Button>
       </div>
 
-      {/* Special Alert for Joint Committee */}
-      {isJointCommittee && (
+      {isCommitteeUser && (
         <Alert type="info" title="Joint Committee Workflow">
-          As a Joint Committee member, you manage joint audit cases. Joint audits require coordination between multiple teams and special approval processes.
+          You manage Joint Audit and Transfer Pricing cases. These require inter-department coordination and follow a special approval process.
         </Alert>
       )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard 
-          label="Total Cases" 
-          value={stats.total} 
-          icon={Package} 
-          color="blue"
-          sub="Assigned to you"
-        />
-        <StatCard 
-          label="Pending Assignment" 
-          value={stats.pending} 
-          icon={Clock} 
-          color="yellow"
-          sub="Awaiting auditor"
-        />
-        <StatCard 
-          label="In Progress" 
-          value={stats.inProgress} 
-          icon={Users} 
-          color="purple"
-          sub="Active audits"
-        />
-        <StatCard 
-          label="Completed" 
-          value={stats.completed} 
-          icon={CheckCircle} 
-          color="green"
-          sub="Finished"
-        />
+        <StatCard label="Total"      value={stats.total}      icon={Package}     color="blue"   sub="Assigned to you" />
+        <StatCard label="Pending"    value={stats.pending}    icon={Clock}       color="yellow" sub="Need auditor" />
+        <StatCard label="In Progress" value={stats.inProgress} icon={Users}      color="purple" sub="Active audits" />
+        <StatCard label="Completed"  value={stats.completed}  icon={CheckCircle} color="green"  sub="Finished" />
       </div>
 
-      {/* Team Overview */}
-      {myAuditors.length > 0 && (
+      {/* Auditor team overview */}
+      {auditors.length > 0 && (
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">👥 Your Audit Team</h3>
-            <Badge color="blue">{myAuditors.length} Auditor{myAuditors.length > 1 ? 's' : ''}</Badge>
+            <Badge color="blue">{auditors.length} Auditor{auditors.length > 1 ? 's' : ''}</Badge>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {myAuditors.map(auditor => {
-              const auditorCases = state.cases.filter(c => 
-                c.assignedAuditor === auditor.id && 
-                c.status !== 'COMPLETED'
-              ).length;
-
+            {auditors.map(a => {
+              const load = cases.filter(c => c.assignedAuditorId === (a.userId || a.id) && c.frontendStatus !== 'COMPLETED').length;
               return (
-                <div key={auditor.id} className="bg-gray-50 rounded-lg p-3 dark:bg-slate-700">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{auditor.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {auditorCases} active case{auditorCases !== 1 ? 's' : ''}
-                  </p>
+                <div key={a.userId || a.id} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">{load} active case{load !== 1 ? 's' : ''}</p>
                 </div>
               );
             })}
@@ -248,356 +195,191 @@ export default function TeamLeaderDashboard() {
         </Card>
       )}
 
-      {/* Selection Banner */}
-      {selectedCases.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="text-blue-600" size={24} />
-            <div>
-              <p className="text-sm font-semibold text-blue-900">
-                {selectedCases.length} case{selectedCases.length > 1 ? 's' : ''} selected
-              </p>
-              <p className="text-xs text-blue-700">
-                Ready to assign to your auditors
-              </p>
-            </div>
-          </div>
+      {/* Selection banner */}
+      {selected.length > 0 && !isCommitteeUser && (
+        <div className="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-xl p-4 flex items-center justify-between">
+          <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+            {selected.length} case{selected.length > 1 ? 's' : ''} selected
+          </p>
           <div className="flex gap-2">
-            <Button 
-              size="sm" 
-              variant="secondary"
-              onClick={() => setSelectedCases([])}
-            >
-              Clear Selection
-            </Button>
-            <Button 
-              size="sm" 
-              variant="success"
-              icon={Send}
-              onClick={openAssignModal}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setSelected([])}>Clear</Button>
+            <Button size="sm" variant="success" icon={Send}
+              onClick={() => { setAssignResult(null); setAssignModal(true); }}
+              disabled={auditors.length === 0}>
               Assign to Auditors
             </Button>
           </div>
         </div>
       )}
 
-      {/* Filters & Tabs */}
+      {assignResult && (
+        <Alert type={assignResult.status === 'SUCCESS' || assignResult.assigned > 0 ? 'success' : 'error'}
+          title={assignResult.status === 'SUCCESS' ? `✅ ${assignResult.assigned} cases assigned to auditors` : '⚠️ Assignment issue'}>
+          {assignResult.message || `${assignResult.assigned || 0} assigned, ${assignResult.failed || 0} failed.`}
+        </Alert>
+      )}
+
+      {/* Table */}
       <Card padding={false}>
-        <div className="px-6 pt-4 pb-0">
-          <Tabs tabs={tabs} active={tab} onChange={setTab} />
+        <div className="px-6 pt-4 pb-0"><Tabs tabs={tabs} active={tab} onChange={setTab} /></div>
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap">
+          <Input icon={Search} placeholder="Search taxpayer / TIN…" value={searchQ} onChange={e => setSearchQ(e.target.value)} />
+          <Select value={filterAT} onChange={e => setFilterAT(e.target.value)}>
+            <option value="ALL">All Audit Types</option>
+            {AUDIT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
+          </Select>
         </div>
 
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 dark:bg-gray-800 dark:bg-slate-700">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <Input
-              icon={Search}
-              placeholder="Search taxpayer, TIN..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-
-            <Select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
-              <option value="ALL">All Years</option>
-              {availableYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </Select>
-
-            <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-              <option value="ALL">All Priorities</option>
-              <option value="HIGH">High Priority</option>
-              <option value="MEDIUM">Medium Priority</option>
-              <option value="NORMAL">Normal Priority</option>
-              <option value="LOW">Low Priority</option>
-            </Select>
-
-            <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              <option value="ALL">All Statuses</option>
-              {Object.entries(CASE_STATUS).map(([key, val]) => (
-                <option key={key} value={key}>{val.label}</option>
-              ))}
-            </Select>
-
-            <Button size="sm" variant="secondary" icon={Filter}>
-              Advanced Filters
-            </Button>
-          </div>
-        </div>
-
-        {/* Case Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+            <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
               <tr>
-                <th className="px-4 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={selectedCases.length === filteredCases.filter(c => c.status === 'ASSIGNED').length && 
-                             filteredCases.filter(c => c.status === 'ASSIGNED').length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-400"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">Taxpayer</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Risk</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Priority</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Assigned Auditor</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Actions</th>
+                {!isCommitteeUser && (
+                  <th className="px-4 py-3">
+                    <input type="checkbox"
+                      checked={selectableInTab.length > 0 && selected.length === selectableInTab.length}
+                      onChange={toggleAll} className="w-4 h-4 rounded" />
+                  </th>
+                )}
+                {['Taxpayer','Risk','Audit Type','Status','Assigned Auditor',''].map((h,i) => (
+                  <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredCases.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="px-4 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
-                    No cases found matching your filters
-                  </td>
-                </tr>
-              ) : (
-                filteredCases.map(caseItem => {
-                  const auditor = caseItem.assignedAuditor 
-                    ? selectors.getUserById(caseItem.assignedAuditor)
-                    : null;
-
-                  return (
-                    <tr key={caseItem.id} className="hover:bg-blue-50 dark:hover:bg-slate-600">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+              {filtered.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
+                  {loading ? 'Loading…' : 'No cases found'}
+                </td></tr>
+              ) : filtered.map(c => {
+                const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
+                const auditor = auditors.find(a => (a.userId||a.id) === c.assignedAuditorId);
+                return (
+                  <tr key={c.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
+                    {!isCommitteeUser && (
                       <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedCases.includes(caseItem.id)}
-                          onChange={() => toggleCaseSelection(caseItem.id)}
-                          disabled={caseItem.status !== 'ASSIGNED'}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
-                        />
+                        <input type="checkbox" checked={selected.includes(c.id)}
+                          onChange={() => toggle(c.id)}
+                          disabled={c.frontendStatus !== 'ASSIGNED'}
+                          className="w-4 h-4 rounded disabled:opacity-40" />
                       </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{caseItem.taxpayerName}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">{caseItem.tin} • {caseItem.sector}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Badge color={riskColors[caseItem.riskLevel]} dot size="sm">
-                          {caseItem.riskLevel}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Badge color={priorityColors[caseItem.priority]} size="sm">
-                          {caseItem.priority}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Badge 
-                          color={CASE_STATUS[caseItem.status]?.color || 'gray'} 
-                          dot 
-                          size="sm"
-                        >
-                          {CASE_STATUS[caseItem.status]?.label || caseItem.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {auditor ? (
-                          <div className="text-xs">
-                            <p className="font-medium text-gray-900 dark:text-white">{auditor.name}</p>
-                            <p className="text-gray-500 dark:text-slate-400">Auditor</p>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">Not assigned</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={Eye}
-                          onClick={() => setViewCaseModal(caseItem)}
-                        >
-                          View
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                    )}
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel} ({c.riskScore})</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color={c.auditTypeDef?.color || 'gray'} size="sm">
+                        {c.auditTypeDef?.shortName || c.auditType}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color={statusDef?.color || 'gray'} dot size="sm">
+                        {statusDef?.label || c.frontendStatus}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {auditor
+                        ? <span className="font-medium text-gray-900 dark:text-white">{auditor.name}</span>
+                        : <span className="text-gray-400">Not assigned</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </Card>
 
       {/* View Case Modal */}
-      {viewCaseModal && (
-        <Modal
-          open={!!viewCaseModal}
-          onClose={() => setViewCaseModal(null)}
-          title="Case Details"
-          size="xl"
-          footer={
-            <div className="flex justify-end">
-              <Button variant="secondary" onClick={() => setViewCaseModal(null)}>
-                Close
-              </Button>
-            </div>
-          }
-        >
+      {viewCase && (
+        <Modal open onClose={() => setViewCase(null)} title="Case Details" size="lg"
+          footer={<Button variant="secondary" onClick={() => setViewCase(null)}>Close</Button>}>
           <div className="space-y-4">
-            {/* Case Overview */}
-            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-blue-700">Case ID</p>
-                  <p className="text-sm font-mono font-semibold text-blue-900">{viewCaseModal.id}</p>
+            <div className="grid grid-cols-3 gap-4 bg-blue-50 dark:bg-slate-800 rounded-xl p-4 border border-blue-100 dark:border-slate-600">
+              <div><p className="text-xs text-blue-600">Case #</p>
+                <p className="text-sm font-mono font-bold text-blue-900 dark:text-white">{viewCase.caseNumber}</p></div>
+              <div><p className="text-xs text-blue-600">Status</p>
+                <Badge color={CASE_STATUS[viewCase.status]?.color || 'gray'} dot>
+                  {CASE_STATUS[viewCase.status]?.label || viewCase.status}
+                </Badge></div>
+              <div><p className="text-xs text-blue-600">Audit Type</p>
+                <Badge color={viewCase.auditTypeDef?.color || 'gray'}>{viewCase.auditTypeDef?.name || viewCase.auditType}</Badge></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-1">
+                <p className="text-sm font-semibold mb-2">🏢 Taxpayer</p>
+                <p className="font-medium text-gray-900 dark:text-white">{viewCase.taxpayerName}</p>
+                <p className="text-xs text-gray-500">TIN: {viewCase.tin}</p>
+                <p className="text-xs text-gray-500">Sector: {viewCase.sector}</p>
+                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Revenue: {(viewCase.estimatedRevenue/1e6).toFixed(1)}M ETB</p>}
+              </div>
+              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4">
+                <p className="text-sm font-semibold mb-2">⚠️ Risk Score</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 bg-gray-200 dark:bg-slate-600 rounded-full h-2">
+                    <div className={`h-2 rounded-full ${viewCase.riskLevel==='CRITICAL'?'bg-red-500':viewCase.riskLevel==='HIGH'?'bg-orange-500':viewCase.riskLevel==='MEDIUM'?'bg-yellow-500':'bg-blue-400'}`}
+                      style={{width:`${Math.min(viewCase.riskScore||0,100)}%`}}/>
+                  </div>
+                  <span className="text-lg font-bold">{viewCase.riskScore}</span>
                 </div>
-                <div>
-                  <p className="text-xs text-blue-700">Status</p>
-                  <Badge color={CASE_STATUS[viewCaseModal.status]?.color || 'gray'} dot>
-                    {CASE_STATUS[viewCaseModal.status]?.label || viewCaseModal.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700">Created</p>
-                  <p className="text-sm font-semibold text-blue-900">
-                    {new Date(viewCaseModal.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
+                <Badge color={riskColors[viewCase.riskLevel]} dot>{viewCase.riskLevel}</Badge>
+                {viewCase.assignedAuditorId && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-600">
+                    <p className="text-xs text-gray-500">Assigned Auditor:</p>
+                    <p className="text-sm font-medium">{auditors.find(a=>(a.userId||a.id)===viewCase.assignedAuditorId)?.name || viewCase.assignedAuditorId}</p>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Taxpayer Profile */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">🏢 Taxpayer Profile</h3>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Business Name</p>
-                    <p className="text-base font-semibold text-gray-900 dark:text-white">{viewCaseModal.taxpayerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">TIN Number</p>
-                    <p className="text-base font-mono font-semibold text-gray-900 dark:text-white">{viewCaseModal.tin}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Sector / Industry</p>
-                    <p className="text-sm text-gray-900 dark:text-white">{viewCaseModal.sector}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Annual Revenue</p>
-                    <p className="text-sm text-gray-900 dark:text-white">
-                      {(viewCaseModal.annualRevenue / 1000000).toFixed(1)}M ETB
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Number of Employees</p>
-                    <p className="text-sm text-gray-900 dark:text-white">{viewCaseModal.employees} employees</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Risk Score</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${
-                            viewCaseModal.riskLevel === 'CRITICAL' ? 'bg-red-500' :
-                            viewCaseModal.riskLevel === 'HIGH' ? 'bg-orange-500' :
-                            viewCaseModal.riskLevel === 'MEDIUM' ? 'bg-yellow-500' :
-                            'bg-blue-500'
-                          }`}
-                          style={{ width: `${viewCaseModal.riskScore}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">{viewCaseModal.riskScore}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Assignment Info */}
-            {viewCaseModal.assignedAuditor && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">👤 Assignment</h3>
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">Assigned Auditor</p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectors.getUserById(viewCaseModal.assignedAuditor)?.name || 'Unknown'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">Start Date</p>
-                      <p className="text-sm text-gray-900 dark:text-white">
-                        {viewCaseModal.startDate 
-                          ? new Date(viewCaseModal.startDate).toLocaleDateString()
-                          : 'Not started'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </Modal>
       )}
 
-      {/* Assignment Modal */}
-      {assignModal && (
-        <Modal
-          open={assignModal}
-          onClose={() => setAssignModal(false)}
-          title="Assign Cases to Auditors"
-          size="lg"
+      {/* Assign to Auditors Modal */}
+      {assignModal && !isCommitteeUser && (
+        <Modal open onClose={() => setAssignModal(false)} title="Assign Cases to Auditors" size="lg"
           footer={
             <div className="flex justify-between w-full">
-              <Button variant="secondary" onClick={() => setAssignModal(false)}>
-                Cancel
-              </Button>
-              <Button variant="success" icon={Send} onClick={handleAssignToAuditors}>
-                Assign {selectedCases.length} Case{selectedCases.length > 1 ? 's' : ''}
+              <Button variant="secondary" onClick={() => setAssignModal(false)}>Cancel</Button>
+              <Button variant="success" icon={Send} onClick={handleAssignAuditors} disabled={assignLoading || !auditors.length}>
+                {assignLoading ? 'Assigning…' : `Assign ${selected.length} Cases`}
               </Button>
             </div>
-          }
-        >
+          }>
           <div className="space-y-4">
-            <Alert type="info" title="Automatic Workload Balancing">
-              Selected cases will be automatically distributed among your auditors based on their current workload. The system ensures fair distribution.
+            <Alert type="info" title="Workload-Balanced Assignment">
+              Cases will be distributed automatically across your auditors based on their current workload.
             </Alert>
-
-            {/* Auditor Workload Preview */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Current Auditor Workload</h3>
-              <div className="space-y-2">
-                {myAuditors.map(auditor => {
-                  const currentLoad = state.cases.filter(c => 
-                    c.assignedAuditor === auditor.id && 
-                    c.status !== 'COMPLETED'
-                  ).length;
-
-                  return (
-                    <div key={auditor.id} className="bg-white rounded-lg border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Current Auditor Workload</p>
+              {auditors.length === 0
+                ? <Alert type="warning" title="No Auditors">You have no auditors in your team. Please contact your Tax Center Manager.</Alert>
+                : auditors.map(a => {
+                    const load = cases.filter(c => c.assignedAuditorId === (a.userId||a.id) && c.frontendStatus !== 'COMPLETED').length;
+                    return (
+                      <div key={a.userId||a.id} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-lg p-3 mb-2">
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{auditor.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">{auditor.email}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</p>
+                          <p className="text-xs text-gray-500">{a.email || a.userId || a.id}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">{currentLoad}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">active cases</p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{load}</p>
+                          <p className="text-xs text-gray-500">active cases</p>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })
+              }
             </div>
-
-            <div className="bg-green-50 rounded-xl p-3 text-sm text-green-800">
-              <strong>Ready to assign:</strong> {selectedCases.length} case(s) will be distributed to {myAuditors.length} auditor{myAuditors.length > 1 ? 's' : ''}.
+            <div className="bg-green-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-green-800 dark:text-green-400">
+              <strong>Ready:</strong> {selected.length} case{selected.length > 1 ? 's' : ''} → {auditors.length} auditor{auditors.length > 1 ? 's' : ''}
             </div>
           </div>
         </Modal>

@@ -183,6 +183,20 @@ public class MockUserManagementAdapter implements UserManagementPort {
         return stats;
     }
 
+    public List<Map<String, Object>> getCommitteeMembers(String auditType) {
+        String typeCode = auditType;
+        // Normalize: JOINT_AUDIT -> JA, TRANSFER_PRICING -> TP
+        if (auditType != null) {
+            String upper = auditType.toUpperCase();
+            if (upper.contains("JOINT") || upper.equals("JA")) typeCode = "JA";
+            else if (upper.contains("TRANSFER") || upper.equals("TP")) typeCode = "TP";
+        }
+        final String finalType = typeCode;
+        return USERS.values().stream()
+            .filter(u -> "COMMITTEE_MEMBER".equals(u.get("userType")) && finalType.equals(u.get("auditType")))
+            .collect(Collectors.toList());
+    }
+
     // ============= UserManagementPort Implementation =============
 
     @Override

@@ -34,6 +34,9 @@ public class ApResponseDtoMapper {
         // Set distribution data
         response.setDistribution(plan.getDistribution());
         
+        // Set amendment comment
+        response.setAmendmentComment(plan.getAmendmentComment());
+        
         // Separate allocations into regional and tax center
         List<AllocationResponse> regionalAllocations = plan.getAllocations().stream()
             .filter(a -> a.getTaxCenterCode() == null)

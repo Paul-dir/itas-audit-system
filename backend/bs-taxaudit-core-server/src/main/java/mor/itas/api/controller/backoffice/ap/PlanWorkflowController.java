@@ -39,7 +39,7 @@ import java.util.ArrayList;
  * 4. Tax Center Manager: Submit feedback
  */
 @RestController
-@RequestMapping("/api/v1/backoffice/ap/plans")
+@RequestMapping("/api/v1/backoffice/ap/plans/workflow")
 public class PlanWorkflowController {
 
     @Autowired

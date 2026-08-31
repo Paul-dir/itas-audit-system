@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, ClipboardList, Clock, CheckCircle, FileText, ArrowRight, Eye, Send, Edit, RotateCcw, Activity, AlertOctagon, Settings, Trash2, Edit2, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
@@ -19,6 +19,25 @@ export default function PlanningDashboard({ view }) {
   const [amendmentEditPlan, setAmendmentEditPlan] = useState(null);
   const [activeTab, setActiveTab] = useState('plans');
   const [error, setError] = useState(null);
+
+  // Refresh plans from backend on mount to pick up any amendments
+  useEffect(() => {
+    const refreshPlans = async () => {
+      try {
+        const { default: planService } = await import('../../../../features/ap/services/planService.js');
+        const allPlans = await planService.getPlans();
+        if (allPlans && allPlans.length > 0) {
+          // Update global state with fresh plans from backend
+          allPlans.forEach(plan => {
+            actions.updatePlanDraft(plan.id, plan);
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to refresh plans:', e);
+      }
+    };
+    refreshPlans();
+  }, []);
 
   // Show full configuration page if view is 'plan-configuration'
   if (view === 'plan-configuration') {

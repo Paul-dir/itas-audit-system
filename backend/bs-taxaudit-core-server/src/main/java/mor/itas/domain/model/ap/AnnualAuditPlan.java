@@ -49,6 +49,9 @@ public class AnnualAuditPlan {
     private OffsetDateTime sentToRegionsAt;
     private List<PlanAllocation> allocations;
     
+    // Amendment
+    private String amendmentComment;
+    
     // Metadata
     private OffsetDateTime updatedAt;
     private Long version;
@@ -162,7 +165,9 @@ public class AnnualAuditPlan {
     // Authorization Checks
     
     public boolean canBeSubmittedByPlanningTeam() {
-        return status == PlanStatus.DRAFT;
+        return status == PlanStatus.DRAFT
+            || status == PlanStatus.AMENDMENT_REQUIRED
+            || status == PlanStatus.SENIOR_MGMT_REJECTED;
     }
     
     public boolean canBeApprovedByDirector() {
@@ -383,6 +388,14 @@ public class AnnualAuditPlan {
     
     public void setVersion(Long version) {
         this.version = version;
+    }
+    
+    public String getAmendmentComment() {
+        return amendmentComment;
+    }
+    
+    public void setAmendmentComment(String amendmentComment) {
+        this.amendmentComment = amendmentComment;
     }
     
     @Override

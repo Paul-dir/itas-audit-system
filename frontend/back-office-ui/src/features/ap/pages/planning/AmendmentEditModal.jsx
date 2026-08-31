@@ -4,6 +4,8 @@ import { Modal, Button, Textarea, Card, Alert, Badge, Input } from '../../../../
 import { DistributionTable } from '../shared/DistributionTable.jsx';
 import { REGIONS, AUDIT_TYPES, getTaxCentersForRegion } from '../../data/constants.js';
 import PlanTimeline from '../shared/PlanTimeline.jsx';
+import { useApp } from '../../../../context/AppContext.jsx';
+import { useAuth } from '../../../../context/AuthContext.jsx';
 
 export default function AmendmentEditModal({ plan, open, onClose, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -37,22 +39,37 @@ export default function AmendmentEditModal({ plan, open, onClose, onUpdate }) {
     return { totals, grandTotal };
   };
 
-  const handleSave = () => {
+  const { actions } = useApp();
+  const { user } = useAuth();
+
+  const handleSave = async () => {
     if (!editedPlan.name?.trim()) {
       alert('Plan name is required');
       return;
     }
     setSaving(true);
-    setTimeout(() => {
-      onUpdate({
+    try {
+      const newTotal = calculateNewTotals().grandTotal;
+      const updates = {
         ...editedPlan,
         distribution: editedDistribution,
-        totalCases: calculateNewTotals().grandTotal
-      });
-      setSaving(false);
+        totalCases: newTotal
+      };
+      
+      // Call backend amend API to save changes and resubmit to Director
+      await actions.amendPlan(plan.id, user?.id || 'planning-team', updates);
+      console.log('✅ Plan amended and resubmitted to Director');
+      
+      onUpdate(updates);
       setIsEditing(false);
       setEditedDistribution(null);
-    }, 300);
+      alert('✅ Plan amended and resubmitted to the Director for review!');
+    } catch (error) {
+      console.error('❌ Failed to amend plan:', error);
+      alert(`Failed to amend plan: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {

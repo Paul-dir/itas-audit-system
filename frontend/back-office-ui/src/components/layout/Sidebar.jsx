@@ -58,64 +58,51 @@ export default function Sidebar({ activeView, onNavigate }) {
   const items = NAV[user.role] || [];
 
   const handleNavClick = (id) => {
-    console.log('=== Sidebar Navigation Click ===');
-    console.log('View ID:', id);
-    console.log('onNavigate function:', onNavigate);
-    console.log('User role:', user?.role);
-    
     if (onNavigate && typeof onNavigate === 'function') {
       onNavigate(id);
-      console.log('Navigation completed to:', id);
-    } else {
-      console.error('onNavigate is not defined or not a function!', onNavigate);
     }
   };
-  
-  // Theme-aware colors
+
   const isDark = theme === 'dark';
-  const sidebarBg = isDark ? 'bg-slate-900' : 'bg-slate-900';
-  const borderColor = isDark ? 'border-slate-800' : 'border-slate-800';
-  const logoBorder = isDark ? 'border-slate-700/60' : 'border-slate-700/60';
-  const userCardBg = isDark ? 'bg-slate-800' : 'bg-slate-800';
 
   return (
-    <aside className={`w-64 ${sidebarBg} flex flex-col h-screen fixed left-0 top-0 z-30 border-r ${borderColor}`}>
-      {/* Logo */}
-      <div className={`px-5 py-5 border-b ${logoBorder}`}>
+    <aside className="w-[260px] bg-gray-900 flex flex-col h-screen fixed left-0 top-0 z-30 border-r border-gray-800">
+      {/* ── Logo & Brand ── */}
+      <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
           <img
             src="/mor-logo.jpeg"
-            alt="MOR"
-            className="w-9 h-9 rounded-xl object-cover flex-shrink-0 shadow-lg"
+            alt="Ministry of Revenues"
+            className="w-10 h-10 rounded-full object-cover flex-shrink-0 ring-2 ring-white/10"
             onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
           />
           <div
-            className="w-9 h-9 bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+            className="w-10 h-10 bg-gradient-to-br from-mor-500 to-mor-700 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ display: 'none' }}
           >
             <span className="text-white font-bold text-xs">MOR</span>
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-tight">MOR</p>
-            <p className="text-slate-400 text-[10px] leading-tight">Audit Planning System</p>
+            <p className="text-white font-bold text-sm leading-tight tracking-tight">MOR</p>
+            <p className="text-blue-400 text-[10px] font-medium leading-tight tracking-wide">Ministry of Revenues</p>
           </div>
         </div>
       </div>
 
-      {/* User card */}
-      <div className={`px-4 py-3 border-b ${logoBorder}`}>
-        <div className={`${userCardBg} rounded-lg px-3 py-2.5`}>
-          <p className="text-white text-sm font-medium truncate">{user.name}</p>
-          <p className="text-slate-400 text-xs mt-0.5 truncate">{ROLE_LABELS[user.role]}</p>
-          {user.email && <p className="text-slate-500 text-[10px] mt-0.5 truncate">{user.email}</p>}
-          {user.region && <p className="text-blue-400 text-xs mt-0.5 truncate capitalize">{user.region.replace(/_/g, ' ')}</p>}
-          {user.taxCenter && <p className="text-slate-500 text-xs mt-0.5 truncate">{user.taxCenter}</p>}
+      {/* ── User Card ── */}
+      <div className="px-4 py-4 border-b border-white/10">
+        <div className="bg-white/[0.04] rounded-xl px-3.5 py-3 border border-white/[0.05]">
+          <p className="text-white text-sm font-semibold truncate">{user.name}</p>
+          <p className="text-blue-400 text-xs font-medium mt-0.5 truncate">{ROLE_LABELS[user.role]}</p>
+          {user.email && <p className="text-gray-400 text-[10px] mt-0.5 truncate">{user.email}</p>}
+          {user.region && <p className="text-blue-300 text-[11px] font-medium mt-1 truncate capitalize">📍 {user.region.replace(/_/g, ' ')}</p>}
+          {user.taxCenter && <p className="text-gray-400 text-[11px] mt-0.5 truncate">🏢 {user.taxCenter}</p>}
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* ── Navigation ── */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <p className="px-2 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Menu</p>
+        <p className="px-3 mb-2.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Navigation</p>
         <ul className="space-y-0.5">
           {items.map(item => {
             const Icon = item.icon;
@@ -125,23 +112,23 @@ export default function Sidebar({ activeView, onNavigate }) {
                 <button
                   type="button"
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 cursor-pointer ${
                     active
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-blue-700 text-white shadow-lg shadow-blue-900/30'
+                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-2.5">
-                    <Icon size={16} />
+                    <Icon size={16} strokeWidth={active ? 2 : 1.5} />
                     {item.label}
                   </span>
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1.5">
                     {item.badge && (
-                      <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full font-semibold border border-green-500/30">
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold border border-emerald-500/20">
                         {item.badge}
                       </span>
                     )}
-                    {active && <ChevronRight size={14} />}
+                    {active && <ChevronRight size={14} className="text-white/60" />}
                   </span>
                 </button>
               </li>
@@ -150,17 +137,14 @@ export default function Sidebar({ activeView, onNavigate }) {
         </ul>
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 pb-4">
+      {/* ── Logout ── */}
+      <div className="px-3 pb-4 border-t border-white/10 pt-3">
         <button
           type="button"
-          onClick={() => {
-            console.log('Logout clicked');
-            logout();
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-150 cursor-pointer"
+          onClick={() => logout()}
+          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-150 cursor-pointer"
         >
-          <LogOut size={16} />
+          <LogOut size={16} strokeWidth={1.5} />
           Sign Out
         </button>
       </div>

@@ -16,12 +16,12 @@ import Badge from '../Badge';
  * STAGES:
  * 1. SUBMITTED_TO_DIRECTOR - Review and make decision
  *    → Send to Planning Team for Amendment (REVISION_REQUESTED)
- *    → Submit directly to Senior Management (SUBMITTED_TO_SENIOR_MANAGEMENT)
+ *    → Submit directly to Senior Management (SUBMITTED_TO_SENIOR_MGMT)
  * 2. RESUBMITTED_TO_DIRECTOR - Accept amendments
  *    → Accept and approve (DIRECTOR_APPROVED)
  *    → Send back to Planning Team (REVISION_REQUESTED)
  * 3. DIRECTOR_APPROVED - Submit to Senior Management
- *    → Submit recommendation (SUBMITTED_TO_SENIOR_MANAGEMENT)
+ *    → Submit recommendation (SUBMITTED_TO_SENIOR_MGMT)
  */
 
 function DirectorPlanReview() {
@@ -160,7 +160,7 @@ function DirectorPlanReview() {
 
       case 'send-to-senior':
         // Director submits to Senior Management
-        plan.status = 'SUBMITTED_TO_SENIOR_MANAGEMENT';
+        plan.status = 'SUBMITTED_TO_SENIOR_MGMT';
         plan.directorRecommendation = {
           sentToSeniorManagement: true,
           sentDate: new Date().toISOString(),

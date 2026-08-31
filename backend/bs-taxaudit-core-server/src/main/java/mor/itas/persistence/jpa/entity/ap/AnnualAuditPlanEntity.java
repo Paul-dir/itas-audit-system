@@ -74,8 +74,8 @@ public class AnnualAuditPlanEntity {
     private OffsetDateTime sentToTaxCenterAt;
 
     // Distribution Data Storage
-    @Column(name = "distribution_json")
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "distribution_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private Map<String, Map<String, Integer>> distribution;  // {region_id: {audit_type_id: count}}
 
     @Column(name = "sent_to_regions_at")
@@ -83,6 +83,15 @@ public class AnnualAuditPlanEntity {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    @Column(name = "sent_to_regions_by", length = 64)
+    private String sentToRegionsBy;
+
+    @Column(name = "regions_received_count")
+    private Integer regionsReceivedCount = 0;
+
+    @Column(name = "amendment_comment")
+    private String amendmentComment;
 
     @Version
     private Long version = 0L;
@@ -255,6 +264,30 @@ public class AnnualAuditPlanEntity {
 
     public void setSentToRegionsAt(OffsetDateTime sentToRegionsAt) {
         this.sentToRegionsAt = sentToRegionsAt;
+    }
+
+    public String getSentToRegionsBy() {
+        return sentToRegionsBy;
+    }
+
+    public void setSentToRegionsBy(String sentToRegionsBy) {
+        this.sentToRegionsBy = sentToRegionsBy;
+    }
+
+    public Integer getRegionsReceivedCount() {
+        return regionsReceivedCount;
+    }
+
+    public void setRegionsReceivedCount(Integer regionsReceivedCount) {
+        this.regionsReceivedCount = regionsReceivedCount;
+    }
+
+    public String getAmendmentComment() {
+        return amendmentComment;
+    }
+
+    public void setAmendmentComment(String amendmentComment) {
+        this.amendmentComment = amendmentComment;
     }
 
     public OffsetDateTime getUpdatedAt() {

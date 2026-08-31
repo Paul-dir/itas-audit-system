@@ -30,7 +30,7 @@ function ApprovedPlansDeploymentView({ userRole }) {
     
     if (userRole === 'director') {
       const directorPlans = data.plans.filter(p => 
-        p.status === 'SENIOR_MANAGEMENT_APPROVED' || 
+        p.status === 'SENIOR_MGMT_APPROVED' || 
         p.status === 'AWAITING_SENIOR_MANAGEMENT_APPROVAL'
       );
       setPlans(directorPlans);
@@ -48,7 +48,7 @@ function ApprovedPlansDeploymentView({ userRole }) {
     // Using data from hook
     const plan = data.plans.find(p => p.id === planId);
     
-    if (!plan || (plan.status !== 'SENIOR_MANAGEMENT_APPROVED' && plan.status !== 'AWAITING_SENIOR_MANAGEMENT_APPROVAL')) {
+    if (!plan || (plan.status !== 'SENIOR_MGMT_APPROVED' && plan.status !== 'AWAITING_SENIOR_MANAGEMENT_APPROVAL')) {
       alert('Plan must be approved by Senior Management');
       return;
     }
@@ -124,7 +124,7 @@ function ApprovedPlansDeploymentView({ userRole }) {
           readOnly={true}
         />
         <div className="flex justify-end gap-3 pt-4">
-          {userRole === 'director' && selectedPlan.status === 'SENIOR_MANAGEMENT_APPROVED' && (
+          {userRole === 'director' && selectedPlan.status === 'SENIOR_MGMT_APPROVED' && (
             <button 
               className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-success-700"
               onClick={() => handleDirectorDeploy(selectedPlan.id)}

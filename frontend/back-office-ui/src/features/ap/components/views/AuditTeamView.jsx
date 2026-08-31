@@ -52,7 +52,7 @@ function AuditTeamView() {
   const stats = {
     draft: plans.filter(p => p.status === 'DRAFT').length,
     withDirector: plans.filter(p => p.status === 'SUBMITTED_TO_DIRECTOR').length,
-    withSenior: plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT').length,
+    withSenior: plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length,
     approved: plans.filter(p => p.status === 'SENIOR_APPROVED').length,
     readyCascade: plans.filter(p => p.status === 'SENIOR_APPROVED').length
   };
@@ -68,7 +68,7 @@ function AuditTeamView() {
       return <Badge status="With Director" className="submitted" />;
     } else if (plan.status === 'DIRECTOR_APPROVED' || plan.status === 'FEEDBACK_COLLECTED') {
       return <Badge status="Director Approved" className="director-approved" />;
-    } else if (plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT') {
+    } else if (plan.status === 'SUBMITTED_TO_SENIOR_MGMT') {
       return <Badge status="With Senior Mgmt" className="senior-pending" />;
     } else if (plan.status === 'SENIOR_APPROVED') {
       return (

@@ -41,6 +41,7 @@ public class AnnualAuditPlanMapper {
             ae.setId(a.getId());
             ae.setAnnualPlan(entity);
             ae.setTaxCenterCode(a.getTaxCenterCode());
+            ae.setRegionCode(a.getRegionCode());  // ✅ CRITICAL: Must set region code!
             ae.setProposedCount(a.getProposedCount());
             ae.setTcAdjustedCount(a.getTcAdjustedCount());
             ae.setTcJustification(a.getTcJustification());
@@ -49,6 +50,7 @@ public class AnnualAuditPlanMapper {
             return ae;
         }).collect(Collectors.toList());
 
+        entity.setAmendmentComment(domain.getAmendmentComment());
         entity.setAllocations(allocationEntities);
         return entity;
     }
@@ -74,6 +76,7 @@ public class AnnualAuditPlanMapper {
         AnnualAuditPlan plan = new AnnualAuditPlan(entity.getId(), entity.getYear(), entity.getName(), 
             entity.getCreatedBy());
         plan.setStatus(mor.itas.domain.model.ap.PlanStatus.valueOf(entity.getStatus().name()));
+        plan.setAmendmentComment(entity.getAmendmentComment());
         
         // Assign distribution from entity (Hibernate handles JSON deserialization)
         if (entity.getDistribution() != null) {

@@ -195,13 +195,15 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
             value={national?.totalTaxpayers?.toLocaleString()}
             icon={Users}
             color="blue"
+            bold
             sub="Registered in MOR system"
           />
           <StatCard
             label="Risky Taxpayers"
             value={national?.totalRisky?.toLocaleString()}
             icon={AlertTriangle}
-            color="orange"
+            color="yellow"
+            bold
             sub={`${national?.percentRisky}% of registered`}
           />
           <StatCard
@@ -209,6 +211,7 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
             value={((national?.byRiskLevel?.critical?.count || 0) + (national?.byRiskLevel?.high?.count || 0)).toLocaleString()}
             icon={Zap}
             color="red"
+            bold
             sub="Require immediate audit priority"
           />
           <StatCard
@@ -216,23 +219,24 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
             value={national?.auditRecommended?.toLocaleString()}
             icon={CheckCircle}
             color="green"
+            bold
             sub="audit_immediately + select_for_audit"
           />
         </div>
       </div>
 
       {/* ── Federal Level Summary Table ── */}
-      <div className="overflow-x-auto rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 p-4">
-        <h3 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-2">🏛️ Federal Level Summary</h3>
-        <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">Taxpayers with federal business license</p>
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Federal Level Summary</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Taxpayers with federal business license</p>
         <table className="min-w-full text-xs">
-          <thead className="bg-blue-100 dark:bg-blue-900">
+          <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="px-3 py-2.5 text-left font-bold text-blue-900 dark:text-blue-100">Federal Level</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Federal Level</th>
               {(national?.byAuditType || []).map(a => (
-                <th key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100 whitespace-nowrap">{a.shortName}</th>
+                <th key={a.id} className="px-2 py-2.5 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">{a.shortName}</th>
               ))}
-              <th className="px-3 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100">Total</th>
+              <th className="px-3 py-2.5 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-blue-950">
@@ -243,7 +247,7 @@ export default function RiskAnalysisDashboard({ onUsePlanDefaults }) {
                   {fmt(a.count)}
                 </td>
               ))}
-              <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 tabular-nums">
+              <td className="px-3 py-2.5 text-center font-bold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 tabular-nums">
                 {fmt(national?.totalRisky)}
               </td>
             </tr>

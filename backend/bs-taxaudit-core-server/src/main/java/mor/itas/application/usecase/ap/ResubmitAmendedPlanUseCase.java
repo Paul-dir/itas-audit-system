@@ -1,14 +1,18 @@
 package mor.itas.application.usecase.ap;
 
 import mor.itas.application.port.inboundport.ap.ResubmitAmendedPlanPort;
-import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
-import mor.itas.domain.model.ap.AnnualAuditPlan;
-import mor.itas.domain.model.ap.PlanStatus;
+import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
+import mor.itas.persistence.jpa.entity.ap.PlanStatusEnum;
+import mor.itas.persistence.jpa.entity.ap.PlanAuditLogEntity;
+import mor.itas.persistence.jpa.entity.ap.ApPlanRevisionEntity;
+import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;
+import mor.itas.persistence.jpa.repository.ap.PlanAuditLogJpaRepository;
+import mor.itas.persistence.jpa.repository.ap.ApPlanRevisionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -16,72 +20,75 @@ import java.util.UUID;
  * 
  * Implements ResubmitAmendedPlanPort.
  * 
- * Processes Planning Team's resubmission of amended plan.
+ * Processes Planning Team's resubmission of amended plan to Director.
  * 
  * Flow:
- * 1. Validate plan exists and is in proper state
- * 2. Mark plan as ready for Director review
- * 3. Store submission details
- * 4. Update plan status to SUBMITTED_TO_DIRECTOR again
+ * 1. Validate plan exists and is in AMENDMENT_REQUIRED status
+ * 2. Store resubmission tracking in ap_plan_revisions
+ * 3. Update plan status to SUBMITTED_TO_DIRECTOR (so Director can review again)
+ * 4. Create audit log entry
  */
 @Service
 @RequiredArgsConstructor
 public class ResubmitAmendedPlanUseCase implements ResubmitAmendedPlanPort {
     
-    private final AnnualAuditPlanRepository repository;
-    
-    // Mock storage for resubmission tracking
-    private static final Map<String, Map<String, Object>> resubmissionTracking = new HashMap<>();
+    private final AnnualAuditPlanJpaRepository planRepository;
+    private final PlanAuditLogJpaRepository auditLogRepository;
+    private final ApPlanRevisionRepository revisionRepository;
     
     @Override
+    @Transactional
     public void resubmitAmendedPlan(
             UUID planId,
             Integer amendmentRound,
             String planningTeamComments,
             String planningTeamId) {
         
-        // Validate plan exists
-        AnnualAuditPlan plan = repository.findById(planId)
+        // 1. Fetch the plan
+        AnnualAuditPlanEntity plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
-        // Validate plan status
-        PlanStatus status = plan.getStatus();
-        if (!isValidStatusForResubmission(status.name())) {
+        // 2. Validate plan status
+        PlanStatusEnum status = plan.getStatus();
+        if (status != PlanStatusEnum.AMENDMENT_REQUIRED) {
             throw new IllegalStateException(
                 "Cannot resubmit plan in status: " + status + ". " +
                 "Plan must be in AMENDMENT_REQUIRED status."
             );
         }
         
-        // Store resubmission tracking
-        Map<String, Object> tracking = new HashMap<>();
-        tracking.put("planId", planId.toString());
-        tracking.put("amendmentRound", amendmentRound);
-        tracking.put("planningTeamComments", planningTeamComments != null ? planningTeamComments : "");
-        tracking.put("submittedBy", planningTeamId);
-        tracking.put("submittedAt", java.time.LocalDateTime.now().toString());
-        tracking.put("status", "SUBMITTED_TO_DIRECTOR");
+        // 3. Store resubmission tracking in ap_plan_revisions
+        String resubmissionComment = String.format(
+            "Amendment Round %d resubmitted. %s",
+            amendmentRound,
+            planningTeamComments != null ? planningTeamComments : ""
+        );
         
-        // Store tracking
-        String trackingKey = planId + ":" + amendmentRound;
-        resubmissionTracking.put(trackingKey, tracking);
+        ApPlanRevisionEntity revision = new ApPlanRevisionEntity(
+            planId,
+            resubmissionComment,
+            "AMENDMENT_RESUBMISSION",
+            planningTeamId
+        );
+        revisionRepository.save(revision);
         
-        // In real implementation, would update plan.status to SUBMITTED_TO_DIRECTOR
-        // and increment plan revision
-    }
-    
-    /**
-     * Check if plan is in valid status for resubmission
-     */
-    private boolean isValidStatusForResubmission(String status) {
-        return "AMENDMENT_REQUIRED".equals(status);
-    }
-    
-    /**
-     * Retrieve resubmission tracking
-     */
-    public static Map<String, Object> getResubmissionTracking(UUID planId, Integer amendmentRound) {
-        String trackingKey = planId + ":" + amendmentRound;
-        return resubmissionTracking.getOrDefault(trackingKey, new HashMap<>());
+        // 4. Update plan status to SUBMITTED_TO_DIRECTOR
+        // This puts the amended plan back in Director's queue for review
+        plan.setStatus(PlanStatusEnum.SUBMITTED_TO_DIRECTOR);
+        plan.setSubmittedToDirectorBy(planningTeamId);
+        plan.setSubmittedToDirectorAt(OffsetDateTime.now());
+        plan.setUpdatedAt(OffsetDateTime.now());
+        planRepository.save(plan);
+        
+        // 5. Create audit log entry
+        PlanAuditLogEntity auditLog = new PlanAuditLogEntity(
+            UUID.randomUUID(),
+            plan,
+            "AMENDED_PLAN_RESUBMITTED_TO_DIRECTOR",
+            planningTeamId,
+            "PLANNING_TEAM",
+            "Amended plan (round " + amendmentRound + ") resubmitted for Director review"
+        );
+        auditLogRepository.save(auditLog);
     }
 }

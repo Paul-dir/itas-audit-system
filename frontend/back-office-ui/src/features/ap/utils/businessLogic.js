@@ -514,17 +514,17 @@ export function submitToSeniorManagement(planId) {
     return false;
   }
 
-  plan.status = 'SUBMITTED_TO_SENIOR_MANAGEMENT';
+  plan.status = 'SUBMITTED_TO_SENIOR_MGMT';
   plan.sentToSeniorDate = new Date().toISOString();
   plan.approvalHistory.push({
-    action: 'SUBMITTED_TO_SENIOR_MANAGEMENT',
+    action: 'SUBMITTED_TO_SENIOR_MGMT',
     by: 'Director',
     date: new Date().toISOString(),
     notes: 'Plan with consolidated regional feedback submitted to Senior Management',
     version: plan.version
   });
 
-  addActivity('Plan Submitted to Senior Management', plan.id, 'SUBMITTED_TO_SENIOR_MANAGEMENT');
+  addActivity('Plan Submitted to Senior Management', plan.id, 'SUBMITTED_TO_SENIOR_MGMT');
   saveData(data);
   return true;
 }
@@ -670,19 +670,19 @@ export function directorReject(planId, reason) {
 export function seniorManagementApprove(planId, notes) {
   const data = loadData();
   const plan = data.plans.find(p => p.id === planId);
-  if (!plan || plan.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT') return false;
+  if (!plan || plan.status !== 'SUBMITTED_TO_SENIOR_MGMT') return false;
   
   // Set status back to DIRECTOR_APPROVED to send back to Director for finalization
-  plan.status = 'SENIOR_MANAGEMENT_APPROVED';
+  plan.status = 'SENIOR_MGMT_APPROVED';
   plan.lastModified = new Date().toISOString();
   plan.approvalHistory.push({ 
-    action: 'SENIOR_MANAGEMENT_APPROVED', 
+    action: 'SENIOR_MGMT_APPROVED', 
     by: 'Senior Management', 
     date: new Date().toISOString(),
     notes: notes || 'Plan approved by Senior Management - returned to Director for finalization',
     version: plan.version
   });
-  addActivity('Plan Approved by Senior Management', plan.id, `SENIOR_MANAGEMENT_APPROVED (v${plan.version}) - Ready for Director finalization`);
+  addActivity('Plan Approved by Senior Management', plan.id, `SENIOR_MGMT_APPROVED (v${plan.version}) - Ready for Director finalization`);
   saveData(data);
   return true;
 }
@@ -690,17 +690,17 @@ export function seniorManagementApprove(planId, notes) {
 export function seniorManagementReject(planId, reason) {
   const data = loadData();
   const plan = data.plans.find(p => p.id === planId);
-  if (!plan || plan.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT') return false;
+  if (!plan || plan.status !== 'SUBMITTED_TO_SENIOR_MGMT') return false;
   
-  plan.status = 'SENIOR_MANAGEMENT_REJECTED';
+  plan.status = 'SENIOR_MGMT_REJECTED';
   plan.approvalHistory.push({ 
-    action: 'SENIOR_MANAGEMENT_REJECTED', 
+    action: 'SENIOR_MGMT_REJECTED', 
     by: 'Senior Management', 
     date: new Date().toISOString(),
     notes: reason || 'Plan rejected by Senior Management - needs revision',
     version: plan.version
   });
-  addActivity('Plan Rejected by Senior Management', plan.id, `SENIOR_MANAGEMENT_REJECTED (v${plan.version})`);
+  addActivity('Plan Rejected by Senior Management', plan.id, `SENIOR_MGMT_REJECTED (v${plan.version})`);
   saveData(data);
   return true;
 }
@@ -709,22 +709,22 @@ export function seniorManagementReject(planId, reason) {
 export function directorResubmitRejectedPlan(planId, revisedNotes = '') {
   const data = loadData();
   const plan = data.plans.find(p => p.id === planId);
-  if (!plan || plan.status !== 'SENIOR_MANAGEMENT_REJECTED') return false;
+  if (!plan || plan.status !== 'SENIOR_MGMT_REJECTED') return false;
   
   // Increment version for the revision
   plan.version++;
-  plan.status = 'SUBMITTED_TO_SENIOR_MANAGEMENT';
+  plan.status = 'SUBMITTED_TO_SENIOR_MGMT';
   plan.lastModified = new Date().toISOString();
   
   plan.approvalHistory.push({ 
-    action: 'RESUBMITTED_TO_SENIOR_MANAGEMENT', 
+    action: 'RESUBMITTED_TO_SENIOR_MGMT', 
     by: 'Director', 
     date: new Date().toISOString(),
     notes: revisedNotes || 'Plan revised and resubmitted after Senior Management feedback',
     version: plan.version
   });
   
-  addActivity('Plan Resubmitted to Senior Management', plan.id, `SUBMITTED_TO_SENIOR_MANAGEMENT (v${plan.version})`);
+  addActivity('Plan Resubmitted to Senior Management', plan.id, `SUBMITTED_TO_SENIOR_MGMT (v${plan.version})`);
   saveData(data);
   return true;
 }
@@ -737,9 +737,9 @@ export function getStatusDisplay(status) {
     'AWAITING_REGIONAL_FEEDBACK': 'Awaiting Regional Feedback',
     'FEEDBACK_COLLECTED': 'Feedback Collected',
     'FINALIZED': 'Finalized (Ready for Senior Mgmt)',
-    'SUBMITTED_TO_SENIOR_MANAGEMENT': 'With Senior Management',
-    'SENIOR_MANAGEMENT_APPROVED': 'Approved by Senior Management',
-    'SENIOR_MANAGEMENT_REJECTED': 'Rejected by Senior Management',
+    'SUBMITTED_TO_SENIOR_MGMT': 'With Senior Management',
+    'SENIOR_MGMT_APPROVED': 'Approved by Senior Management',
+    'SENIOR_MGMT_REJECTED': 'Rejected by Senior Management',
     'REVISION_REQUESTED': 'Revision Requested',
     'REJECTED': 'Rejected'
   };
@@ -754,9 +754,9 @@ export function getBadgeClass(status) {
     'AWAITING_REGIONAL_FEEDBACK': 'feedback',
     'FEEDBACK_COLLECTED': 'feedback-collected',
     'FINALIZED': 'senior-approved',
-    'SUBMITTED_TO_SENIOR_MANAGEMENT': 'pending',
-    'SENIOR_MANAGEMENT_APPROVED': 'senior-approved',
-    'SENIOR_MANAGEMENT_REJECTED': 'rejected',
+    'SUBMITTED_TO_SENIOR_MGMT': 'pending',
+    'SENIOR_MGMT_APPROVED': 'senior-approved',
+    'SENIOR_MGMT_REJECTED': 'rejected',
     'REVISION_REQUESTED': 'pending',
     'REJECTED': 'rejected'
   };

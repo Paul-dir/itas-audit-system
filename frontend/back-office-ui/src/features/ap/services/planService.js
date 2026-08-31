@@ -83,7 +83,7 @@ class PlanService {
         console.warn('⚠️  WARNING: Plan name is empty or default!');
       }
       
-      const response = await fetch(`${API_BASE_URL}/ap/plans`, {
+      const response = await fetch(`${API_BASE_URL}/ap/plans/workflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,26 +115,45 @@ class PlanService {
   }
 
   /**
-   * Submit Tax Center feedback for a specific allocation via Backend API
+   * Submit Tax Center feedback for a specific allocation
+   * Endpoint: PATCH /api/v1/backoffice/ap/plans/workflow/{planId}/allocations/{taxCenterCode}/feedback
    */
-  async submitTaxCenterFeedback(planId, allocationId, feedbackData, actorId) {
+  async submitTaxCenterFeedback(planId, taxCenterCode, adjustedCount, justification, actorId) {
     try {
-      console.log('🚀 Submitting TC feedback via Backend API:', planId, allocationId);
-      const response = await fetch(`${API_BASE_URL}/ap/plans/${planId}/allocations/${allocationId}/feedback`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Actor-Id': actorId || 'system'
-        },
-        body: JSON.stringify(feedbackData)
-      });
+      console.log('🚀 Submitting TC feedback via Backend API');
+      console.log('📊 Plan ID:', planId);
+      console.log('🏢 Tax Center Code:', taxCenterCode);
+      console.log('📈 Adjusted Count:', adjustedCount);
+      console.log('📝 Justification:', justification);
+
+      const response = await fetch(
+        `${API_BASE_URL}/ap/plans/workflow/${planId}/allocations/${taxCenterCode}/feedback`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'tax-center-manager',
+            'X-User-Role': 'TAX_CENTER_MANAGER'
+          },
+          body: JSON.stringify({
+            adjustedCount: parseInt(adjustedCount),
+            justification: justification
+          })
+        }
+      );
       
+      console.log('📥 Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Backend error response:', errorText);
+        throw new Error(`API error: ${response.status} - ${errorText}`);
       }
       
       const result = await response.json();
       console.log('✅ Feedback submitted successfully:', result);
+      
+      this.clearCache(planId);
       return result;
     } catch (error) {
       console.error('❌ Failed to submit feedback:', error);
@@ -148,7 +167,7 @@ class PlanService {
   async submitToDirector(planId, actorId) {
     try {
       console.log('🚀 Submitting plan to Director via Backend API:', planId);
-      const response = await fetch(`${API_BASE_URL}/ap/plans/${planId}/submit-to-director`, {
+      const response = await fetch(`${API_BASE_URL}/ap/plans/workflow/${planId}/submit-to-director`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,6 +209,11 @@ class PlanService {
       if (filters.fiscalYear) queryParams.append('fiscalYear', filters.fiscalYear);
       if (filters.createdBy) queryParams.append('createdBy', filters.createdBy);
       
+      // Always request a large page size to get all plans (default backend is 20)
+      // This ensures newly created plans are included in the list
+      queryParams.append('page', '0');
+      queryParams.append('size', '1000');
+      
       const response = await fetch(`${API_BASE_URL}/ap/plans?${queryParams}`, {
         method: 'GET',
         headers: {
@@ -208,8 +232,68 @@ class PlanService {
       // Handle both array response and object with data property
       let plans = Array.isArray(result) ? result : (result.data || []);
       
-      // Backend already returns correct format with region IDs, no transformation needed
-      console.log('📊 Plans distribution data preserved from backend');
+      // Map backend region codes to frontend region IDs
+      const codeToId = { 'AA': 'addis_ababa', 'BA': 'amhara', 'BB': 'oromia', 'AB': 'dire_dawa', 'CA': 'snnpr', 'SO': 'somali' };
+      const idToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+      
+      plans = plans.map(plan => {
+        const mapped = { ...plan };
+        
+        // Ensure name field exists (backend uses planName)
+        if (!mapped.name && mapped.planName) {
+          mapped.name = mapped.planName;
+        }
+        if (!mapped.year && mapped.planYear) {
+          mapped.year = mapped.planYear;
+        }
+        
+        // Transform distribution from backend codes to frontend IDs
+        if (mapped.distribution) {
+          const transformed = {};
+          Object.entries(mapped.distribution).forEach(([key, auditTypes]) => {
+            const frontendId = codeToId[key] || key;
+            transformed[frontendId] = auditTypes;
+          });
+          mapped.distribution = transformed;
+        }
+        
+        // Calculate totalCases from distribution if null
+        if (!mapped.totalCases && mapped.distribution) {
+          let total = 0;
+          Object.values(mapped.distribution).forEach(regionAuditTypes => {
+            if (regionAuditTypes && typeof regionAuditTypes === 'object') {
+              Object.values(regionAuditTypes).forEach(count => { total += count || 0; });
+            }
+          });
+          mapped.totalCases = total;
+        }
+
+        // Transform regionalFeedback from backend format to frontend format
+        // Backend: { "AA": { "status": "submitted", "feedback": {...} } }
+        // Frontend: { "addis_ababa": { "desk_audit": {...}, "_status": "submitted" } }
+        if (mapped.regionalFeedback) {
+          const transformedFeedback = {};
+          Object.entries(mapped.regionalFeedback).forEach(([code, fbData]) => {
+            const frontendId = codeToId[code] || code;
+            const feedbackContent = fbData.feedback || fbData;
+            const status = fbData.status || (fbData.isDefault ? 'pending' : 'submitted');
+            transformedFeedback[frontendId] = {
+              ...feedbackContent,
+              _status: status,
+              _isDefault: fbData.isDefault || false,
+              feedback: feedbackContent,
+              submitted: status === 'submitted',
+              submittedBy: fbData.submittedBy || '',
+              submittedAt: fbData.submittedAt || '',
+            };
+          });
+          mapped.regionalFeedback = transformedFeedback;
+        }
+        
+        return mapped;
+      });
+      
+      console.log('📊 Plans transformed: distribution codes→IDs, names normalized');
       
       return plans;
     } catch (error) {
@@ -242,7 +326,7 @@ class PlanService {
       console.log(`📝 Region mapping: ${regionCode} → ${backendRegionCode}`);
       
       const response = await fetch(
-        `${API_BASE_URL}/ap/plans/region/${backendRegionCode}`,
+        `${API_BASE_URL}/ap/regional/plans?regionCode=${backendRegionCode}`,
         {
           method: 'GET',
           headers: {
@@ -261,18 +345,81 @@ class PlanService {
       
       let plans = result.data || [];
       
-      // Transform distribution from backend format (region codes) to frontend format (region IDs)
-      // Backend returns: {AA: {...}, BA: {...}, ...}
-      // Frontend needs: {addis_ababa: {...}, amhara: {...}, ...}
+      // ✅ TRANSFORM backend response to frontend format
+      // Backend returns: planName, planYear, regionAllocatedCases, status, planId, etc.
+      // Frontend expects: name, year, distribution, status, id, etc.
       plans = plans.map(plan => {
-        if (plan.distribution) {
-          plan.distribution = convertDistributionFromBackend(plan.distribution);
-          console.log('📊 Transformed distribution for plan:', plan.id);
+        console.log('📝 Transforming plan:', { 
+          planName: plan.planName, 
+          planYear: plan.planYear,
+          planId: plan.planId,
+          regionAllocatedCases: plan.regionAllocatedCases,
+          status: plan.status,
+          rawTcDistributions: plan.tcDistributions
+        });
+        
+        const transformedPlan = {
+          ...plan,
+          // Map backend field names to frontend format
+          id: plan.planId || plan.id,  // ✅ CRITICAL: planId → id
+          name: plan.planName || plan.name,  // Fallback to 'name' if planName doesn't exist
+          year: plan.planYear || plan.year,  // Fallback to 'year' if planYear doesn't exist
+          
+          // Convert regionAllocatedCases to distribution format expected by frontend
+          // IMPORTANT: Use FRONTEND regionCode as key, not backend code
+          // This way views can access distribution[region] where region is the frontend ID
+          distribution: {
+            ...plan.distribution,
+            [regionCode]: plan.regionAllocatedCases || {}  // Use frontend region code as key
+          },
+          
+          tcDistributions: plan.tcDistributions ? {
+            [regionCode]: plan.tcDistributions[backendRegionCode] || plan.tcDistributions[regionCode]
+          } : undefined,
+
+          regionalFeedback: plan.acknowledged ? {
+            [regionCode]: {
+              submittedAt: plan.acknowledgedAt,
+              submittedBy: plan.acknowledgedBy
+            }
+          } : undefined,
+
+          // Keep original fields for backward compatibility
+          planName: plan.planName || plan.name,
+          planYear: plan.planYear || plan.year,
+          planId: plan.planId || plan.id,
+          regionAllocatedCases: plan.regionAllocatedCases || {},
+          regionalFeedbackSubmitted: plan.regionalFeedbackSubmitted || false,
+        };
+
+        // Transform taxCenterFeedback nested keys from backend codes to frontend IDs
+        if (plan.taxCenterFeedback) {
+          const backendTcFeedback = plan.taxCenterFeedback[backendRegionCode] || plan.taxCenterFeedback[regionCode] || {};
+          const frontendTcFeedback = {};
+          
+          const backendToFrontendTcCode = {
+            'AA-TC1': 'addis_ababa-tc1', 'AA-TC2': 'addis_ababa-tc2', 'AA-TC3': 'addis_ababa-tc3',
+            'BA-TC1': 'amhara-tc1', 'BA-TC2': 'amhara-tc2', 'BA-TC3': 'amhara-tc3',
+            'BB-TC1': 'oromia-tc1', 'BB-TC2': 'oromia-tc2', 'BB-TC3': 'oromia-tc3',
+            'AB-TC1': 'dire_dawa-tc1', 'AB-TC2': 'dire_dawa-tc2', 'AB-TC3': 'dire_dawa-tc3',
+            'CA-TC1': 'snnpr-tc1', 'CA-TC2': 'snnpr-tc2', 'CA-TC3': 'snnpr-tc3',
+            'SO-TC1': 'somali-tc1', 'SO-TC2': 'somali-tc2', 'SO-TC3': 'somali-tc3',
+          };
+
+          Object.entries(backendTcFeedback).forEach(([backendCode, data]) => {
+            const frontendId = backendToFrontendTcCode[backendCode] || backendCode;
+            frontendTcFeedback[frontendId] = data;
+          });
+
+          transformedPlan.taxCenterFeedback = {
+            [regionCode]: frontendTcFeedback
+          };
         }
-        return plan;
+
+        return transformedPlan;
       });
       
-      console.log('✅ Plans ready for regional dashboard');
+      console.log('✅ Transformed plans:', plans.length, 'plans ready for regional dashboard');
       return plans;
     } catch (error) {
       console.error('❌ Failed to fetch regional plans:', error);
@@ -574,6 +721,349 @@ class PlanService {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * Get all plans pending director review
+   * Endpoint: GET /api/v1/backoffice/ap/plans/pending-director-review
+   */
+  async getPendingDirectorReviewPlans(actorId) {
+    try {
+      console.log('📋 Fetching plans pending director review from backend');
+      
+      const response = await fetch(
+        `${API_BASE_URL}/ap/plans/pending-director-review`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'director'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Pending director review plans fetched:', result.data?.length || 0);
+      
+      // Handle both array response and object with data property
+      let plans = Array.isArray(result) ? result : (result.data || []);
+      
+      return plans;
+    } catch (error) {
+      console.error('❌ Failed to fetch pending director review plans:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get allocations for a specific tax center
+   * Endpoint: GET /api/v1/backoffice/ap/tax-center/allocations?taxCenterId={taxCenterId}
+   */
+  async getTaxCenterAllocations(taxCenterId) {
+    try {
+      console.log('📋 Fetching tax center allocations from backend for:', taxCenterId);
+      
+      const response = await fetch(
+        `${API_BASE_URL}/ap/tax-center/allocations?taxCenterId=${taxCenterId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Tax center allocations fetched:', result.data?.length || 0);
+      
+      return result.data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch tax center allocations:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send distribution allocations to tax centers
+   * Creates PlanAllocation records for each tax center with their allocated cases
+   * Endpoint: POST /api/v1/backoffice/ap/plans/workflow/{planId}/divide-allocations
+   */
+  async sendDistributionToTaxCenters(planId, region, tcAllocations, actorId) {
+    try {
+      console.log('🚀 Sending distribution to tax centers for region:', region);
+      console.log('📦 TC Allocations from frontend:', JSON.stringify(tcAllocations, null, 2));
+
+      // Map frontend region IDs to backend region codes
+      // Frontend uses: addis_ababa, amhara, oromia, dire_dawa, snnpr, somali
+      // Backend expects: AA, BA, BB, AB, CA, SO
+      const regionIdToCode = {
+        'addis_ababa': 'AA',
+        'amhara': 'BA',
+        'oromia': 'BB',
+        'dire_dawa': 'AB',
+        'snnpr': 'CA',
+        'somali': 'SO',
+      };
+
+      const backendRegionCode = regionIdToCode[region];
+      if (!backendRegionCode) {
+        throw new Error(`Unknown region ID: ${region}`);
+      }
+      console.log(`🔄 Converted region ${region} to backend code ${backendRegionCode}`);
+
+      // Transform frontend allocation format to backend format
+      // Frontend: { tcId: { auditTypeId: count, ... }, ... }
+      // Backend needs: taxCenterAllocations: [{ taxCenterCode, auditCount }, ...]
+      
+      // ✅ Map frontend tax center IDs to backend codes
+      // Frontend uses: addis_ababa-tc1, Backend expects: AA-TC1
+      const tcIdToBackendCode = {
+        'addis_ababa-tc1': 'AA-TC1', 'addis_ababa-tc2': 'AA-TC2', 'addis_ababa-tc3': 'AA-TC3',
+        'amhara-tc1': 'BA-TC1', 'amhara-tc2': 'BA-TC2', 'amhara-tc3': 'BA-TC3',
+        'oromia-tc1': 'BB-TC1', 'oromia-tc2': 'BB-TC2', 'oromia-tc3': 'BB-TC3',
+        'dire_dawa-tc1': 'AB-TC1', 'dire_dawa-tc2': 'AB-TC2', 'dire_dawa-tc3': 'AB-TC3',
+        'snnpr-tc1': 'CA-TC1', 'snnpr-tc2': 'CA-TC2', 'snnpr-tc3': 'CA-TC3',
+        'somali-tc1': 'SO-TC1', 'somali-tc2': 'SO-TC2', 'somali-tc3': 'SO-TC3',
+      };
+
+      // Transform to backend format: { taxCenterCode: { auditType: count, ... }, ... }
+      const taxCenterAllocations = {};
+      Object.entries(tcAllocations).forEach(([tcId, auditTypes]) => {
+        const backendTcCode = tcIdToBackendCode[tcId] || tcId;
+        const breakdown = {};
+        Object.entries(auditTypes || {}).forEach(([auditType, count]) => {
+          breakdown[auditType] = count || 0;
+        });
+        taxCenterAllocations[backendTcCode] = breakdown;
+      });
+
+      console.log('📦 Transformed for backend:', JSON.stringify(taxCenterAllocations, null, 2));
+
+      const response = await fetch(
+        `${API_BASE_URL}/ap/regional/plans/${planId}/distribute-to-tax-centers?regionCode=${backendRegionCode}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'regional-director-001'
+          },
+          body: JSON.stringify({ taxCenterAllocations })
+        }
+      );
+
+      console.log('📥 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Backend error response:', errorText);
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Distribution sent to tax centers successfully');
+      console.log('📊 Updated plan:', result);
+
+      this.clearCache(planId);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to send distribution to tax centers:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit regional aggregated feedback to director
+   * Endpoint: POST /api/v1/backoffice/ap/regions/{regionCode}/submit-feedback
+   */
+  async submitRegionalFeedback(planId, regionCode, feedbackText, tcAllocations, capacityOverrides, actorId) {
+    try {
+      console.log('📤 Submitting regional feedback for plan:', planId);
+      console.log('🔧 Capacity overrides:', capacityOverrides);
+
+      // Map frontend region ID to backend code
+      const regionIdToCode = {
+        'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB',
+        'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO',
+      };
+      const backendRegionCode = regionIdToCode[regionCode] || regionCode;
+
+      // Build aggregated feedback from plan allocations
+      // Fetch current plan to get distribution data
+      const planData = await this.getPlanById(planId);
+      const regionDist = planData?.distribution?.[regionCode] || planData?.distribution?.[backendRegionCode] || {};
+
+      const aggregatedFeedback = {};
+      Object.entries(regionDist).forEach(([auditType, count]) => {
+        let totalCapacity = 0;
+        
+        // Use override if provided, otherwise calculate from tcAllocations
+        if (capacityOverrides && capacityOverrides[auditType] !== undefined) {
+          totalCapacity = capacityOverrides[auditType];
+          console.log(`✅ Using override for ${auditType}: ${totalCapacity}`);
+        } else if (tcAllocations && Object.keys(tcAllocations).length > 0) {
+          Object.values(tcAllocations).forEach(tcAlloc => {
+            totalCapacity += (tcAlloc[auditType] || 0);
+          });
+        } else {
+          totalCapacity = count; // fallback if no tcAllocations provided
+        }
+
+        aggregatedFeedback[auditType] = {
+          totalRequested: count,
+          totalCapacity: totalCapacity,
+          totalGap: totalCapacity - count,
+          gapPercentage: count > 0 ? ((totalCapacity - count) / count) * 100 : 0,
+          taxCenterFeedbacks: [],
+          isRegionallyAdjusted: capacityOverrides && capacityOverrides[auditType] !== undefined
+        };
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/ap/regions/${backendRegionCode}/submit-feedback`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'regional-director'
+          },
+          body: JSON.stringify({
+            planId: planId,
+            aggregatedFeedback: aggregatedFeedback,
+            capacityOverrides: capacityOverrides || {}, // Send overrides to backend
+            regionalAnalysis: feedbackText
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      if (result.status === 'ERROR') {
+         throw new Error(result.error?.message || result.message || 'Backend returned an error');
+      }
+      console.log('✅ Regional feedback submitted:', result);
+      this.clearCache(planId);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to submit regional feedback:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit plan to senior management
+   * Endpoint: POST /api/v1/backoffice/ap/plans/{planId}/submit-to-management
+   */
+  async submitToSeniorManagement(planId, directorComment, actorId) {
+    try {
+      console.log('📤 Submitting plan to senior management:', planId);
+      const response = await fetch(
+        `${API_BASE_URL}/ap/plans/${planId}/submit-to-management`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'audit-director'
+          },
+          body: JSON.stringify({ directorComment: directorComment || '' })
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Plan submitted to senior management:', result);
+      this.clearCache(planId);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to submit to senior management:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Senior management decision (approve/reject)
+   * Endpoint: POST /api/v1/backoffice/ap/plans/{planId}/management-decision
+   */
+  async managementDecision(planId, decision, reason, actorId) {
+    try {
+      console.log('📋 Processing management decision:', decision, 'for plan:', planId);
+      const response = await fetch(
+        `${API_BASE_URL}/ap/plans/${planId}/management-decision`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || 'senior-management'
+          },
+          body: JSON.stringify({ decision: decision, reason: reason || '' })
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Management decision processed:', result);
+      this.clearCache(planId);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to process management decision:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get allocations for the logged-in tax center
+   * Endpoint: GET /api/v1/backoffice/ap/tax-centers/{taxCenterCode}/allocations
+   */
+  async getTaxCenterAllocationsFetch(taxCenterCode, actorId) {
+    try {
+      console.log('📋 Fetching allocations for tax center:', taxCenterCode);
+
+      const response = await fetch(
+        `${API_BASE_URL}/tax-centers/${taxCenterCode}/allocations`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': actorId || taxCenterCode
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Tax center allocations fetched:', result.allocations?.length || 0);
+
+      // Handle both array response and object with allocations property
+      let allocations = Array.isArray(result) ? result : (result.allocations || []);
+
+      return allocations;
+    } catch (error) {
+      console.error('❌ Failed to fetch tax center allocations:', error);
+      throw error;
+    }
   }
 }
 

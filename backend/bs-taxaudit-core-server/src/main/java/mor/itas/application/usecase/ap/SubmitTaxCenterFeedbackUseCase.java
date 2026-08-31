@@ -14,6 +14,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.OffsetDateTime;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;
+import mor.itas.persistence.jpa.repository.ap.PlanAllocationRepository;
+import java.util.UUID;
 
 /**
  * SubmitTaxCenterFeedbackUseCase - Use Case
@@ -35,6 +43,8 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
     
     private final AnnualAuditPlanRepository repository;
     private final TaxCenterFeedbackService feedbackService;
+    private final PlanAllocationRepository planAllocationRepository;
+    private final ObjectMapper objectMapper;
     
     // Mock storage for tax center feedback (in real implementation, use repository)
     private static final Map<String, List<TaxCenterFeedback>> feedbackStorage = new HashMap<>();
@@ -68,6 +78,26 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
         // Create feedback domain objects
         List<TaxCenterFeedback> feedbacks = new ArrayList<>();
         
+        // Fetch existing plan allocations for this region and tax center
+        List<PlanAllocationEntity> allocations = planAllocationRepository
+            .findByAnnualPlanIdAndRegionCode(planId, regionId)
+            .stream()
+            .filter(a -> taxCenterId.equals(a.getTaxCenterCode()))
+            .toList();
+
+        if (allocations.isEmpty()) {
+            throw new IllegalStateException("No allocations found for tax center " + taxCenterId);
+        }
+
+        PlanAllocationEntity allocation = allocations.get(0);
+        allocation.setTcFeedbackSubmitted(true);
+        allocation.setTcFeedbackSubmittedAt(OffsetDateTime.now());
+
+        // Update justification with first non-null justification (since frontend passes one per audit type but DB has 1)
+        String overallJustification = null;
+        ObjectNode adjustedAllocationsNode = objectMapper.createObjectNode();
+        int totalAdjusted = 0;
+
         for (Map.Entry<String, Map<String, Object>> entry : feedbackByAuditType.entrySet()) {
             String auditTypeId = entry.getKey();
             Map<String, Object> feedbackData = entry.getValue();
@@ -77,10 +107,19 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
             Integer acceptedCount = getIntValue(feedbackData, "accepted");
             String justification = (String) feedbackData.get("justification");
             
+            if (justification != null && !justification.trim().isEmpty() && overallJustification == null) {
+                overallJustification = justification;
+            }
+            
+            if (acceptedCount != null) {
+                adjustedAllocationsNode.put(auditTypeId, acceptedCount);
+                totalAdjusted += acceptedCount;
+            }
+
             @SuppressWarnings("unchecked")
             Map<String, Object> details = (Map<String, Object>) feedbackData.get("details");
             
-            // Create feedback using domain service
+            // Create feedback using domain service (still used for domain rules/storage if needed)
             TaxCenterFeedback feedback = feedbackService.createFeedback(
                 taxCenterId,
                 regionId,
@@ -94,6 +133,12 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
             
             feedbacks.add(feedback);
         }
+
+        allocation.setTcJustification(overallJustification);
+        allocation.setTcAdjustedCount(totalAdjusted);
+        allocation.setTcAdjustedAllocations(adjustedAllocationsNode);
+
+        planAllocationRepository.save(allocation);
         
         // Store feedback (mock implementation)
         String feedbackKey = planId + ":" + taxCenterId;

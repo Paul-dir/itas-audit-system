@@ -22,14 +22,13 @@ function reducer(state, action) {
   }
 }
 
-export function AppProvider({ children }) {
+function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, { plans: [], cases: [], users: [] });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Load users from local storage (seed data)
         const SEED_VERSION = 'v5-auditors-added';
         const seeded = storage.get(STORE_KEYS.SEEDED);
         if (seeded !== SEED_VERSION) {
@@ -39,7 +38,6 @@ export function AppProvider({ children }) {
           storage.set(STORE_KEYS.SEEDED, SEED_VERSION);
         }
 
-        // Fetch plans from backend API
         const { default: planService } = await import('../features/ap/services/planService.js');
         let plansFromBackend = [];
         try {
@@ -62,11 +60,7 @@ export function AppProvider({ children }) {
         console.error('Error initializing data:', error);
         dispatch({
           type: 'LOAD',
-          payload: {
-            users: SEED_USERS,
-            plans: SEED_PLANS,
-            cases: [],
-          },
+          payload: { users: SEED_USERS, plans: SEED_PLANS, cases: [] },
         });
       }
       setReady(true);
@@ -91,35 +85,36 @@ export function AppProvider({ children }) {
   const getPlan = (id) => state.plans.find(p => p.id === id);
   const getCase = (id) => state.cases.find(c => c.id === id);
 
+  /** Helper: reload all plans from backend and update local state */
+  const reloadPlans = async () => {
+    const { default: planService } = await import('../features/ap/services/planService.js');
+    try {
+      const allPlans = await planService.getPlans();
+      dispatch({ type: 'LOAD', payload: { ...state, plans: allPlans } });
+      return allPlans;
+    } catch (error) {
+      console.warn('⚠️ Failed to reload plans:', error);
+      return null;
+    }
+  };
+
   const actions = {
     // ── Plan creation ──────────────────────────────────────────────────────
     createPlan: async (data) => {
       try {
         const { default: planService } = await import('../features/ap/services/planService.js');
-        // Call backend API
         const createdPlan = await planService.createPlan(data, data.createdBy);
-        
-        // Store the distribution data that was sent (frontend keeps this)
         createdPlan.distribution = data.distribution;
-        
-        // Reload all plans from backend to ensure consistency
+
         try {
           const allPlans = await planService.getPlans();
-          // Add distribution back to all plans
           allPlans.forEach(plan => {
             if (plan.id === createdPlan.id) {
               plan.distribution = data.distribution;
             }
           });
-          dispatch({
-            type: 'LOAD',
-            payload: {
-              ...state,
-              plans: allPlans,
-            },
-          });
+          dispatch({ type: 'LOAD', payload: { ...state, plans: allPlans } });
         } catch (error) {
-          // If reload fails, at least add the created plan to local state
           const plan = {
             id: createdPlan.id,
             ...data,
@@ -129,7 +124,7 @@ export function AppProvider({ children }) {
           };
           dispatch({ type: 'CREATE_PLAN', payload: plan });
         }
-        
+
         return createdPlan;
       } catch (error) {
         console.error("Error creating plan:", error);
@@ -142,37 +137,65 @@ export function AppProvider({ children }) {
       if (plan) dispatch({ type: 'UPDATE_PLAN', payload: { ...plan, ...updates } });
     },
 
+    // Planning Team amends plan allocations and resubmits to Director
+    amendPlan: async (planId, actorId, updates) => {
+      try {
+        // Convert frontend distribution format to backend plannedChanges format
+        const plannedChanges = {};
+        if (updates.distribution) {
+          Object.entries(updates.distribution).forEach(([regionId, auditTypes]) => {
+            const regionCodeMap = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+            const code = regionCodeMap[regionId] || regionId;
+            plannedChanges[code] = {};
+            if (auditTypes && typeof auditTypes === 'object') {
+              Object.entries(auditTypes).forEach(([auditType, count]) => {
+                plannedChanges[code][auditType] = parseInt(count) || 0;
+              });
+            }
+          });
+        }
+
+        // The /amend endpoint saves changes AND transitions to SUBMITTED_TO_DIRECTOR
+        const amendResponse = await fetch(`/api/v1/backoffice/ap/plans/${planId}/amend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'planning-team' },
+          body: JSON.stringify({
+            amendmentRound: 1,
+            plannedChanges,
+            planningTeamComments: updates.amendmentComment || 'Plan amended by Planning Team'
+          })
+        });
+
+        if (!amendResponse.ok) {
+          const errorText = await amendResponse.text();
+          throw new Error(`Amend API error: ${amendResponse.status} - ${errorText}`);
+        }
+
+        console.log('✅ Plan amended and resubmitted to Director:', planId);
+        await reloadPlans();
+        return await amendResponse.json();
+      } catch (error) {
+        console.error('❌ Failed to amend plan:', error);
+        throw error;
+      }
+    },
+
     // ── Planning Team → Director ───────────────────────────────────────────
     submitToDirector: async (planId, actorId) => {
       try {
         const { default: planService } = await import('../features/ap/services/planService.js');
-        // Call backend API
         const updatedPlan = await planService.submitToDirector(planId, actorId);
-        
-        // Reload all plans from backend to ensure consistency
+
         try {
           const allPlans = await planService.getPlans();
-          dispatch({
-            type: 'LOAD',
-            payload: {
-              ...state,
-              plans: allPlans,
-            },
-          });
+          dispatch({ type: 'LOAD', payload: { ...state, plans: allPlans } });
         } catch (error) {
-          // If reload fails, at least update the submitted plan
           const plan = getPlan(planId);
           if (plan) {
-            dispatch({
-              type: 'UPDATE_PLAN',
-              payload: {
-                ...plan,
-                status: updatedPlan.status || 'SUBMITTED_TO_DIRECTOR',
-              },
-            });
+            dispatch({ type: 'UPDATE_PLAN', payload: { ...plan, status: updatedPlan.status || 'SUBMITTED_TO_DIRECTOR' } });
           }
         }
-        
+
         return updatedPlan;
       } catch (error) {
         console.error("Error submitting plan to Director:", error);
@@ -181,373 +204,483 @@ export function AppProvider({ children }) {
     },
 
     // ── Director actions ───────────────────────────────────────────────────
-    approvePlan: (planId, actorId, comment) => {
-      const plan = getPlan(planId);
-      if (plan) dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline({ ...plan, directorComment: comment }, 'DIRECTOR_APPROVED', actorId, comment || 'Approved'),
-      });
+    approvePlan: async (planId, directorId, comment) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': directorId || 'director' },
+          body: JSON.stringify({ reason: comment || '' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Plan approved:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to approve plan:', error);
+        throw error;
+      }
     },
 
-    requestRevision: (planId, actorId, comment) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      const updated = {
-        ...plan,
-        directorComment: comment,
-        revisions: [...(plan.revisions || []), { comment, timestamp: new Date().toISOString(), by: actorId }],
-      };
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, 'REVISION_REQUESTED', actorId, comment) });
+    sendToRegions: async (planId, directorId, deploymentNote) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/send-to-regions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': directorId || 'director' },
+          body: JSON.stringify({ deploymentNote: deploymentNote || '' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Plan sent to regions:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to send plan to regions:', error);
+        throw error;
+      }
     },
 
-    sendToRegions: (planId, actorId) => {
-      const plan = getPlan(planId);
-      if (plan) dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline(plan, 'AWAITING_REGIONAL_FEEDBACK', actorId, 'Sent to all regions for feedback'),
-      });
+    // ✅ FIXED: Director sends back for amendment — calls backend API
+    sendAmendmentToPlanningTeam: async (planId, actorId, comment) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/request-amendment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'director' },
+          body: JSON.stringify({ feedback: comment || 'Amendment requested' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Amendment requested:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to request amendment:', error);
+        throw error;
+      }
     },
 
-    // Director: after all feedback collected, send back to planning team for amendment
-    sendAmendmentToPlanningTeam: (planId, actorId, comment) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      const updated = {
-        ...plan,
-        amendmentComment: comment,
-        revisions: [...(plan.revisions || []), { comment, timestamp: new Date().toISOString(), by: actorId, type: 'amendment' }],
-      };
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, 'AMENDMENT_REQUIRED', actorId, comment || 'Feedback sent for amendment') });
+    requestRevision: async (planId, actorId, comment) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/request-amendment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'director' },
+          body: JSON.stringify({ feedback: comment || 'Revision requested' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Revision requested:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to request revision:', error);
+        throw error;
+      }
     },
 
-    // Director: submit amended plan directly to senior management (after amendment cycle)
-    submitToSeniorMgmt: (planId, actorId) => {
-      const plan = getPlan(planId);
-      if (plan) dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline(plan, 'SUBMITTED_TO_SENIOR_MGMT', actorId, 'Submitted for senior management approval'),
-      });
+    // ✅ FIXED: Director submits to Senior Management — calls backend API
+    submitToSeniorMgmt: async (planId, actorId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/submit-to-management`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'director' },
+          body: JSON.stringify({ directorComment: 'Submitted for final approval' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Submitted to Senior Management:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to submit to Senior Management:', error);
+        throw error;
+      }
     },
 
-    // Director: send senior-management-approved plan to regions (NOT finalized yet!)
-    sendApprovedToRegions: (planId, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline(plan, 'APPROVED_TO_REGIONS', actorId, 'Approved plan sent to all regions - awaiting regional deployment to tax centers'),
-      });
-    },
+    // ✅ FIXED: Director distributes approved plan to regions — calls backend API
+    sendApprovedToRegions: async (planId, actorId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/distribute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'director' }
+        });
 
-    // NEW: Regional Director deploys to their tax centers
-    deployToTaxCenters: (planId, regionId, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      
-      // Mark this region as deployed
-      const deployments = plan.regionalDeployments || {};
-      deployments[regionId] = {
-        deployedAt: new Date().toISOString(),
-        deployedBy: actorId,
-        status: 'DEPLOYED'
-      };
-      
-      // Check if all regions have deployed
-      const allRegionsDeployed = REGIONS.every(r => deployments[r.id]);
-      
-      const newStatus = allRegionsDeployed ? 'FINALIZED' : 'APPROVED_TO_REGIONS';
-      const msg = allRegionsDeployed 
-        ? `All regions deployed - Plan finalized` 
-        : `${regionId} deployed to tax centers`;
-      
-      const updated = {
-        ...plan,
-        regionalDeployments: deployments
-      };
-      
-      dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline(updated, newStatus, actorId, msg)
-      });
-      
-      // If all regions deployed, generate cases
-      if (allRegionsDeployed) {
-        dispatch({ type: 'ADD_CASES', payload: generateCases(planId, plan.distribution, plan.regionalFeedback || {}) });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Approved plan distributed to regions:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to distribute approved plan:', error);
+        throw error;
       }
     },
 
     // ── Regional actions ───────────────────────────────────────────────────
+    distributeToTaxCenters: async (planId, regionId, tcAllocations, actorId) => {
+      try {
+        console.log('📤 Distributing plan to tax centers...');
 
-    // Step 1: Regional Director distributes to Tax Centers (persists allocations so TCs can see their plan)
-    distributeToTaxCenters: (planId, regionId, tcAllocations, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      const updated = {
-        ...plan,
-        tcDistributions: {
-          ...(plan.tcDistributions || {}),
-          [regionId]: {
-            allocations: tcAllocations,
-            distributedAt: new Date().toISOString(),
-            distributedBy: actorId,
-          },
-        },
-      };
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, plan.status, actorId, `${regionId} distributed allocations to tax centers`) });
-    },
+        // ✅ Map frontend IDs to backend codes
+        const regionIdToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+        const tcIdToBackendCode = {
+          'addis_ababa-tc1': 'AA-TC1', 'addis_ababa-tc2': 'AA-TC2', 'addis_ababa-tc3': 'AA-TC3',
+          'amhara-tc1': 'BA-TC1', 'amhara-tc2': 'BA-TC2', 'amhara-tc3': 'BA-TC3',
+          'oromia-tc1': 'BB-TC1', 'oromia-tc2': 'BB-TC2', 'oromia-tc3': 'BB-TC3',
+          'dire_dawa-tc1': 'AB-TC1', 'dire_dawa-tc2': 'AB-TC2', 'dire_dawa-tc3': 'AB-TC3',
+          'snnpr-tc1': 'CA-TC1', 'snnpr-tc2': 'CA-TC2', 'snnpr-tc3': 'CA-TC3',
+          'somali-tc1': 'SO-TC1', 'somali-tc2': 'SO-TC2', 'somali-tc3': 'SO-TC3',
+        };
+        const backendRegionCode = regionIdToCode[regionId] || regionId;
 
-    // Step 2: Regional Director submits consolidated feedback
-    // 🎯 DEMO MODE: Auto-fills missing tax centers with defaults
-    submitRegionalFeedback: (planId, regionId, feedbackText, taxCenterAllocations, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-
-      // 🚀 DEMO MODE: Auto-fill missing tax centers with default allocations
-      // If TC-1 submits feedback but TC-2 and TC-3 don't, we use their original allocation
-      const taxCenters = getTaxCentersForRegion(regionId);
-      const originalDistribution = plan.distribution?.[regionId] || {};
-      
-      // Build complete tax center allocations (user-submitted + auto-filled defaults)
-      const completeTCAllocations = {};
-      
-      // Use user-provided allocations first, fall back to equal distribution
-      taxCenters.forEach((tc, index) => {
-        if (taxCenterAllocations && taxCenterAllocations[tc.id]) {
-          // User provided allocation for this TC
-          completeTCAllocations[tc.id] = taxCenterAllocations[tc.id];
-        } else {
-          // Auto-fill with default proportional allocation
-          // Default: distribute remaining cases evenly among tax centers
-          const defaultShare = {};
-          Object.keys(originalDistribution).forEach(auditType => {
-            const totalForType = originalDistribution[auditType] || 0;
-            const perTC = Math.floor(totalForType / taxCenters.length);
-            const remainder = totalForType % taxCenters.length;
-            // Give remainder to first TCs
-            defaultShare[auditType] = perTC + (index < remainder ? 1 : 0);
-          });
-          completeTCAllocations[tc.id] = defaultShare;
-        }
-      });
-
-      const newFeedback = {
-        ...plan.regionalFeedback,
-        [regionId]: {
-          feedback: feedbackText,
-          taxCenterAllocations: completeTCAllocations,
-          submittedAt: new Date().toISOString(),
-          submittedBy: actorId,
-          autoFilled: !taxCenterAllocations || Object.keys(taxCenterAllocations).length < taxCenters.length,
-        },
-      };
-      
-      // 🚀 DEMO MODE: One regional feedback auto-routes back to Director
-      // Director will review and send to Planning Team for amendments
-      // Also auto-fills other regions with default allocations
-      const hasAtLeastOneFeedback = Object.keys(newFeedback).length > 0;
-      
-      if (hasAtLeastOneFeedback) {
-        // Auto-fill missing regions with their default allocations
-        const allRegions = REGIONS;
-        allRegions.forEach(region => {
-          if (!newFeedback[region.id] && plan.distribution?.[region.id]) {
-            // This region hasn't submitted - auto-fill with defaults
-            const regionTCs = getTaxCentersForRegion(region.id);
-            const regionDist = plan.distribution[region.id];
-            const autoTCAlloc = {};
-            
-            regionTCs.forEach((tc, idx) => {
-              const tcShare = {};
-              Object.keys(regionDist).forEach(auditType => {
-                const total = regionDist[auditType] || 0;
-                const perTC = Math.floor(total / regionTCs.length);
-                const remainder = total % regionTCs.length;
-                tcShare[auditType] = perTC + (idx < remainder ? 1 : 0);
-              });
-              autoTCAlloc[tc.id] = tcShare;
-            });
-            
-            newFeedback[region.id] = {
-              feedback: `Auto-generated: ${region.name} allocation maintained as planned.`,
-              taxCenterAllocations: autoTCAlloc,
-              submittedAt: new Date().toISOString(),
-              submittedBy: 'system',
-              autoFilled: true,
-            };
-          }
+        // Transform tcAllocations to use backend TC codes
+        const backendTcAllocations = {};
+        Object.entries(tcAllocations).forEach(([tcId, auditTypes]) => {
+          const backendTcCode = tcIdToBackendCode[tcId] || tcId;
+          backendTcAllocations[backendTcCode] = auditTypes;
         });
-      }
-      
-      // Route to FEEDBACK_COLLECTED (Director reviews) instead of directly to Planning Team
-      const newStatus = hasAtLeastOneFeedback ? 'FEEDBACK_COLLECTED' : 'AWAITING_REGIONAL_FEEDBACK';
-      const msg = hasAtLeastOneFeedback 
-        ? `Regional feedback from ${regionId} received - All regions auto-filled, ready for Director review` 
-        : `${regionId} submitted feedback`;
-      
-      // Update plan with feedback
-      const updated = {
-        ...plan,
-        regionalFeedback: newFeedback,
-        feedbackNote: `Regional feedback received from ${regionId}. Other regions auto-filled with default allocations.`,
-        revisions: [
-          ...(plan.revisions || []),
+
+        const response = await fetch(
+          `/api/v1/backoffice/ap/regional/plans/${planId}/distribute-to-tax-centers?regionCode=${backendRegionCode}`,
           {
-            comment: `Regional feedback from ${regionId}, other regions auto-filled`,
-            timestamp: new Date().toISOString(),
-            by: actorId,
-            type: 'feedback',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'regional-director' },
+            body: JSON.stringify({ regionCode: backendRegionCode, taxCenterAllocations: backendTcAllocations })
           }
-        ],
-      };
-      
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, newStatus, actorId, msg) });
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Plan distributed to tax centers:', result);
+
+        const plan = getPlan(planId);
+        if (plan) {
+          const updated = {
+            ...plan,
+            regionalDeployments: {
+              ...(plan.regionalDeployments || {}),
+              [regionId]: { deployedAt: new Date().toISOString(), deployedBy: actorId, taxCenterCount: Object.keys(tcAllocations).length }
+            },
+            tcDistributions: {
+              ...(plan.tcDistributions || {}),
+              [regionId]: { allocations: tcAllocations, distributedAt: new Date().toISOString(), distributedBy: actorId, sentToBackend: true },
+            },
+          };
+          dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, plan.status, actorId, `Distributed allocations to tax centers`) });
+        }
+
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to distribute to tax centers:', error);
+        throw error;
+      }
     },
 
-    // NEW: Override regional feedback aggregation (Director can modify collected feedback before sending to amendment)
+    // ✅ FIXED: Regional feedback submission — calls backend API
+    submitRegionalFeedback: async (planId, regionId, feedbackText, taxCenterAllocations, actorId) => {
+      try {
+        console.log('📤 Submitting regional feedback to backend...');
+
+        const plan = getPlan(planId);
+        if (!plan) throw new Error('Plan not found');
+
+        const regionDist = plan.distribution?.[regionId] || plan.regionAllocatedCases || {};
+
+        const aggregatedFeedback = {};
+        Object.keys(regionDist).forEach(auditType => {
+          let totalRequested = 0;
+          let totalCapacity = 0;
+          const tcFeedbacks = [];
+
+          if (taxCenterAllocations) {
+            Object.entries(taxCenterAllocations).forEach(([tcId, allocation]) => {
+              const requested = allocation[auditType] || 0;
+              totalRequested += requested;
+              totalCapacity += requested;
+              tcFeedbacks.push({ taxCenterId: tcId, requested, accepted: requested });
+            });
+          }
+
+          aggregatedFeedback[auditType] = {
+            totalRequested, totalCapacity,
+            totalGap: totalCapacity - totalRequested,
+            gapPercentage: totalRequested > 0 ? ((totalCapacity - totalRequested) / totalRequested * 100) : 0,
+            taxCenterFeedbacks: tcFeedbacks
+          };
+        });
+
+        // ✅ Map frontend region ID to backend code
+        const regionIdToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+        const backendRegionCode = regionIdToCode[regionId] || regionId;
+
+        const response = await fetch(`/api/v1/backoffice/ap/regions/${backendRegionCode}/submit-feedback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'regional-director' },
+          body: JSON.stringify({ planId, aggregatedFeedback, regionalAnalysis: feedbackText })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Regional feedback submitted:', result);
+
+        const planUpdated = getPlan(planId);
+        if (planUpdated) {
+          const updated = {
+            ...planUpdated,
+            regionalFeedback: {
+              ...(planUpdated.regionalFeedback || {}),
+              [regionId]: { feedback: feedbackText, aggregatedFeedback, submittedAt: new Date().toISOString(), submittedBy: actorId, submitted: true }
+            },
+          };
+          dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, planUpdated.status, actorId, `Submitted regional feedback`) });
+        }
+
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to submit regional feedback:', error);
+        throw error;
+      }
+    },
+
     overrideRegionalFeedback: (planId, regionId, overriddenAllocations, overrideComment, actorId) => {
       const plan = getPlan(planId);
       if (!plan) return;
 
       const updatedFeedback = {
         ...plan.regionalFeedback,
-        [regionId]: {
-          ...plan.regionalFeedback?.[regionId],
-          taxCenterAllocations: overriddenAllocations,
-          overriddenAt: new Date().toISOString(),
-          overriddenBy: actorId,
-          overrideComment: overrideComment,
-          isOverridden: true,
-        }
+        [regionId]: { ...plan.regionalFeedback?.[regionId], taxCenterAllocations: overriddenAllocations, overriddenAt: new Date().toISOString(), overriddenBy: actorId, overrideComment, isOverridden: true }
       };
 
-      const updated = {
-        ...plan,
-        regionalFeedback: updatedFeedback,
-        revisions: [
-          ...(plan.revisions || []),
-          {
-            comment: `Director overrode ${regionId} feedback allocation: ${overrideComment}`,
-            timestamp: new Date().toISOString(),
-            by: actorId,
-            type: 'regional_override',
-          }
-        ],
-      };
-
-      dispatch({ type: 'UPDATE_PLAN', payload: updated });
+      dispatch({ type: 'UPDATE_PLAN', payload: { ...plan, regionalFeedback: updatedFeedback } });
     },
 
+    // ✅ FIXED: Tax center feedback — calls backend API with correct parameters
     submitTaxCenterFeedback: async (planId, regionId, taxCenterId, feedbackText, adjustedAllocation, actorId) => {
       try {
-        const plan = getPlan(planId);
-        if (!plan) return;
+        console.log('📤 Submitting tax center feedback...');
+        console.log('   Plan:', planId, 'TC:', taxCenterId, 'Region:', regionId);
 
-        // Sum the adjusted allocations across all audit types
         const totalAdjusted = Object.values(adjustedAllocation).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
 
-        // Find the specific allocation ID for this tax center
-        const allocation = (plan.allocations || []).find(a => a.taxCenterCode === taxCenterId);
-        if (!allocation) {
-           console.error("Allocation not found for tax center", taxCenterId);
-           return;
+        // Get the allocation ID for this tax center
+        const plan = getPlan(planId);
+        if (!plan) throw new Error('Plan not found');
+
+        // Try to find allocation from local state or fetch from backend
+        let allocationId = null;
+        if (plan.allocations) {
+          const allocation = plan.allocations.find(a => a.taxCenterCode === taxCenterId || a.taxCenterId === taxCenterId);
+          if (allocation) allocationId = allocation.id;
         }
 
-        const { default: planService } = await import('../features/ap/services/planService.js');
-        const updatedPlan = await planService.submitTaxCenterFeedback(planId, allocation.id, {
-          tcAdjustedCount: totalAdjusted,
-          tcJustification: feedbackText
-        }, actorId);
+        if (allocationId) {
+          // Use the workflow endpoint for per-audit-type feedback
+          const response = await fetch(
+            `/api/v1/backoffice/ap/plans/workflow/${planId}/allocations/${taxCenterId}/feedback`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || taxCenterId },
+              body: JSON.stringify({ adjustedCount: totalAdjusted, justification: feedbackText || 'Tax center feedback' })
+            }
+          );
 
-        // We can just replace the plan in our local state with the backend's updated version.
-        // We will merge it with our local timeline/frontend specific fields so the UI doesn't break
-        const mergedPlan = {
-          ...plan,
-          ...updatedPlan,
-          // Retain legacy frontend structure for now to not break other views
-          taxCenterFeedback: {
-            ...(plan.taxCenterFeedback || {}),
-            [regionId]: {
-              ...(plan.taxCenterFeedback?.[regionId] || {}),
-              [taxCenterId]: {
-                feedback: feedbackText,
-                adjustedAllocation,
-                submittedAt: new Date().toISOString(),
-                submittedBy: actorId,
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Backend error:', errorText);
+            throw new Error(`API error: ${response.status} - ${errorText}`);
+          }
+        } else {
+          // Use the tax-center acknowledge endpoint
+          const tcAllocations = await this.getTaxCenterAllocationsForPlan(planId, taxCenterId);
+          if (tcAllocations && tcAllocations.length > 0) {
+            const allocation = tcAllocations[0];
+            const response = await fetch(
+              `/api/v1/backoffice/ap/tax-center/allocations/${allocation.allocationId || allocation.id}/acknowledge`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || taxCenterId },
+                body: JSON.stringify({
+                  taxCenterId,
+                  feedback: feedbackText || '',
+                  adjustedAllocations: adjustedAllocation,
+                  totalAdjusted,
+                  originalTotal: allocation.proposedCount || 0
+                })
               }
+            );
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`API error: ${response.status} - ${errorText}`);
             }
           }
-        };
+        }
 
-        dispatch({ 
-          type: 'UPDATE_PLAN', 
-          payload: timeline(mergedPlan, plan.status, actorId, `${taxCenterId} submitted feedback`)
-        });
+        console.log('✅ Tax center feedback submitted');
+
+        // Update local state
+        const planUpdated = getPlan(planId);
+        if (planUpdated) {
+          const mergedPlan = {
+            ...planUpdated,
+            taxCenterFeedback: {
+              ...(planUpdated.taxCenterFeedback || {}),
+              [regionId]: {
+                ...(planUpdated.taxCenterFeedback?.[regionId] || {}),
+                [taxCenterId]: { feedback: feedbackText, adjustedAllocation, submittedAt: new Date().toISOString(), submittedBy: actorId }
+              }
+            }
+          };
+          dispatch({ type: 'UPDATE_PLAN', payload: timeline(mergedPlan, planUpdated.status, actorId, `${taxCenterId} submitted feedback`) });
+        }
       } catch (error) {
-        console.error("Failed to submit feedback:", error);
+        console.error("❌ Failed to submit tax center feedback:", error);
+        throw error;
       }
     },
+
+    getTaxCenterAllocationsForPlan: async (planId, taxCenterId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/tax-center/allocations?taxCenterId=${taxCenterId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) return [];
+        const result = await response.json();
+        return result.data || [];
+      } catch (error) {
+        return [];
+      }
+    },
+
     // ── Senior Management ──────────────────────────────────────────────────
-    approveBySenior: (planId, actorId, comment) => {
-      const plan = getPlan(planId);
-      if (plan) dispatch({
-        type: 'UPDATE_PLAN',
-        payload: timeline({ ...plan, seniorComment: comment }, 'SENIOR_MGMT_APPROVED', actorId, comment || 'Approved'),
-      });
+    // ✅ FIXED: Senior Management approves — calls backend API
+    approveBySenior: async (planId, actorId, comment) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/management-decision`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'management' },
+          body: JSON.stringify({ decision: 'APPROVE', managementComment: comment || 'Approved by Senior Management' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Senior Management approved:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to approve by Senior Management:', error);
+        throw error;
+      }
     },
 
-    rejectBySenior: (planId, actorId, comment) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      const updated = {
-        ...plan,
-        seniorComment: comment,
-        revisions: [...(plan.revisions || []), { comment, timestamp: new Date().toISOString(), by: actorId, type: 'senior_rejection' }],
-      };
-      // Use distinct status so Director can distinguish Senior rejection from Director revision
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(updated, 'SENIOR_MGMT_REJECTED', actorId, comment) });
+    // ✅ FIXED: Senior Management rejects — calls backend API
+    rejectBySenior: async (planId, actorId, comment) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/${planId}/management-decision`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'management' },
+          body: JSON.stringify({ decision: 'REJECT', managementComment: comment || 'Rejected by Senior Management' })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Senior Management rejected:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to reject by Senior Management:', error);
+        throw error;
+      }
     },
 
-    // Legacy: finalize directly (kept for backward compat)
-    finalizePlan: (planId, actorId) => {
-      const plan = getPlan(planId);
-      if (!plan) return;
-      dispatch({ type: 'UPDATE_PLAN', payload: timeline(plan, 'FINALIZED', actorId, 'Plan finalized and cases deployed') });
-      dispatch({ type: 'ADD_CASES', payload: generateCases(planId, plan.distribution, plan.regionalFeedback || {}) });
+    finalizePlan: async (planId, actorId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/workflow/${planId}/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': actorId || 'director' }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Plan finalized:', planId);
+        await reloadPlans();
+        return result;
+      } catch (error) {
+        console.error('❌ Failed to finalize plan:', error);
+        throw error;
+      }
     },
 
     // ── Case assignment ────────────────────────────────────────────────────
     assignCaseToTeamLeader: (caseId, teamLeaderId) => {
       const c = getCase(caseId);
-      if (c) dispatch({
-        type: 'UPDATE_CASE',
-        payload: { ...c, assignedTeamLeader: teamLeaderId, status: 'ASSIGNED', assignedAt: new Date().toISOString() },
-      });
+      if (c) dispatch({ type: 'UPDATE_CASE', payload: { ...c, assignedTeamLeader: teamLeaderId, status: 'ASSIGNED', assignedAt: new Date().toISOString() } });
     },
 
     assignCasesToTeamLeader: (caseIds, teamLeaderId) => {
       caseIds.forEach(caseId => {
         const c = getCase(caseId);
-        if (c) dispatch({
-          type: 'UPDATE_CASE',
-          payload: { ...c, assignedTeamLeader: teamLeaderId, status: 'ASSIGNED', assignedAt: new Date().toISOString() },
-        });
+        if (c) dispatch({ type: 'UPDATE_CASE', payload: { ...c, assignedTeamLeader: teamLeaderId, status: 'ASSIGNED', assignedAt: new Date().toISOString() } });
       });
     },
 
     assignCaseToAuditor: (caseId, auditorId) => {
       const c = getCase(caseId);
-      if (c) dispatch({
-        type: 'UPDATE_CASE',
-        payload: { ...c, assignedAuditor: auditorId, status: 'IN_PROGRESS', startDate: new Date().toISOString() },
-      });
+      if (c) dispatch({ type: 'UPDATE_CASE', payload: { ...c, assignedAuditor: auditorId, status: 'IN_PROGRESS', startDate: new Date().toISOString() } });
     },
 
     updateCaseStatus: (caseId, status, notes = '') => {
       const c = getCase(caseId);
-      if (c) dispatch({ type: 'UPDATE_CASE', payload: {
-        ...c, status, notes: notes || c.notes,
-        ...(status === 'COMPLETED' ? { completedDate: new Date().toISOString() } : {}),
-      }});
+      if (c) dispatch({ type: 'UPDATE_CASE', payload: { ...c, status, notes: notes || c.notes, ...(status === 'COMPLETED' ? { completedDate: new Date().toISOString() } : {}) } });
     },
 
     updateCasePriority: (caseId, priority) => {
@@ -555,29 +688,81 @@ export function AppProvider({ children }) {
       if (c) dispatch({ type: 'UPDATE_CASE', payload: { ...c, priority } });
     },
 
-    // NEW: Add manual cases (not linked to a plan)
     addManualCases: (cases) => {
       dispatch({ type: 'ADD_CASES', payload: cases });
     },
 
-    // NEW: Mark plan as assigned (prevent duplicate TL assignment)
     markPlanAsAssigned: (planId, taxCenter) => {
       const plan = getPlan(planId);
       if (!plan) return;
-      
       const assignments = plan.teamLeaderAssignments || {};
-      assignments[taxCenter] = {
-        assignedAt: new Date().toISOString(),
-        status: 'ASSIGNED'
-      };
-      
-      dispatch({
-        type: 'UPDATE_PLAN',
-        payload: {
-          ...plan,
-          teamLeaderAssignments: assignments
+      assignments[taxCenter] = { assignedAt: new Date().toISOString(), status: 'ASSIGNED' };
+      dispatch({ type: 'UPDATE_PLAN', payload: { ...plan, teamLeaderAssignments: assignments } });
+    },
+
+    loadPlansForRegion: async (regionCode) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/regional/plans?regionCode=${regionCode}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': regionCode || 'regional-director' }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} - ${errorText}`);
         }
-      });
+
+        const result = await response.json();
+        console.log(`✅ Loaded regional plans for ${regionCode}:`, result.data.length);
+        return result.data;
+      } catch (error) {
+        console.error('❌ Failed to load regional plans:', error);
+        throw error;
+      }
+    },
+
+    loadPendingDirectorPlans: async (directorId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/pending-director-review`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': directorId || 'director' }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn('⚠️ Failed to fetch pending director plans:', errorText);
+          return [];
+        }
+
+        const result = await response.json();
+        console.log('✅ Loaded pending director plans:', result.data?.length || 0);
+        return result.data || [];
+      } catch (error) {
+        console.error('❌ Failed to load pending director plans:', error);
+        return [];
+      }
+    },
+
+    loadActivePlans: async (directorId) => {
+      try {
+        const response = await fetch(`/api/v1/backoffice/ap/plans/active-plans`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': directorId || 'director' }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn('⚠️ Failed to fetch active plans:', errorText);
+          return [];
+        }
+
+        const result = await response.json();
+        console.log('✅ Loaded active plans from backend:', result.data?.length || 0);
+        return result.data || [];
+      } catch (error) {
+        console.error('❌ Failed to load active plans:', error);
+        return [];
+      }
     },
   };
 
@@ -609,5 +794,7 @@ export function AppProvider({ children }) {
     </AppContext.Provider>
   );
 }
+
+export { AppProvider };
 
 export const useApp = () => useContext(AppContext);
