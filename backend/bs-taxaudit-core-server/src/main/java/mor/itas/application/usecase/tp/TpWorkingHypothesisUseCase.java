@@ -1,10 +1,10 @@
-package mor.itas.application.usecase.ap;
+package mor.itas.application.usecase.tp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
-import mor.itas.persistence.jpa.entity.ap.TpWorkingHypothesisEntity;
+import mor.itas.persistence.jpa.entity.tp.TpWorkingHypothesisEntity;
 import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,12 +20,13 @@ public class TpWorkingHypothesisUseCase {
     private final ApAuditCaseRepository auditCaseRepository;
 
     @Transactional
-    public void saveWorkingHypothesis(UUID caseId, String description, String issue, String rationale, 
-                                      BigDecimal revenueAtRisk, JsonNode calculationDetails, String currentUserId) {
+    public void saveWorkingHypothesis(UUID caseId, String hypothesisDescription,
+                                      String identifiedIssue, String economicRationale,
+                                      BigDecimal revenueAtRisk, JsonNode calculationDetails,
+                                      String currentUserId) {
         log.info("Saving TP Working Hypothesis for case: {}", caseId);
-
         ApAuditCaseEntity auditCase = auditCaseRepository.findById(caseId)
-                .orElseThrow(() -> new IllegalArgumentException("Case not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
         TpWorkingHypothesisEntity hypothesis = auditCase.getTpWorkingHypothesis();
         if (hypothesis == null) {
@@ -36,9 +37,9 @@ public class TpWorkingHypothesisUseCase {
                     .build();
         }
 
-        hypothesis.setHypothesisDescription(description);
-        hypothesis.setIdentifiedIssue(issue);
-        hypothesis.setEconomicRationale(rationale);
+        hypothesis.setHypothesisDescription(hypothesisDescription);
+        hypothesis.setIdentifiedIssue(identifiedIssue);
+        hypothesis.setEconomicRationale(economicRationale);
         hypothesis.setRevenueAtRisk(revenueAtRisk);
         hypothesis.setCalculationDetails(calculationDetails);
         hypothesis.setUpdatedBy(currentUserId);

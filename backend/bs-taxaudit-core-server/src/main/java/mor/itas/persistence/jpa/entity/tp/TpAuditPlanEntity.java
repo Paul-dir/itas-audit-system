@@ -1,8 +1,9 @@
-package mor.itas.persistence.jpa.entity.ap;
+package mor.itas.persistence.jpa.entity.tp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import lombok.*;
+import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -13,11 +14,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "tp_audit_plan")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class TpAuditPlanEntity {
 
     @Id

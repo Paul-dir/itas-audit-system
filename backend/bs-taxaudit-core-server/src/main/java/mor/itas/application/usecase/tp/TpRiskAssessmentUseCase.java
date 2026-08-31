@@ -1,10 +1,10 @@
-package mor.itas.application.usecase.ap;
+package mor.itas.application.usecase.tp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
-import mor.itas.persistence.jpa.entity.ap.TpRiskAssessmentEntity;
+import mor.itas.persistence.jpa.entity.tp.TpRiskAssessmentEntity;
 import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +21,7 @@ public class TpRiskAssessmentUseCase {
     @Transactional
     public void saveRiskAssessment(UUID caseId, String riskLevel, JsonNode riskDetails, String comments, String currentUserId) {
         log.info("Saving TP Risk Assessment for case: {}", caseId);
-        
-        ApAuditCaseEntity auditCase = auditCaseRepository.findById(caseId)
-                .orElseThrow(() -> new IllegalArgumentException("Case not found"));
-
-        if (!"TRANSFER_PRICING".equals(auditCase.getAuditType())) {
-            throw new IllegalStateException("Case is not a Transfer Pricing audit");
-        }
+        ApAuditCaseEntity auditCase = getValidTpCase(caseId);
 
         TpRiskAssessmentEntity assessment = auditCase.getTpRiskAssessment();
         if (assessment == null) {
@@ -42,13 +36,21 @@ public class TpRiskAssessmentUseCase {
         assessment.setRiskDetails(riskDetails);
         assessment.setComments(comments);
         assessment.setUpdatedBy(currentUserId);
-        
-        // If transitioning from ASSIGNED_TO_TEAM_LEADER, update phase
-        if ("ASSIGNED_TO_TEAM_LEADER".equals(auditCase.getStatus())) {
-            auditCase.setStatus("DETAILED_RISK_ASSESSMENT");
-        }
 
+        if ("ASSIGNED_TO_TEAM_LEADER".equals(auditCase.getStatus()) || "ASSIGNED_TO_COMMITTEE".equals(auditCase.getStatus())) {
+            auditCase.setStatus("IN_PROGRESS");
+        }
+        auditCase.setTpCurrentPhase("DETAILED_RISK_ASSESSMENT");
         auditCase.setTpRiskAssessment(assessment);
         auditCaseRepository.save(auditCase);
+    }
+
+    private ApAuditCaseEntity getValidTpCase(UUID caseId) {
+        ApAuditCaseEntity c = auditCaseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        if (!"TRANSFER_PRICING".equals(c.getAuditType())) {
+            throw new IllegalStateException("Case is not a Transfer Pricing audit");
+        }
+        return c;
     }
 }

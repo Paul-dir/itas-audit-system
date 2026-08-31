@@ -1,10 +1,10 @@
-package mor.itas.application.usecase.ap;
+package mor.itas.application.usecase.tp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
-import mor.itas.persistence.jpa.entity.ap.TpAuditPlanEntity;
+import mor.itas.persistence.jpa.entity.tp.TpAuditPlanEntity;
 import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,13 +19,13 @@ public class TpAuditPlanUseCase {
     private final ApAuditCaseRepository auditCaseRepository;
 
     @Transactional
-    public void saveAuditPlan(UUID caseId, String objective, String scope, JsonNode materiality, 
-                              JsonNode industryResearch, JsonNode samplingMethod, JsonNode plannedProcedures, 
+    public void saveAuditPlan(UUID caseId, String objective, String scope,
+                              JsonNode materialityDetails, JsonNode industryResearch,
+                              JsonNode samplingMethod, JsonNode plannedProcedures,
                               String currentUserId) {
         log.info("Saving TP Audit Plan for case: {}", caseId);
-
         ApAuditCaseEntity auditCase = auditCaseRepository.findById(caseId)
-                .orElseThrow(() -> new IllegalArgumentException("Case not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
         TpAuditPlanEntity plan = auditCase.getTpAuditPlan();
         if (plan == null) {
@@ -38,17 +38,13 @@ public class TpAuditPlanUseCase {
 
         plan.setObjective(objective);
         plan.setScope(scope);
-        plan.setMaterialityDetails(materiality);
+        plan.setMaterialityDetails(materialityDetails);
         plan.setIndustryResearch(industryResearch);
         plan.setSamplingMethod(samplingMethod);
         plan.setPlannedProcedures(plannedProcedures);
         plan.setUpdatedBy(currentUserId);
 
-        // Transition phase if needed
-        if ("DETAILED_RISK_ASSESSMENT".equals(auditCase.getStatus())) {
-            auditCase.setStatus("PLANNING");
-        }
-
+        auditCase.setTpCurrentPhase("PLANNING");
         auditCase.setTpAuditPlan(plan);
         auditCaseRepository.save(auditCase);
     }
