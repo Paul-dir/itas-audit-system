@@ -215,6 +215,7 @@ export default function DirectorDashboard({ view }) {
           {row.status === 'SUBMITTED_TO_DIRECTOR' && !row.revisions?.some(r => r.type === 'amendment') && !row.amendmentComment && (
             <>
               <Button size="xs" variant="success" icon={CheckCircle} onClick={() => openAction(row, 'approve')}>Approve</Button>
+              <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>Route to Regions/LTO</Button>
               <Button size="xs" variant="warning" icon={RotateCcw} onClick={() => openAction(row, 'revise')}>Revise</Button>
             </>
           )}
@@ -225,24 +226,29 @@ export default function DirectorDashboard({ view }) {
               <Button size="xs" variant="success" icon={CheckCircle} onClick={() => openAction(row, 'approve')}>
                 ✓ Approve → Sr. Mgmt
               </Button>
+              <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>Route to Regions/LTO</Button>
               <Button size="xs" variant="warning" icon={RotateCcw} onClick={() => openAction(row, 'amendment')}>
                 Send for Amendment
               </Button>
             </>
           )}
 
-          {/* DIRECTOR_APPROVED: send to regions for feedback */}
-          {row.status === 'DIRECTOR_APPROVED' && (
+          {/* DIRECTOR_APPROVED or SUBMITTED_TO_REGIONAL: send/route to regions for feedback */}
+          {(row.status === 'DIRECTOR_APPROVED' || row.status === 'SUBMITTED_TO_REGIONAL') && (
             <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>
-              Send to Regions
+              Route to Regions/LTO
             </Button>
           )}
 
-          {/* AWAITING_REGIONAL_FEEDBACK: Director can forward directly to Senior Mgmt or send for amendment */}
-          {row.status === 'AWAITING_REGIONAL_FEEDBACK' && (
+          {/* AWAITING_REGIONAL_FEEDBACK / REGIONAL_APPROVED: Director can forward directly to Senior Mgmt or send for amendment */}
+          {(row.status === 'AWAITING_REGIONAL_FEEDBACK' || row.status === 'REGIONAL_APPROVED') && (
             <>
               <Button size="xs" variant="primary" icon={ArrowRight} onClick={() => openAction(row, 'submit_senior')}>
                 Forward to Senior Mgmt
+              </Button>
+
+              <Button size="xs" variant="secondary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>
+                Re-route to Regions/LTO
               </Button>
               <Button size="xs" variant="ghost" icon={Eye} onClick={() => setSelectedPlan(row)}>
                 View Feedback
@@ -255,9 +261,14 @@ export default function DirectorDashboard({ view }) {
 
           {/* FEEDBACK_COLLECTED: All regions submitted — send for amendment */}
           {row.status === 'FEEDBACK_COLLECTED' && (
-            <Button size="xs" variant="warning" icon={Edit3} onClick={() => openAction(row, 'amendment')}>
-              Send for Amendment
-            </Button>
+            <>
+              <Button size="xs" variant="primary" icon={ArrowRight} onClick={() => openAction(row, 'submit_senior')}>
+                Forward to Senior Mgmt
+              </Button>
+              <Button size="xs" variant="warning" icon={Edit3} onClick={() => openAction(row, 'amendment')}>
+                Send for Amendment
+              </Button>
+            </>
           )}
 
           {/* SENIOR_MGMT_REJECTED: Director handles — resubmit to Senior or send back for amendment */}
@@ -272,10 +283,10 @@ export default function DirectorDashboard({ view }) {
             </>
           )}
 
-          {/* SENIOR_MGMT_APPROVED: Director deploys the plan */}
-          {row.status === 'SENIOR_MGMT_APPROVED' && (
+          {/* SENIOR_MGMT_APPROVED or FINALIZED: Director deploys the plan */}
+          {(row.status === 'SENIOR_MGMT_APPROVED' || row.status === 'FINALIZED') && (
             <Button size="xs" variant="success" icon={Zap} onClick={() => openAction(row, 'send_regions')}>
-              Deploy to Regions
+              Deploy to Regions & LTO
             </Button>
           )}
         </div>
@@ -556,7 +567,7 @@ export default function DirectorDashboard({ view }) {
                 doAction();
               }
             }}
-            disabled={(meta.required && !comment.trim()) || (actionType === 'send_to_regions_pre' && reviewPlan?.status !== 'DIRECTOR_APPROVED')}
+            disabled={meta.required && !comment.trim()}
           >
             {meta.title}
           </Button>

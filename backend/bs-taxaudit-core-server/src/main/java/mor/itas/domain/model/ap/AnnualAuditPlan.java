@@ -181,7 +181,13 @@ public class AnnualAuditPlan {
     }
     
     public boolean canBeSubmittedToRegionalByDirector() {
-        return status == PlanStatus.DIRECTOR_APPROVED;
+        return status == PlanStatus.DIRECTOR_APPROVED
+            || status == PlanStatus.SUBMITTED_TO_DIRECTOR
+            || status == PlanStatus.SUBMITTED_TO_REGIONAL
+            || status == PlanStatus.REGIONAL_APPROVED
+            || status == PlanStatus.SENT_TO_TAX_CENTERS
+            || status == PlanStatus.TC_FEEDBACK_SUBMITTED
+            || status == PlanStatus.FINALIZED;
     }
     
     public boolean canBeApprovedByRegionalDirector() {
