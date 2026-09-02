@@ -55,37 +55,77 @@ public class CaseManagementController {
         try {
             List<ApAuditCaseEntity> cases;
 
-            if (taxCenter != null && !taxCenter.isBlank()) {
+            // Normalize tax center code: AA-TC1 → TC-AA-01
+            String normalizedTC = normalizeTaxCenterCode(taxCenter);
+
+            if (normalizedTC != null && !normalizedTC.isBlank()) {
                 // ── Tax center view ──────────────────────────────────────────
+                System.out.println("[Cases] Tax center query: " + taxCenter + " -> " + normalizedTC);
                 if (status != null && !status.isBlank()) {
-                    cases = caseRepository.findByTaxCenterCodeAndStatus(taxCenter, status);
+                    cases = caseRepository.findByTaxCenterCodeAndStatus(normalizedTC, status);
                 } else {
-                    cases = caseRepository.findByTaxCenterCode(taxCenter);
+                    cases = caseRepository.findByTaxCenterCode(normalizedTC);
                 }
             } else if (teamLeader != null && !teamLeader.isBlank()) {
-                // ── Team leader view (only their assigned types, not committee) ──
-                if (status != null && !status.isBlank()) {
-                    cases = caseRepository.findByAssignedTeamLeaderIdAndStatus(teamLeader, status);
-                } else {
-                    cases = caseRepository.findByAssignedTeamLeaderId(teamLeader)
+                // ── Team leader view ─────────────────────────────────────────
+                cases = caseRepository.findByAssignedTeamLeaderId(teamLeader);
+
+                // If no results by direct UUID/username, search by taxCenter and match assignedTeamLeaderId
+                if (cases.isEmpty()) {
+                    String resolvedTC = resolveTaxCenterFromUserContext(teamLeader, taxCenter);
+                    if (resolvedTC != null) {
+                        cases = caseRepository.findByTaxCenterCode(resolvedTC)
+                                .stream()
+                                .filter(c -> (teamLeader.equals(c.getAssignedTeamLeaderId()))
+                                          && !ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT.equals(c.getStatus())
+                                          && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus()))
+                                .collect(Collectors.toList());
+                    }
+                }
+
+                // Filter out committee cases
+                final List<ApAuditCaseEntity> finalCases = cases;
+                cases = finalCases.stream()
+                        .filter(c -> !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus()))
+                        .collect(Collectors.toList());
+
+            } else if (committeeId != null && !committeeId.isBlank()) {
+                // ── Committee member view (strictly separated by auditType) ──
+                String resolvedTC = resolveTaxCenterFromUserContext(committeeId, taxCenter);
+                final String requestedType = auditType != null && !auditType.isBlank() ? auditType.toUpperCase() : null;
+
+                if (resolvedTC != null) {
+                    cases = caseRepository.findByTaxCenterCode(resolvedTC)
                             .stream()
-                            .filter(c -> !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus()))
+                            .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
+                                      || "JOINT_AUDIT".equals(c.getAuditType())
+                                      || "TRANSFER_PRICING".equals(c.getAuditType()))
+                            .filter(c -> requestedType == null || requestedType.equals(c.getAuditType()))
+                            .collect(Collectors.toList());
+                } else {
+                    cases = caseRepository.findAll()
+                            .stream()
+                            .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
+                                      || "JOINT_AUDIT".equals(c.getAuditType())
+                                      || "TRANSFER_PRICING".equals(c.getAuditType()))
+                            .filter(c -> requestedType == null || requestedType.equals(c.getAuditType()))
                             .collect(Collectors.toList());
                 }
-            } else if (committeeId != null && !committeeId.isBlank()) {
-                // ── Committee member view (only committee-type cases) ──────────
-                cases = caseRepository.findByAssignedTeamLeaderId(committeeId)
-                        .stream()
-                        .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
-                                  || "JOINT_AUDIT".equals(c.getAuditType())
-                                  || "TRANSFER_PRICING".equals(c.getAuditType()))
-                        .collect(Collectors.toList());
+
             } else if (auditor != null && !auditor.isBlank()) {
                 // ── Auditor view ─────────────────────────────────────────────
-                if (status != null && !status.isBlank()) {
-                    cases = caseRepository.findByAssignedAuditorIdAndStatus(auditor, status);
-                } else {
-                    cases = caseRepository.findByAssignedAuditorId(auditor);
+                cases = caseRepository.findByAssignedAuditorId(auditor);
+
+                // If no results, try backend auditor ID format
+                if (cases.isEmpty()) {
+                    String resolvedTC = resolveTaxCenterFromUserContext(auditor, taxCenter);
+                    if (resolvedTC != null) {
+                        System.out.println("[Cases] Auditor ID '" + auditor + "' not found, falling back to TC: " + resolvedTC);
+                        cases = caseRepository.findByTaxCenterCode(resolvedTC)
+                                .stream()
+                                .filter(c -> c.getAssignedAuditorId() != null)
+                                .collect(Collectors.toList());
+                    }
                 }
             } else if (status != null && !status.isBlank()) {
                 cases = caseRepository.findByStatus(status);
@@ -385,6 +425,57 @@ public class CaseManagementController {
         } catch (Exception e) {
             return ResponseEntity.ok(GenericResponse.error("STATUS_ERROR", e.getMessage()));
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Normalize tax center code from frontend format to backend format.
+     * Frontend: AA-TC1 → Backend: TC-AA-01
+     * Also handles: AA-TC2 → TC-AA-02, etc.
+     */
+    private String normalizeTaxCenterCode(String code) {
+        if (code == null || code.isBlank()) return code;
+        // Already in backend format
+        if (code.startsWith("TC-")) return code;
+        // Frontend format: AA-TC1, BB-TC2, etc.
+        // Convert: AA-TC1 → TC-AA-01
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^([A-Z]{2})-TC(\\d+)$").matcher(code.trim());
+        if (m.matches()) {
+            String region = m.group(1);
+            String tcNum = String.format("%02d", Integer.parseInt(m.group(2)));
+            return "TC-" + region + "-" + tcNum;
+        }
+        return code;
+    }
+
+    /**
+     * Find the backend tax center code for a frontend user ID.
+     * Maps seed user tax center context to the backend TC-AA-XX format.
+     * e.g., u-tl-aa1a (addis_ababa-tc1) → TC-AA-01
+     */
+    private String resolveTaxCenterFromUserContext(String userId, String requestTaxCenter) {
+        // If a tax center was explicitly provided, use it
+        if (requestTaxCenter != null && !requestTaxCenter.isBlank()) {
+            return normalizeTaxCenterCode(requestTaxCenter);
+        }
+        // Try to extract tax center from user ID pattern
+        // u-tc-aa1 → addis_ababa-tc1 → TC-AA-01
+        // u-tl-aa1a → addis_ababa-tc1 → TC-AA-01
+        // u-aud-aa1a → addis_ababa-tc1 → TC-AA-01
+        if (userId != null) {
+            String lower = userId.toLowerCase();
+            // Extract region+tc number from user ID
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:tc|tl|aud)(?:om)?-([a-z]{2})(\\d)").matcher(lower);
+            if (m.find()) {
+                String region = m.group(1).toUpperCase();
+                String tcNum = m.group(2);
+                return "TC-" + region + "-" + "0" + tcNum;
+            }
+        }
+        return null;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

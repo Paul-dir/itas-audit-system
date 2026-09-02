@@ -28,12 +28,25 @@ export default function CreatePlanModal({ open, onClose }) {
   const { planDefaults, source } = useRiskEngine();
 
   const [step, setStep] = useState(1);
+  // Find next available year (skip years that already have plans)
+  const getNextAvailableYear = () => {
+    const currentYear = new Date().getFullYear();
+    const existingYears = new Set((state.plans || []).map(p => p.planYear));
+    let year = currentYear;
+    while (existingYears.has(year)) {
+      year++;
+    }
+    return year;
+  };
+
   const [form, setForm] = useState({
     name: '',
-    year: new Date().getFullYear(),
+    year: getNextAvailableYear(),
+    targetPlanCases: 3500, // Scaled target size for quality-focused testing (3000 - 5000)
     description: '',
     strategy: '',
     riskBased: false,
+    estimatedRevenue: 10000000,
   });
   const [distribution, setDistribution] = useState(emptyDistribution);
   const [error, setError] = useState('');
@@ -44,13 +57,25 @@ export default function CreatePlanModal({ open, onClose }) {
     (sum, regionDist) => sum + Object.values(regionDist).reduce((s, v) => s + v, 0), 0
   );
 
-  const applyDefaults = useCallback((defaults) => {
+  const applyDefaults = useCallback((defaults, targetSize = 3500) => {
     if (!defaults) return;
-    // Merge defaults into current distribution (override zeros)
+    
+    // Calculate sum of raw defaults
+    let rawSum = 0;
+    REGIONS.forEach(r => {
+      AUDIT_TYPES.forEach(a => {
+        rawSum += defaults[r.id]?.[a.id] ?? 0;
+      });
+    });
+
+    const scaleFactor = rawSum > 0 ? (targetSize / rawSum) : 1;
+
+    // Merge defaults into current distribution with scaling factor
     const merged = emptyDistribution();
     REGIONS.forEach(r => {
       AUDIT_TYPES.forEach(a => {
-        merged[r.id][a.id] = defaults[r.id]?.[a.id] ?? 0;
+        const rawVal = defaults[r.id]?.[a.id] ?? 0;
+        merged[r.id][a.id] = Math.round(rawVal * scaleFactor);
       });
     });
     setDistribution(merged);
@@ -77,10 +102,11 @@ export default function CreatePlanModal({ open, onClose }) {
     }
     
     // Check if a plan already exists for this year (year must be unique)
-    const yearExists = state.plans.some(p => p.planYear === form.year);
+    const yearExists = state.plans.some(p => p.planYear === parseInt(form.year));
     if (yearExists) {
-      setError(`A plan for fiscal year ${form.year} already exists. Each fiscal year can have only one national audit plan.`);
-      console.error('❌ Plan already exists for year:', form.year);
+      const nextYear = getNextAvailableYear();
+      setError(`FY ${form.year} already has a plan. Next available year: FY ${nextYear} — update the year field and try again.`);
+      console.error('❌ Plan already exists for year:', form.year, '| Next available:', nextYear);
       return;
     }
     
@@ -118,7 +144,7 @@ export default function CreatePlanModal({ open, onClose }) {
     setStep(1);
     setError('');
     setUsedDefaults(false);
-    setForm({ name: '', year: new Date().getFullYear(), description: '', strategy: '', riskBased: false });
+    setForm({ name: '', year: getNextAvailableYear(), description: '', strategy: '', riskBased: false, estimatedRevenue: 10000000 });
     setDistribution(emptyDistribution());
   };
 
@@ -201,11 +227,31 @@ export default function CreatePlanModal({ open, onClose }) {
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           />
+          <div>
+            <Input
+              label="Fiscal Year"
+              type="number"
+              value={form.year}
+              onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+            />
+            {state.plans.some(p => p.planYear === parseInt(form.year)) ? (
+              <p className="text-xs text-red-500 mt-1">⚠️ FY {form.year} already has a plan. Next available: FY {getNextAvailableYear()}</p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">✅ FY {form.year} is available (next free: FY {getNextAvailableYear()})</p>
+            )}
+          </div>
           <Input
-            label="Fiscal Year"
+            label="Target Plan Case Size (Cases) *"
             type="number"
-            value={form.year}
-            onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+            placeholder="e.g. 3500 (3,000 - 5,000 for testing)"
+            value={form.targetPlanCases}
+            onChange={e => setForm(f => ({ ...f, targetPlanCases: parseInt(e.target.value) || 3500 }))}
+          />
+          <Input
+            label="Estimated Revenue (ETB) *"
+            type="number"
+            value={form.estimatedRevenue}
+            onChange={e => setForm(f => ({ ...f, estimatedRevenue: e.target.value }))}
           />
           <Select
             label="Audit Strategy"

@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Package, Users, CheckCircle, AlertTriangle, Eye, Send, Search, RefreshCw, UserCheck } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
+import { formatRevenue } from '../../utils/revenueFormatter.js';
 
 // Map frontend tax-center ID → backend code (AA-TC1 format)
 const TC_MAP = {
@@ -30,9 +31,16 @@ function mapCase(c) {
   const frontendStatus = c.frontendStatus || normalizeBackendStatus(c.status);
   const riskLevel = getRiskLevel(c.riskScore || 0);
   const auditDef = getAuditTypeDef(c.auditType);
+  // Extract plan year from caseNumber prefix (e.g. "5002-85241c1a..." -> 5002) if planYear is missing
+  let year = c.planYear;
+  if (!year && c.caseNumber && c.caseNumber.includes('-')) {
+    const prefix = c.caseNumber.split('-')[0];
+    if (!isNaN(prefix)) year = parseInt(prefix, 10);
+  }
   return {
     ...c,
     id: c.id || c.caseNumber,
+    planYear: year || 2026,
     taxpayerName: c.taxpayerName || c.taxpayerId,
     tin: c.taxpayerId,
     sector: c.sector || 'Unknown',
@@ -59,6 +67,8 @@ export default function CaseManagement() {
   const [assignModal, setAssignModal] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignResult, setAssignResult]   = useState(null);
+  const [page, setPage]                   = useState(1);
+  const [itemsPerPage, setItemsPerPage]   = useState(10);
 
   // Team leaders for this tax center (from user management API)
   const [teamLeaders, setTeamLeaders] = useState([]);
@@ -79,22 +89,54 @@ export default function CaseManagement() {
     finally { setLoading(false); }
   }, [tcCode, user?.id]);
 
-  // ── Fetch team leaders for this TC ─────────────────────────────────────────
   const fetchTeamLeaders = useCallback(async () => {
     if (!tcCode) return;
     try {
       const r = await fetch(`/api/v1/backoffice/ap/users?role=team_leader&taxCenter=${encodeURIComponent(tcCode)}`, {
         headers: { 'X-Actor-Id': user?.id || 'tc-manager' }
       });
-      if (r.ok) { const res = await r.json(); setTeamLeaders(res.data || res || []); }
+      if (r.ok) {
+        const res = await r.json();
+        const list = res.data || res || [];
+        if (list.length > 0) {
+          setTeamLeaders(list);
+          return;
+        }
+      }
     } catch (e) { console.error('fetchTeamLeaders', e); }
+
+    // Fallback team leaders matching SEED_USERS for this tax center
+    try {
+      const { SEED_USERS } = await import('../../data/seed.js');
+      const seedTLs = SEED_USERS.filter(u => u.role === 'team_leader' && u.taxCenter === (user?.taxCenter || 'addis_ababa-tc1'));
+      if (seedTLs.length > 0) {
+        setTeamLeaders(seedTLs);
+        return;
+      }
+    } catch (err) {}
+
+    setTeamLeaders([
+      { id: 'u-tl-aa1a', fullName: 'Henok Belay (Desk TL)', name: 'Henok Belay', auditType: 'DESK_AUDIT' },
+      { id: 'u-tl-aa1b', fullName: 'Tigist Alemu (Field TL)', name: 'Tigist Alemu', auditType: 'FIELD_AUDIT' },
+      { id: 'u-tl-aa1d', fullName: 'Seble Tesfaye (Comp TL)', name: 'Seble Tesfaye', auditType: 'COMPREHENSIVE_AUDIT' },
+      { id: 'u-tl-aa1f', fullName: 'Sara Negash (Issue TL)', name: 'Sara Negash', auditType: 'ISSUE_AUDIT' }
+    ]);
   }, [tcCode, user?.id]);
 
   useEffect(() => { fetchCases(); fetchTeamLeaders(); }, [fetchCases, fetchTeamLeaders]);
 
+  const [yearFilter, setYearFilter]       = useState('ALL');
+
+  // Available Plan Years
+  const availableYears = useMemo(() => {
+    const years = new Set(cases.map(c => c.planYear || 2026));
+    return ['ALL', ...Array.from(years).sort()];
+  }, [cases]);
+
   // ── Derived lists ────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return cases.filter(c => {
+      if (yearFilter !== 'ALL' && String(c.planYear || 2026) !== String(yearFilter)) return false;
       if (tab === 'pending'   && c.frontendStatus !== 'PENDING')   return false;
       if (tab === 'assigned'  && !['ASSIGNED','IN_PROGRESS'].includes(c.frontendStatus)) return false;
       if (tab === 'completed' && !['COMPLETED','CLOSED'].includes(c.frontendStatus))     return false;
@@ -105,14 +147,19 @@ export default function CaseManagement() {
       }
       return true;
     });
-  }, [cases, tab, filterAT, searchQ]);
+  }, [cases, tab, filterAT, searchQ, yearFilter]);
+
+  const yearFilteredCases = useMemo(() => {
+    if (yearFilter === 'ALL') return cases;
+    return cases.filter(c => String(c.planYear || 2026) === String(yearFilter));
+  }, [cases, yearFilter]);
 
   const stats = useMemo(() => ({
-    total:     cases.length,
-    pending:   cases.filter(c => c.frontendStatus === 'PENDING').length,
-    assigned:  cases.filter(c => ['ASSIGNED','IN_PROGRESS'].includes(c.frontendStatus)).length,
-    completed: cases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
-  }), [cases]);
+    total:     yearFilteredCases.length,
+    pending:   yearFilteredCases.filter(c => c.frontendStatus === 'PENDING').length,
+    assigned:  yearFilteredCases.filter(c => ['ASSIGNED','IN_PROGRESS'].includes(c.frontendStatus)).length,
+    completed: yearFilteredCases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
+  }), [yearFilteredCases]);
 
   const tabs = [
     { id:'pending',   label:'Pending Assignment', count: stats.pending   },
@@ -137,9 +184,13 @@ export default function CaseManagement() {
       // Group team leaders by audit type
       const tlByType = {};
       teamLeaders.forEach(tl => {
-        const at = (tl.auditType || '').toUpperCase().replace(' ', '_');
-        if (!tlByType[at]) tlByType[at] = [];
-        tlByType[at].push(tl);
+        let rawAt = (tl.auditType || '').toUpperCase().replace(/\s+/g, '_');
+        if (rawAt === 'DESK') rawAt = 'DESK_AUDIT';
+        if (rawAt === 'FIELD') rawAt = 'FIELD_AUDIT';
+        if (rawAt === 'COMPREHENSIVE') rawAt = 'COMPREHENSIVE_AUDIT';
+        if (rawAt === 'ISSUE') rawAt = 'ISSUE_AUDIT';
+        if (!tlByType[rawAt]) tlByType[rawAt] = [];
+        tlByType[rawAt].push(tl);
       });
       // Round-robin index per audit type
       const rrIdx = {};
@@ -152,19 +203,23 @@ export default function CaseManagement() {
         const backendType = c.auditType; // Already backend format (DESK_AUDIT etc.)
         const isCommittee = c.isCommittee;
 
-        let candidates = [];
         if (isCommittee) {
-          // For committee types, use any TL tagged as committee, or fall back to joint_audit TLs
-          candidates = tlByType['JOINT_AUDIT'] || tlByType['COMMITTEE'] || [];
-        } else {
-          candidates = tlByType[backendType] || tlByType['DESK_AUDIT'] || Object.values(tlByType)[0] || [];
+          // Route Joint Audit to Joint Committee Chair, TP to TP Committee Chair
+          const commChair = backendType === 'TRANSFER_PRICING' 
+            ? '5d3b32e2-be93-4889-bf01-de527a80cec6' // tp.committee1
+            : '99a64010-645c-4752-bf57-e046d220cfe4'; // aa.committee1
+          assignments.push({ caseId: c.id, teamLeaderId: commChair, status: 'ASSIGNED_TO_COMMITTEE' });
+          warnings.push(`Case ${c.caseNumber} (${c.auditTypeDef?.shortName || c.auditType}) assigned to Committee.`);
+          continue;
         }
 
+        let candidates = tlByType[backendType] || [];
+
         if (!candidates.length) {
-          // No matching TL — try to assign to anyone
-          const allTLs = Object.values(tlByType).flat();
-          if (allTLs.length) {
-            candidates = allTLs;
+          // No matching standard TL — assign to available standard TL
+          const standardTLs = Object.values(tlByType).flat().filter(t => t.auditType !== 'joint_audit' && t.auditType !== 'transfer_pricing');
+          if (standardTLs.length) {
+            candidates = standardTLs;
             warnings.push(`No specialized TL for ${backendType}, assigning to available TL`);
           } else {
             warnings.push(`No team leader found for case ${c.caseNumber}`);
@@ -192,12 +247,23 @@ export default function CaseManagement() {
 
       const res = await r.json();
       const resultData = res.data || res;
+      const committeeCount = warnings.filter(w => w.includes('routed to Joint Audit Committee')).length;
+      const otherWarnings = warnings.filter(w => !w.includes('routed to Joint Audit Committee'));
+      
+      let summaryMsg = null;
+      if (committeeCount > 0) {
+        summaryMsg = `${committeeCount} Joint/TP cases automatically routed to Joint Audit Committee.`;
+      }
+      if (otherWarnings.length > 0) {
+        summaryMsg = summaryMsg ? `${summaryMsg} (${otherWarnings.join('; ')})` : otherWarnings.join('; ');
+      }
+
       setAssignResult({
         status: resultData.status || (res.status === 'SUCCESS' ? 'SUCCESS' : 'DONE'),
         assigned: resultData.assigned || 0,
         failed: resultData.failed || 0,
         warnings,
-        message: warnings.length ? warnings.join('; ') : null,
+        message: summaryMsg,
       });
 
       // Refresh cases from backend
@@ -263,11 +329,16 @@ export default function CaseManagement() {
           <Tabs tabs={tabs} active={tab} onChange={setTab} />
         </div>
 
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap items-center">
           <Input icon={Search} placeholder="Search taxpayer / TIN…" value={searchQ} onChange={e => setSearchQ(e.target.value)} />
           <Select value={filterAT} onChange={e => setFilterAT(e.target.value)}>
             <option value="ALL">All Audit Types</option>
             {AUDIT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
+          </Select>
+          <Select value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+            {availableYears.map(y => (
+              <option key={y} value={y}>{y === 'ALL' ? 'All Plan Years' : `FY ${y}`}</option>
+            ))}
           </Select>
         </div>
 
@@ -282,17 +353,17 @@ export default function CaseManagement() {
                     onChange={toggleAll}
                     className="w-4 h-4 rounded" />
                 </th>
-                {['Taxpayer','Risk','Audit Type','Status','Assigned To',''].map((h,i) => (
+                {['Taxpayer','Plan Year','Risk','Audit Type','Status','Assigned To',''].map((h,i) => (
                   <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
                   {loading ? 'Loading…' : 'No cases found'}
                 </td></tr>
-              ) : filtered.map(c => {
+              ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
                 const atDef = c.auditTypeDef;
                 const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
                 return (
@@ -306,6 +377,9 @@ export default function CaseManagement() {
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
                       <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color="purple" size="sm">FY {c.planYear || 2026}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel}</Badge>
@@ -335,6 +409,14 @@ export default function CaseManagement() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={page}
+          totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
+          totalItems={filtered.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       </Card>
 
       {/* View Case Modal */}
@@ -359,7 +441,7 @@ export default function CaseManagement() {
                 <p className="font-medium">{viewCase.taxpayerName}</p>
                 <p className="text-xs text-gray-500">TIN: {viewCase.tin}</p>
                 <p className="text-xs text-gray-500">Sector: {viewCase.sector}</p>
-                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Est. Revenue: {(viewCase.estimatedRevenue/1e6).toFixed(1)}M ETB</p>}
+                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Est. Revenue: {formatRevenue(viewCase.estimatedRevenue)} ETB</p>}
               </div>
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-2">
                 <p className="text-sm font-semibold">⚠️ Risk</p>
@@ -409,7 +491,7 @@ export default function CaseManagement() {
                     <Badge color={at.color}>{at.shortName}</Badge>
                     <span className="text-sm">{typeCases.length} case{typeCases.length > 1 ? 's' : ''}</span>
                     <span className="text-xs text-gray-500">
-                      {at.id === 'joint_audit' || at.id === 'transfer_pricing' ? '→ Committee' : '→ Team Leader'}
+                      {at.id === 'joint_audit' || at.id === 'transfer_pricing' ? '→ Joint Committee / Specialized TL' : '→ Team Leader'}
                     </span>
                   </div>
                 );

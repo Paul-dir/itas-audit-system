@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 /**
  * CreatePlanRequest - Request DTO for creating an Annual Audit Plan
@@ -29,6 +30,10 @@ public class CreatePlanRequest {
     // Format: { "addis_ababa": { "desk_audit": 30000, "joint_audit": 12000, ... }, ... }
     private Map<String, Map<String, Integer>> distribution;
 
+    @NotNull(message = "Estimated revenue is required")
+    @Positive(message = "Estimated revenue must be positive")
+    private BigDecimal estimatedRevenue;
+
     // Constructors
     public CreatePlanRequest() {
     }
@@ -39,11 +44,12 @@ public class CreatePlanRequest {
         this.regionalAllocations = regionalAllocations;
     }
 
-    public CreatePlanRequest(Integer planYear, String planName, List<RegionalAllocationRequest> regionalAllocations, Map<String, Map<String, Integer>> distribution) {
+    public CreatePlanRequest(Integer planYear, String planName, List<RegionalAllocationRequest> regionalAllocations, Map<String, Map<String, Integer>> distribution, BigDecimal estimatedRevenue) {
         this.planYear = planYear;
         this.planName = planName;
         this.regionalAllocations = regionalAllocations;
         this.distribution = distribution;
+        this.estimatedRevenue = estimatedRevenue;
     }
 
     // Getters and Setters
@@ -77,6 +83,14 @@ public class CreatePlanRequest {
 
     public void setDistribution(Map<String, Map<String, Integer>> distribution) {
         this.distribution = distribution;
+    }
+
+    public BigDecimal getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
     }
 
     @Override

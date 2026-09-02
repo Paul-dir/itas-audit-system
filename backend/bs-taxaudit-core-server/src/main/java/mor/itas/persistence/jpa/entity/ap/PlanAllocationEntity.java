@@ -3,6 +3,8 @@ package mor.itas.persistence.jpa.entity.ap;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.math.BigDecimal;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * PlanAllocationEntity - JPA Entity for ap_plan_allocations table
@@ -57,6 +59,13 @@ public class PlanAllocationEntity {
 
     @Column(name = "tc_adjustment_reason", length = 500)
     private String tcAdjustmentReason;  // E.g., "Q3 staffing shortage"
+
+    @Column(name = "estimated_revenue", precision = 19, scale = 2)
+    private BigDecimal estimatedRevenue;
+
+    @Column(name = "revenue_by_audit_type", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private JsonNode revenueByAuditType;
 
     @Column(name = "tc_feedback_submitted", nullable = false)
     private Boolean tcFeedbackSubmitted = false;
@@ -212,6 +221,22 @@ public class PlanAllocationEntity {
 
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public BigDecimal getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
+    }
+
+    public JsonNode getRevenueByAuditType() {
+        return revenueByAuditType;
+    }
+
+    public void setRevenueByAuditType(JsonNode revenueByAuditType) {
+        this.revenueByAuditType = revenueByAuditType;
     }
 
     public OffsetDateTime getUpdatedAt() {

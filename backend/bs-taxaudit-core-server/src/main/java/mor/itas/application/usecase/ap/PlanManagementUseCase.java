@@ -41,6 +41,7 @@ public class PlanManagementUseCase {
         String planName,
         List<RegionalAllocationDto> regionalAllocations,
         Map<String, Map<String, Integer>> distribution,
+        java.math.BigDecimal estimatedRevenue,
         String actorId) {
 
         // Validate that plan doesn't already exist for this year (year is unique)
@@ -61,16 +62,95 @@ public class PlanManagementUseCase {
         // Store distribution data
         plan.setDistribution(distribution);
 
-        // Add regional allocations (one per region)
-        for (RegionalAllocationDto regional : regionalAllocations) {
-            PlanAllocation allocation = new PlanAllocation(
-                UUID.randomUUID(),
-                plan.getId(),
-                null,                      // tax_center_code = NULL for regional
-                regional.getRegionCode(),
-                regional.getProposedCount()
+        // Compute Revenue Distribution
+        if (estimatedRevenue != null) {
+            plan.setEstimatedRevenue(estimatedRevenue);
+            
+            // Regional capacity weights
+            Map<String, Double> regionWeights = Map.of(
+                "AA", 0.60, // Addis Ababa gets 60%
+                "BA", 0.10, // Amhara
+                "BB", 0.10, // Oromia
+                "AB", 0.08, // Dire Dawa
+                "CA", 0.07, // SNNPR
+                "SO", 0.05  // Somalia
             );
-            plan.addAllocation(allocation);
+            
+            // Audit Type weights (high value audits get more revenue share)
+            Map<String, Double> typeWeights = Map.of(
+                "COMPREHENSIVE", 0.35,
+                "TRANSFER_PRICING", 0.30,
+                "FIELD_AUDIT", 0.20,
+                "DESK_AUDIT", 0.10,
+                "JOINT_AUDIT", 0.03,
+                "ISSUE_AUDIT", 0.02
+            );
+
+            Map<String, Object> distJson = new java.util.HashMap<>();
+            Map<String, java.math.BigDecimal> regionRevenues = new java.util.HashMap<>();
+            
+            // Calculate regional total revenues
+            for (Map.Entry<String, Double> entry : regionWeights.entrySet()) {
+                java.math.BigDecimal regRev = estimatedRevenue.multiply(new java.math.BigDecimal(entry.getValue().toString()));
+                regionRevenues.put(entry.getKey(), regRev);
+            }
+            distJson.put("by_region", regionRevenues);
+            
+            // Calculate national audit type revenues
+            Map<String, java.math.BigDecimal> typeRevenues = new java.util.HashMap<>();
+            for (Map.Entry<String, Double> entry : typeWeights.entrySet()) {
+                typeRevenues.put(entry.getKey(), estimatedRevenue.multiply(new java.math.BigDecimal(entry.getValue().toString())));
+            }
+            distJson.put("by_audit_type_national", typeRevenues);
+            
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                plan.setEstimatedRevenueDistribution(mapper.valueToTree(distJson));
+            } catch (Exception e) {
+                // Ignore json parsing error
+            }
+            
+            // Add regional allocations (one per region) with revenue division
+            for (RegionalAllocationDto regional : regionalAllocations) {
+                PlanAllocation allocation = new PlanAllocation(
+                    UUID.randomUUID(),
+                    plan.getId(),
+                    null,                      // tax_center_code = NULL for regional
+                    regional.getRegionCode(),
+                    regional.getProposedCount()
+                );
+                
+                // Set revenue for this region
+                java.math.BigDecimal regRev = regionRevenues.getOrDefault(regional.getRegionCode(), java.math.BigDecimal.ZERO);
+                allocation.setEstimatedRevenue(regRev);
+                
+                // Break down region revenue by audit type
+                Map<String, java.math.BigDecimal> regTypeRevenues = new java.util.HashMap<>();
+                for (Map.Entry<String, Double> entry : typeWeights.entrySet()) {
+                    regTypeRevenues.put(entry.getKey(), regRev.multiply(new java.math.BigDecimal(entry.getValue().toString())));
+                }
+                
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    allocation.setRevenueByAuditType(mapper.valueToTree(regTypeRevenues));
+                } catch (Exception e) {
+                    // Ignore json parsing error
+                }
+                
+                plan.addAllocation(allocation);
+            }
+        } else {
+            // Add regional allocations (one per region) without revenue
+            for (RegionalAllocationDto regional : regionalAllocations) {
+                PlanAllocation allocation = new PlanAllocation(
+                    UUID.randomUUID(),
+                    plan.getId(),
+                    null,
+                    regional.getRegionCode(),
+                    regional.getProposedCount()
+                );
+                plan.addAllocation(allocation);
+            }
         }
 
         // Save plan
@@ -241,6 +321,14 @@ public class PlanManagementUseCase {
                 regionCode,
                 tcDto.getAuditCount()
             );
+            
+            // Distribute estimated revenue from region to tax center based on audit count proportion
+            if (regionalAllocation.getEstimatedRevenue() != null && proposedTotal > 0) {
+                java.math.BigDecimal ratio = new java.math.BigDecimal(tcDto.getAuditCount())
+                    .divide(new java.math.BigDecimal(proposedTotal), 4, java.math.RoundingMode.HALF_UP);
+                tcAllocation.setEstimatedRevenue(regionalAllocation.getEstimatedRevenue().multiply(ratio));
+            }
+            
             plan.addAllocation(tcAllocation);
             totalDivided += tcDto.getAuditCount();
 
@@ -301,11 +389,34 @@ public class PlanManagementUseCase {
                                     tcDto.getAuditCount()
                                 );
                                 
-                                // Set the breakdown as JsonNode
+                                // Set the count breakdown as JsonNode
                                 com.fasterxml.jackson.databind.JsonNode jsonNode = 
                                     com.fasterxml.jackson.databind.node.JsonNodeFactory.instance
                                         .pojoNode(breakdown);
                                 entity.setAllocationByAuditType(jsonNode);
+                                
+                                // Also set revenue breakdown
+                                if (entity.getEstimatedRevenue() != null && regionalAllocation.getRevenueByAuditType() != null) {
+                                    try {
+                                        java.math.BigDecimal ratio = new java.math.BigDecimal(tcDto.getAuditCount())
+                                            .divide(new java.math.BigDecimal(proposedTotal), 4, java.math.RoundingMode.HALF_UP);
+                                            
+                                        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                                        Map<String, java.math.BigDecimal> tcRevenueByType = new java.util.HashMap<>();
+                                        
+                                        com.fasterxml.jackson.databind.JsonNode regRevByType = regionalAllocation.getRevenueByAuditType();
+                                        java.util.Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> fields = regRevByType.fields();
+                                        while (fields.hasNext()) {
+                                            Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> field = fields.next();
+                                            java.math.BigDecimal typeRev = new java.math.BigDecimal(field.getValue().asText());
+                                            tcRevenueByType.put(field.getKey(), typeRev.multiply(ratio));
+                                        }
+                                        entity.setRevenueByAuditType(mapper.valueToTree(tcRevenueByType));
+                                    } catch (Exception e) {
+                                        // Ignore parsing errors
+                                    }
+                                }
+                                
                                 allocationRepository.save(entity);
                                 break;
                             }

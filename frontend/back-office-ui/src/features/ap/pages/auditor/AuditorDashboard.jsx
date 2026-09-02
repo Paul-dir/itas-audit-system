@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Search as SearchIcon, Clock, CheckCircle, PlayCircle, Eye, BarChart3 } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Textarea, Input } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Textarea, Input, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
 import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 
@@ -15,6 +15,8 @@ export default function AuditorDashboard({ view }) {
   const [selectedCase, setSelectedCase] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const myCases = selectors.getCasesForAuditor(user.id);
   
@@ -125,7 +127,19 @@ export default function AuditorDashboard({ view }) {
         <div className="p-4">
           {filtered.length === 0
             ? <Empty icon={SearchIcon} title="No cases" description="Cases assigned to you will appear here." />
-            : <Table columns={cols} rows={filtered} onRowClick={row => setSelectedCase(row)} />
+            : (
+              <>
+                <Table columns={cols} rows={filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)} onRowClick={row => setSelectedCase(row)} />
+                <Pagination
+                  currentPage={page}
+                  totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
+                  totalItems={filtered.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setPage}
+                  onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+                />
+              </>
+            )
           }
         </div>
       </Card>

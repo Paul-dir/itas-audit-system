@@ -1,10 +1,21 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Package, Users, CheckCircle, Clock, Search, Send, Eye, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
+import { formatRevenue } from '../../utils/revenueFormatter.js';
 
 const API = '/api/v1/backoffice/ap/cases';
+
+// Map frontend tax-center ID → backend code
+const TC_MAP = {
+  'addis_ababa-tc1':'TC-AA-01','addis_ababa-tc2':'TC-AA-02','addis_ababa-tc3':'TC-AA-03',
+  'amhara-tc1':'TC-BA-01','amhara-tc2':'TC-BA-02','amhara-tc3':'TC-BA-03',
+  'oromia-tc1':'TC-BB-01','oromia-tc2':'TC-BB-02','oromia-tc3':'TC-BB-03',
+  'dire_dawa-tc1':'TC-AB-01','dire_dawa-tc2':'TC-AB-02','dire_dawa-tc3':'TC-AB-03',
+  'snnpr-tc1':'TC-CA-01','snnpr-tc2':'TC-CA-02','snnpr-tc3':'TC-CA-03',
+  'somali-tc1':'TC-SO-01','somali-tc2':'TC-SO-02','somali-tc3':'TC-SO-03',
+};
 
 const riskColors = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
 
@@ -34,7 +45,7 @@ function mapCase(c) {
 
 export default function TeamLeaderDashboard() {
   const { user } = useAuth();
-  const isCommitteeUser = user?.isJointCommittee === true || user?.role === 'committee';
+  const isCommitteeUser = user?.role === 'committee';
 
   const [cases, setCases]         = useState([]);
   const [auditors, setAuditors]   = useState([]);
@@ -44,45 +55,127 @@ export default function TeamLeaderDashboard() {
   const [searchQ, setSearchQ]     = useState('');
   const [filterAT, setFilterAT]   = useState('ALL');
   const [viewCase, setViewCase]   = useState(null);
-  const [assignModal, setAssignModal] = useState(false);
+  const [assignModal, setAssignModal]     = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignResult, setAssignResult]   = useState(null);
+  const [page, setPage]                   = useState(1);
+  const [itemsPerPage, setItemsPerPage]   = useState(10);
+  const [yearFilter, setYearFilter]       = useState('ALL');
 
   // ── Fetch cases assigned to this TL / committee member ──────────────────────
   const fetchCases = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const param = isCommitteeUser ? `committeeId=${user.id}` : `teamLeader=${user.id}`;
+      const tcCode = TC_MAP[user?.taxCenter] || user?.taxCenter;
+      const atParam = user?.auditType ? `&auditType=${encodeURIComponent(user.auditType)}` : '';
+      const param = isCommitteeUser
+        ? `committeeId=${user.id}${tcCode ? '&taxCenter=' + encodeURIComponent(tcCode) : ''}${atParam}`
+        : `teamLeader=${user.id}${tcCode ? '&taxCenter=' + encodeURIComponent(tcCode) : ''}${atParam}`;
       const r = await fetch(`${API}?${param}`, {
         headers: { 'X-Actor-Id': user.id }
       });
       if (r.ok) {
         const res = await r.json();
-        setCases((res.data || []).map(mapCase));
+        let fetched = (res.data || []).map(mapCase);
+        // If committee query by ID returned 0 cases, fallback to fetching joint audit / committee cases for this tax center
+        if (isCommitteeUser && fetched.length === 0 && tcCode) {
+          const fallbackRes = await fetch(`${API}?taxCenter=${encodeURIComponent(tcCode)}`, {
+            headers: { 'X-Actor-Id': user.id }
+          });
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            const allTcCases = (fallbackData.data || []).map(mapCase);
+            fetched = allTcCases.filter(c => c.isCommittee || c.assignedTeamLeaderId === user.id);
+          }
+        }
+        setCases(fetched);
       }
     } catch (e) { console.error('fetchCases', e); }
     finally { setLoading(false); }
-  }, [user?.id, isCommitteeUser]);
+  }, [user?.id, user?.taxCenter, isCommitteeUser]);
 
   // ── Fetch auditors under this TL ────────────────────────────────────────────
   const fetchAuditors = useCallback(async () => {
     if (!user?.id || isCommitteeUser) return;
     try {
-      const r = await fetch(`/api/v1/backoffice/ap/users?role=auditor&teamLeader=${user.id}`, {
+      const tcCode = TC_MAP[user?.taxCenter] || user?.taxCenter || '';
+      const r = await fetch(`/api/v1/backoffice/ap/users?role=auditor&teamLeader=${user.id}&taxCenter=${encodeURIComponent(tcCode)}`, {
         headers: { 'X-Actor-Id': user.id }
       });
-      if (r.ok) { const res = await r.json(); setAuditors(res.data || res || []); }
-    } catch (e) { console.error('fetchAuditors', e); }
-  }, [user?.id, isCommitteeUser]);
+      let loaded = [];
+      if (r.ok) {
+        const res = await r.json();
+        loaded = res.data || res || [];
+      }
+      // Strictly match auditors assigned to this specific Team Leader
+      if (!Array.isArray(loaded) || loaded.length === 0) {
+        const { SEED_USERS } = await import('../../data/seed.js');
+        loaded = SEED_USERS.filter(u => u.role === 'auditor' && u.teamLeader === user.id);
+        // Fallback if specific ID mapping is missing but tax center matches
+        if (loaded.length === 0) {
+          loaded = SEED_USERS.filter(u => u.role === 'auditor' && u.taxCenter === user.taxCenter).slice(0, 2);
+        }
+      }
+      setAuditors(loaded);
+    } catch (e) { 
+      console.error('fetchAuditors', e);
+      try {
+        const { SEED_USERS } = await import('../../data/seed.js');
+        setAuditors(SEED_USERS.filter(u => u.role === 'auditor' && u.teamLeader === user.id));
+      } catch (err) {}
+    }
+  }, [user?.id, user?.taxCenter, isCommitteeUser]);
 
   useEffect(() => { fetchCases(); fetchAuditors(); }, [fetchCases, fetchAuditors]);
+
+  // Available Plan Years
+  const availableYears = useMemo(() => {
+    const years = new Set(cases.map(c => c.planYear || 2026));
+    return ['ALL', ...Array.from(years).sort()];
+  }, [cases]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return cases.filter(c => {
-      // For TL: pending = ASSIGNED_TO_TEAM_LEADER, in_progress = IN_PROGRESS
-      if (tab === 'pending'     && c.frontendStatus !== 'ASSIGNED')    return false;
+      // Filter by Plan Year
+      if (yearFilter !== 'ALL' && String(c.planYear || 2026) !== String(yearFilter)) {
+        return false;
+      }
+      // Standard Team Leaders must NOT see cases still undergoing Joint Committee approval
+      if (!isCommitteeUser && (c.status === 'ASSIGNED_TO_COMMITTEE' || c.frontendStatus === 'ASSIGNED_TO_COMMITTEE')) {
+        return false;
+      }
+      // Strictly isolate by assigned team leader OR audit type specialization
+      if (!isCommitteeUser) {
+        if (c.assignedTeamLeaderId && c.assignedTeamLeaderId !== user?.id) {
+          return false;
+        }
+        if (user?.auditType) {
+          const userType = user.auditType.toLowerCase().replace(/_/g, '');
+          const caseType = (c.auditTypeDef?.id || c.auditType || '').toLowerCase().replace(/_/g, '');
+          if (userType !== caseType && !caseType.includes(userType) && !userType.includes(caseType)) {
+            return false;
+          }
+        }
+      } else {
+        // Enforce strict separation for specialized committees
+        const caseType = (c.auditTypeDef?.id || c.auditType || '').toUpperCase();
+        if (user?.auditType) {
+          const userType = user.auditType.toUpperCase();
+          if (userType === 'JOINT_AUDIT' || userType === 'JOINT') {
+            if (caseType !== 'JOINT_AUDIT' && caseType !== 'JOINT') {
+              return false;
+            }
+          } else if (userType === 'TRANSFER_PRICING' || userType === 'TP') {
+            if (caseType !== 'TRANSFER_PRICING' && caseType !== 'TP') {
+              return false;
+            }
+          }
+        }
+      }
+      // For TL/Committee: pending tab includes ASSIGNED (TL) and ASSIGNED_TO_COMMITTEE (Committee)
+      if (tab === 'pending'     && !['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) && c.status !== 'ASSIGNED_TO_COMMITTEE') return false;
       if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS') return false;
       if (tab === 'completed'   && !['COMPLETED','CLOSED'].includes(c.frontendStatus)) return false;
       if (filterAT !== 'ALL' && c.auditTypeDef?.id !== filterAT) return false;
@@ -92,14 +185,29 @@ export default function TeamLeaderDashboard() {
       }
       return true;
     });
-  }, [cases, tab, filterAT, searchQ]);
+  }, [cases, tab, filterAT, searchQ, yearFilter, user?.id, user?.auditType, isCommitteeUser]);
+
+  const scopedCases = useMemo(() => {
+    return cases.filter(c => {
+      if (!isCommitteeUser && (c.status === 'ASSIGNED_TO_COMMITTEE' || c.frontendStatus === 'ASSIGNED_TO_COMMITTEE')) {
+        return false;
+      }
+      if (!isCommitteeUser && c.assignedTeamLeaderId && c.assignedTeamLeaderId !== user?.id) {
+        return false;
+      }
+      if (!user?.auditType || isCommitteeUser) return true;
+      const userType = user.auditType.toLowerCase();
+      const caseType = (c.auditTypeDef?.id || c.auditType || '').toLowerCase();
+      return userType === caseType || caseType.includes(userType) || userType.includes(caseType);
+    });
+  }, [cases, user?.id, user?.auditType, isCommitteeUser]);
 
   const stats = useMemo(() => ({
-    total:      cases.length,
-    pending:    cases.filter(c => c.frontendStatus === 'ASSIGNED').length,
-    inProgress: cases.filter(c => c.frontendStatus === 'IN_PROGRESS').length,
-    completed:  cases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
-  }), [cases]);
+    total:      scopedCases.length,
+    pending:    scopedCases.filter(c => ['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_COMMITTEE').length,
+    inProgress: scopedCases.filter(c => c.frontendStatus === 'IN_PROGRESS').length,
+    completed:  scopedCases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
+  }), [scopedCases]);
 
   const tabs = [
     { id:'pending',     label: isCommitteeUser ? 'Assigned to Committee' : 'Pending Auditor Assignment', count: stats.pending     },
@@ -108,7 +216,7 @@ export default function TeamLeaderDashboard() {
   ];
 
   // ── Selection ────────────────────────────────────────────────────────────────
-  const selectableInTab = filtered.filter(c => c.frontendStatus === 'ASSIGNED');
+  const selectableInTab = filtered.filter(c => ['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_COMMITTEE');
   const toggleAll = () => setSelected(prev =>
     prev.length === selectableInTab.length ? [] : selectableInTab.map(c => c.id));
   const toggle = id => setSelected(prev =>
@@ -151,7 +259,7 @@ export default function TeamLeaderDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isCommitteeUser ? 'Joint Committee Dashboard' : 'Team Leader Dashboard'}
+            {user?.role === 'committee' ? 'Joint Committee Dashboard' : 'Team Leader Dashboard'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {loading ? 'Loading cases…' : `${stats.total} cases assigned to you`}
@@ -160,7 +268,7 @@ export default function TeamLeaderDashboard() {
         <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>Refresh</Button>
       </div>
 
-      {isCommitteeUser && (
+      {user?.role === 'committee' && (
         <Alert type="info" title="Joint Committee Workflow">
           You manage Joint Audit and Transfer Pricing cases. These require inter-department coordination and follow a special approval process.
         </Alert>
@@ -222,11 +330,16 @@ export default function TeamLeaderDashboard() {
       {/* Table */}
       <Card padding={false}>
         <div className="px-6 pt-4 pb-0"><Tabs tabs={tabs} active={tab} onChange={setTab} /></div>
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap items-center">
           <Input icon={Search} placeholder="Search taxpayer / TIN…" value={searchQ} onChange={e => setSearchQ(e.target.value)} />
           <Select value={filterAT} onChange={e => setFilterAT(e.target.value)}>
             <option value="ALL">All Audit Types</option>
             {AUDIT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
+          </Select>
+          <Select value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+            {availableYears.map(y => (
+              <option key={y} value={y}>{y === 'ALL' ? 'All Plan Years' : `FY ${y}`}</option>
+            ))}
           </Select>
         </div>
 
@@ -251,7 +364,7 @@ export default function TeamLeaderDashboard() {
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
                   {loading ? 'Loading…' : 'No cases found'}
                 </td></tr>
-              ) : filtered.map(c => {
+              ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
                 const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
                 const auditor = auditors.find(a => (a.userId||a.id) === c.assignedAuditorId);
                 return (
@@ -295,6 +408,14 @@ export default function TeamLeaderDashboard() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={page}
+          totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
+          totalItems={filtered.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       </Card>
 
       {/* View Case Modal */}
@@ -318,7 +439,7 @@ export default function TeamLeaderDashboard() {
                 <p className="font-medium text-gray-900 dark:text-white">{viewCase.taxpayerName}</p>
                 <p className="text-xs text-gray-500">TIN: {viewCase.tin}</p>
                 <p className="text-xs text-gray-500">Sector: {viewCase.sector}</p>
-                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Revenue: {(viewCase.estimatedRevenue/1e6).toFixed(1)}M ETB</p>}
+                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Revenue: {formatRevenue(viewCase.estimatedRevenue)} ETB</p>}
               </div>
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4">
                 <p className="text-sm font-semibold mb-2">⚠️ Risk Score</p>

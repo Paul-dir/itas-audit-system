@@ -348,6 +348,69 @@ export function Tabs({ tabs, active, onChange, className = '' }) {
   );
 }
 
+// ──── PAGINATION ───────────────────────────────────────────
+export function Pagination({ currentPage = 1, totalPages = 1, totalItems = 0, itemsPerPage = 5, onPageChange, onItemsPerPageChange }) {
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#161f28] text-slate-600 dark:text-slate-400 text-xs">
+      <div>
+        Showing <span className="font-semibold text-slate-900 dark:text-white">{startItem}</span> to <span className="font-semibold text-slate-900 dark:text-white">{endItem}</span> of <span className="font-semibold text-slate-900 dark:text-white">{totalItems}</span> plans
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => onPageChange && onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage <= 1}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          ‹
+        </button>
+
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map(page => (
+          <button
+            key={page}
+            onClick={() => onPageChange && onPageChange(page)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg font-semibold text-xs transition-all ${
+              currentPage === page
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+            }`}
+          >
+            {page}
+          </button>
+        ))}
+
+        <button
+          onClick={() => onPageChange && onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          ›
+        </button>
+      </div>
+
+      {onItemsPerPageChange && (
+        <div className="flex items-center gap-2">
+          <span>Show</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+          <span>per page</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ──── CONFIRM MODAL ────────────────────────────────────────
 export function ConfirmModal({ open, onClose, onConfirm, title, message, confirmLabel = 'Confirm', loading }) {
   if (!open) return null;

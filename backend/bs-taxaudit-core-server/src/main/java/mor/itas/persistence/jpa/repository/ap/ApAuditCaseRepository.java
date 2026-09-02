@@ -61,6 +61,13 @@ public interface ApAuditCaseRepository extends JpaRepository<ApAuditCaseEntity, 
     @Query("DELETE FROM ApAuditCaseEntity ac WHERE ac.planId = :planId")
     int deleteByPlanId(@Param("planId") UUID planId);
 
+    // ── By plan year ─────────────────────────────────────────────────────────
+    @Query("SELECT ac FROM ApAuditCaseEntity ac WHERE ac.caseNumber LIKE CONCAT(:planYear, '%')")
+    List<ApAuditCaseEntity> findByPlanYear(@Param("planYear") int planYear);
+
+    // ── By multiple plans ─────────────────────────────────────────────────────
+    List<ApAuditCaseEntity> findByPlanIdIn(List<UUID> planIds);
+
     // ── Stat queries ──────────────────────────────────────────────────────────
     @Query("SELECT ac.auditType, COUNT(ac) FROM ApAuditCaseEntity ac WHERE ac.taxCenterCode = :taxCenterCode GROUP BY ac.auditType")
     List<Object[]> countByTaxCenterCodeGroupedByAuditType(@Param("taxCenterCode") String taxCenterCode);

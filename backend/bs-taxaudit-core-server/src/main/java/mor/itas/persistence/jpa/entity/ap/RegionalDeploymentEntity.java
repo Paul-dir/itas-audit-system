@@ -40,6 +40,14 @@ public class RegionalDeploymentEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Integer> regionAllocatedCases;  // { audit_type: count }
 
+    // Revenue tracking at regional level
+    @Column(name = "estimated_revenue")
+    private Long estimatedRevenue;
+
+    @Column(name = "revenue_by_audit_type")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Long> revenueByAuditType;  // { DESK_AUDIT: 50000, ... }
+
     // Region status tracking
     @Column(name = "received_at")
     private OffsetDateTime receivedAt;
@@ -122,6 +130,22 @@ public class RegionalDeploymentEntity {
 
     public void setRegionAllocatedCases(Map<String, Integer> regionAllocatedCases) {
         this.regionAllocatedCases = regionAllocatedCases;
+    }
+
+    public Long getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(Long estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
+    }
+
+    public Map<String, Long> getRevenueByAuditType() {
+        return revenueByAuditType;
+    }
+
+    public void setRevenueByAuditType(Map<String, Long> revenueByAuditType) {
+        this.revenueByAuditType = revenueByAuditType;
     }
 
     public OffsetDateTime getReceivedAt() {

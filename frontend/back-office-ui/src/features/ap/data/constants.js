@@ -3,15 +3,20 @@
 // ============================================================
 
 export const REGIONS = [
-  { id: 'addis_ababa', name: 'Addis Ababa', code: 'AA' },
-  { id: 'amhara',      name: 'Amhara',      code: 'BA' },
-  { id: 'oromia',      name: 'Oromia',      code: 'BB' },
-  { id: 'dire_dawa',   name: 'Dire Dawa',   code: 'AB' },
-  { id: 'snnpr',       name: 'SNNPR',       code: 'CA' },
-  { id: 'somali',      name: 'Somali',      code: 'SO' },
+  { id: 'federal_level', name: 'Federal Level (LTO)', code: 'FED' },
+  { id: 'addis_ababa',    name: 'Addis Ababa',          code: 'AA' },
+  { id: 'amhara',         name: 'Amhara',               code: 'BA' },
+  { id: 'oromia',         name: 'Oromia',               code: 'BB' },
+  { id: 'dire_dawa',      name: 'Dire Dawa',            code: 'AB' },
+  { id: 'snnpr',          name: 'SNNPR',                code: 'CA' },
+  { id: 'somali',         name: 'Somali',               code: 'SO' },
 ];
 
 export const TAX_CENTERS = {
+  federal_level: [
+    { id: 'federal-lto1', name: 'Federal Large Taxpayers Office 1', shortName: 'FED-LTO1' },
+    { id: 'federal-lto2', name: 'Federal Large Taxpayers Office 2', shortName: 'FED-LTO2' },
+  ],
   addis_ababa: [
     { id: 'addis_ababa-tc1', name: 'Addis Ababa TC1', shortName: 'AA-TC1' },
     { id: 'addis_ababa-tc2', name: 'Addis Ababa TC2', shortName: 'AA-TC2' },

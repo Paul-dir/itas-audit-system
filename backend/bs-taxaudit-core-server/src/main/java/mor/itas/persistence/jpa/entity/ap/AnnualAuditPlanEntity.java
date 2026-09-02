@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * AnnualAuditPlanEntity - JPA Entity for ap_annual_audit_plans table
@@ -92,6 +94,13 @@ public class AnnualAuditPlanEntity {
 
     @Column(name = "amendment_comment")
     private String amendmentComment;
+
+    @Column(name = "estimated_revenue", precision = 19, scale = 2)
+    private BigDecimal estimatedRevenue;
+
+    @Column(name = "estimated_revenue_distribution", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private JsonNode estimatedRevenueDistribution;
 
     @Version
     private Long version = 0L;
@@ -296,6 +305,22 @@ public class AnnualAuditPlanEntity {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public BigDecimal getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
+    }
+
+    public JsonNode getEstimatedRevenueDistribution() {
+        return estimatedRevenueDistribution;
+    }
+
+    public void setEstimatedRevenueDistribution(JsonNode estimatedRevenueDistribution) {
+        this.estimatedRevenueDistribution = estimatedRevenueDistribution;
     }
 
     public Long getVersion() {

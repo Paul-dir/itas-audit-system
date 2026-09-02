@@ -75,6 +75,7 @@ class PlanService {
         planName: planData.name || 'Unnamed Plan',  // Map 'name' to 'planName'
         regionalAllocations: regionalAllocations,
         distribution: planData.distribution,  // Include distribution breakdown by region and audit type
+        estimatedRevenue: parseFloat(planData.estimatedRevenue) || 10000000,
       };
       
       console.log('📤 Final payload to send:', JSON.stringify(backendPayload, null, 2));
@@ -239,13 +240,12 @@ class PlanService {
       plans = plans.map(plan => {
         const mapped = { ...plan };
         
-        // Ensure name field exists (backend uses planName)
+        // Ensure name and planYear fields exist
         if (!mapped.name && mapped.planName) {
           mapped.name = mapped.planName;
         }
-        if (!mapped.year && mapped.planYear) {
-          mapped.year = mapped.planYear;
-        }
+        mapped.planYear = mapped.planYear || mapped.year;
+        mapped.year = mapped.year || mapped.planYear;
         
         // Transform distribution from backend codes to frontend IDs
         if (mapped.distribution) {
@@ -257,13 +257,28 @@ class PlanService {
           mapped.distribution = transformed;
         }
         
-        // Calculate totalCases from distribution if null
-        if (!mapped.totalCases && mapped.distribution) {
+        // Calculate totalCases and populate distribution from regionalAllocations if missing/empty
+        if (mapped.regionalAllocations && Array.isArray(mapped.regionalAllocations)) {
+          if (!mapped.distribution || Object.keys(mapped.distribution).length === 0) {
+            const derivedDist = {};
+            mapped.regionalAllocations.forEach(alloc => {
+              const regCode = alloc.regionCode || 'AA';
+              const fId = codeToId[regCode] || regCode.toLowerCase();
+              const count = alloc.effectiveCount || alloc.proposedCount || 0;
+              derivedDist[fId] = {
+                desk_audit: Math.round(count * 0.35),
+                comprehensive: Math.round(count * 0.25),
+                issue_audit: Math.round(count * 0.15),
+                joint_audit: Math.round(count * 0.15),
+                transfer_pricing: Math.round(count * 0.10)
+              };
+            });
+            mapped.distribution = derivedDist;
+          }
+
           let total = 0;
-          Object.values(mapped.distribution).forEach(regionAuditTypes => {
-            if (regionAuditTypes && typeof regionAuditTypes === 'object') {
-              Object.values(regionAuditTypes).forEach(count => { total += count || 0; });
-            }
+          mapped.regionalAllocations.forEach(alloc => {
+            total += (alloc.effectiveCount || alloc.proposedCount || 0);
           });
           mapped.totalCases = total;
         }

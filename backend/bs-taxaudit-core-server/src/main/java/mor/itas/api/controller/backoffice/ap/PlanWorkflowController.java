@@ -85,13 +85,13 @@ public class PlanWorkflowController {
             if (risk != null) {
                 long regionalTotal = risk.critical() + risk.high() + risk.medium() + risk.low();
                 
-                // Calculate distribution by audit type based on percentages
-                int desk = (int)(regionalTotal * 0.35);
-                int field = (int)(regionalTotal * 0.25);
-                int joint = (int)(regionalTotal * 0.15);
-                int tprice = (int)(regionalTotal * 0.08);
-                int comp = (int)(regionalTotal * 0.12);
-                int issue = (int)(regionalTotal * 0.05);
+                // Calculate distribution by audit type based on testing target (~500-800 per region, 20-50 per type in TC)
+                int desk = (int)(regionalTotal * 0.35 * 0.02);
+                int field = (int)(regionalTotal * 0.25 * 0.02);
+                int joint = (int)(regionalTotal * 0.15 * 0.02);
+                int tprice = (int)(regionalTotal * 0.08 * 0.02);
+                int comp = (int)(regionalTotal * 0.12 * 0.02);
+                int issue = (int)(regionalTotal * 0.05 * 0.02);
                 int regionTotal = desk + field + joint + tprice + comp + issue;
                 
                 totalCases += regionTotal;
@@ -132,28 +132,28 @@ public class PlanWorkflowController {
     public ResponseEntity<Map<String, Object>> getRiskAnalysisDashboard(
             @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
         
-        // Get national risk distribution
+        // Get national risk distribution - SCALED FOR OPTIMAL TESTING PERFORMANCE (Total: 3,500 national cases)
         Map<String, Integer> nationalRiskCounts = new HashMap<>();
-        nationalRiskCounts.put("critical", 21_500);
-        nationalRiskCounts.put("high", 79_980);
-        nationalRiskCounts.put("medium", 149_640);
-        nationalRiskCounts.put("low", 178_880);
-        Long totalAudits = 21_500L + 79_980L + 149_640L + 178_880L;
+        nationalRiskCounts.put("critical", 350);
+        nationalRiskCounts.put("high", 1050);
+        nationalRiskCounts.put("medium", 1225);
+        nationalRiskCounts.put("low", 875);
+        Long totalAudits = 350L + 1050L + 1225L + 875L; // 3,500 total
         
         // Calculate percentages
-        Double criticalPct = (21_500.0 / totalAudits) * 100;
-        Double highPct = (79_980.0 / totalAudits) * 100;
-        Double mediumPct = (149_640.0 / totalAudits) * 100;
-        Double lowPct = (178_880.0 / totalAudits) * 100;
+        Double criticalPct = (350.0 / totalAudits) * 100;
+        Double highPct = (1050.0 / totalAudits) * 100;
+        Double mediumPct = (1225.0 / totalAudits) * 100;
+        Double lowPct = (875.0 / totalAudits) * 100;
         
         Map<String, Object> dashboard = new LinkedHashMap<>();
         
         // National Level
         Map<String, Object> national = new LinkedHashMap<>();
-        national.put("totalTaxpayers", 5_200_000L);
-        national.put("totalRiskyTaxpayers", 430_000L);
+        national.put("totalTaxpayers", 50_000L);
+        national.put("totalRiskyTaxpayers", 4_500L);
         national.put("totalAuditsRequired", totalAudits);
-        national.put("riskPercentage", String.format("%.2f%%", (430_000.0 / 5_200_000.0) * 100));
+        national.put("riskPercentage", String.format("%.2f%%", (4_500.0 / 50_000.0) * 100));
         national.put("riskLevelBreakdown", nationalRiskCounts);
         national.put("riskLevelPercentages", Map.of(
             "critical", String.format("%.2f%%", criticalPct),
@@ -163,67 +163,67 @@ public class PlanWorkflowController {
         ));
         dashboard.put("nationalAggregate", national);
         
-        // Regional Breakdown
+        // Regional Breakdown (Scaled to 500-800 per region)
         Map<String, Object> regional = new LinkedHashMap<>();
         
-        // Region AA
+        // Region AA (800 audits)
         Map<String, Object> aa = new LinkedHashMap<>();
         aa.put("regionCode", "AA");
         aa.put("regionName", "Addis Ababa");
-        aa.put("taxpayers", 1_200_000L);
-        aa.put("riskyTaxpayers", 86_000L);
-        aa.put("auditsRequired", 4_300 + 15_996 + 29_928 + 35_776);
-        aa.put("riskLevelBreakdown", Map.of("critical", 4_300, "high", 15_996, "medium", 29_928, "low", 35_776));
+        aa.put("taxpayers", 15_000L);
+        aa.put("riskyTaxpayers", 1_000L);
+        aa.put("auditsRequired", 800);
+        aa.put("riskLevelBreakdown", Map.of("critical", 100, "high", 250, "medium", 270, "low", 180));
         regional.put("AA", aa);
         
-        // Region BA
+        // Region BA (600 audits)
         Map<String, Object> ba = new LinkedHashMap<>();
         ba.put("regionCode", "BA");
         ba.put("regionName", "Amhara (Bahir Dar)");
-        ba.put("taxpayers", 800_000L);
-        ba.put("riskyTaxpayers", 64_500L);
-        ba.put("auditsRequired", 3_225 + 11_997 + 22_446 + 26_832);
-        ba.put("riskLevelBreakdown", Map.of("critical", 3_225, "high", 11_997, "medium", 22_446, "low", 26_832));
+        ba.put("taxpayers", 10_000L);
+        ba.put("riskyTaxpayers", 750L);
+        ba.put("auditsRequired", 600);
+        ba.put("riskLevelBreakdown", Map.of("critical", 60, "high", 180, "medium", 210, "low", 150));
         regional.put("BA", ba);
         
-        // Region BB
+        // Region BB (600 audits)
         Map<String, Object> bb = new LinkedHashMap<>();
         bb.put("regionCode", "BB");
         bb.put("regionName", "Oromia");
-        bb.put("taxpayers", 1_000_000L);
-        bb.put("riskyTaxpayers", 64_500L);
-        bb.put("auditsRequired", 3_225 + 11_997 + 22_446 + 26_832);
-        bb.put("riskLevelBreakdown", Map.of("critical", 3_225, "high", 11_997, "medium", 22_446, "low", 26_832));
+        bb.put("taxpayers", 12_000L);
+        bb.put("riskyTaxpayers", 750L);
+        bb.put("auditsRequired", 600);
+        bb.put("riskLevelBreakdown", Map.of("critical", 60, "high", 180, "medium", 210, "low", 150));
         regional.put("BB", bb);
         
-        // Region AB
+        // Region AB (500 audits)
         Map<String, Object> ab = new LinkedHashMap<>();
         ab.put("regionCode", "AB");
         ab.put("regionName", "Dire Dawa");
-        ab.put("taxpayers", 400_000L);
-        ab.put("riskyTaxpayers", 19_350L);
-        ab.put("auditsRequired", 968 + 3_599 + 6_734 + 8_050);
-        ab.put("riskLevelBreakdown", Map.of("critical", 968, "high", 3_599, "medium", 6_734, "low", 8_050));
+        ab.put("taxpayers", 5_000L);
+        ab.put("riskyTaxpayers", 600L);
+        ab.put("auditsRequired", 500);
+        ab.put("riskLevelBreakdown", Map.of("critical", 50, "high", 150, "medium", 180, "low", 120));
         regional.put("AB", ab);
         
-        // Region CA
+        // Region CA (500 audits)
         Map<String, Object> ca = new LinkedHashMap<>();
         ca.put("regionCode", "CA");
         ca.put("regionName", "SNNPR");
-        ca.put("taxpayers", 500_000L);
-        ca.put("riskyTaxpayers", 21_520L);
-        ca.put("auditsRequired", 1_075 + 4_198 + 7_857 + 9_391);
-        ca.put("riskLevelBreakdown", Map.of("critical", 1_075, "high", 4_198, "medium", 7_857, "low", 9_391));
+        ca.put("taxpayers", 4_000L);
+        ca.put("riskyTaxpayers", 600L);
+        ca.put("auditsRequired", 500);
+        ca.put("riskLevelBreakdown", Map.of("critical", 40, "high", 145, "medium", 175, "low", 140));
         regional.put("CA", ca);
         
-        // Region SO
+        // Region SO (500 audits)
         Map<String, Object> so = new LinkedHashMap<>();
         so.put("regionCode", "SO");
         so.put("regionName", "Somalia");
-        so.put("taxpayers", 300_000L);
-        so.put("riskyTaxpayers", 21_520L);
-        so.put("auditsRequired", 1_075 + 4_198 + 7_857 + 9_391);
-        so.put("riskLevelBreakdown", Map.of("critical", 1_075, "high", 4_198, "medium", 7_857, "low", 9_391));
+        so.put("taxpayers", 4_000L);
+        so.put("riskyTaxpayers", 600L);
+        so.put("auditsRequired", 500);
+        so.put("riskLevelBreakdown", Map.of("critical", 40, "high", 145, "medium", 175, "low", 140));
         regional.put("SO", so);
         
         dashboard.put("regionalBreakdown", regional);
@@ -240,10 +240,10 @@ public class PlanWorkflowController {
         
         // Risk Level Distribution
         Map<String, Object> riskDistribution = new LinkedHashMap<>();
-        riskDistribution.put("critical", Map.of("count", 21_500, "percentage", criticalPct));
-        riskDistribution.put("high", Map.of("count", 79_980, "percentage", highPct));
-        riskDistribution.put("medium", Map.of("count", 149_640, "percentage", mediumPct));
-        riskDistribution.put("low", Map.of("count", 178_880, "percentage", lowPct));
+        riskDistribution.put("critical", Map.of("count", 350, "percentage", criticalPct));
+        riskDistribution.put("high", Map.of("count", 1050, "percentage", highPct));
+        riskDistribution.put("medium", Map.of("count", 1225, "percentage", mediumPct));
+        riskDistribution.put("low", Map.of("count", 875, "percentage", lowPct));
         dashboard.put("riskLevelDistribution", riskDistribution);
         
         return ResponseEntity.ok(dashboard);
@@ -264,6 +264,7 @@ public class PlanWorkflowController {
             request.getPlanName(),
             regionalAllocations,
             request.getDistribution(),  // Pass distribution data
+            request.getEstimatedRevenue(), // Pass estimated revenue
             actorId
         );
 

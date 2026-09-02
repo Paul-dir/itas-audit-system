@@ -3,6 +3,7 @@ import { MapPin, Send, CheckCircle, Clock, Eye, Package, ArrowRight, Search, Tim
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, Button, Alert, Badge, StatCard, Modal, Textarea, Tabs, Empty, Table, Input } from '../../../../components/ui/index.jsx';
+import { formatRevenue } from '../../utils/revenueFormatter.js';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 import { DistributionTable, TaxCenterDistributionTable } from '../shared/DistributionTable.jsx';
 import DistributionModal from './DistributionModal.jsx';
@@ -43,6 +44,23 @@ export default function RegionalDashboard({ view }) {
   const [distributionModalPlan, setDistributionModalPlan] = useState(null);
   const [feedbackModalPlan, setFeedbackModalPlan] = useState(null);
   const [capacityOverrides, setCapacityOverrides] = useState({}); // Regional director's capacity adjustments
+  const [revenueStats, setRevenueStats] = useState(null);
+
+  // Load regional revenue stats
+  useEffect(() => {
+    const loadRevenue = async () => {
+      try {
+        const res = await fetch(`/api/v1/backoffice/ap/revenue/regional?regionCode=${(region || 'AA').toUpperCase()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRevenueStats(data);
+        }
+      } catch (err) {
+        console.error('Failed to load revenue stats:', err);
+      }
+    };
+    loadRevenue();
+  }, [region]);
 
   // ✅ Fetch plans for this region from backend on component mount
   useEffect(() => {
@@ -75,9 +93,9 @@ export default function RegionalDashboard({ view }) {
   );
   
   // ✅ Plans sent to tax centers - STILL visible, waiting for tax center feedback
-  // A plan is waiting for TC feedback if it has been distributed by this region,
-  // and NOT all tax centers for this region have submitted their feedback yet.
+  // Only applies to plans in pre-approval feedback phase (AWAITING_REGIONAL_FEEDBACK or SENT_TO_TAX_CENTERS)
   const waitingTaxCenterFeedback = allPlans.filter(p => {
+    if (['APPROVED_TO_REGIONS', 'FINALIZED', 'FEEDBACK_COLLECTED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(p.status)) return false;
     const isDistributed = p.tcDistributions?.[region];
     const isPostDistribution = ['AWAITING_REGIONAL_FEEDBACK', 'SENT_TO_TAX_CENTERS'].includes(p.status);
     if (!isDistributed || !isPostDistribution) return false;
@@ -95,6 +113,7 @@ export default function RegionalDashboard({ view }) {
   
   // Plans where all tax centers have submitted feedback (and Regional Director hasn't submitted yet)
   const submitted = allPlans.filter(p => {
+    if (['APPROVED_TO_REGIONS', 'FINALIZED', 'FEEDBACK_COLLECTED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(p.status)) return false;
     const isDistributed = p.tcDistributions?.[region];
     const isPostDistribution = ['AWAITING_REGIONAL_FEEDBACK', 'SENT_TO_TAX_CENTERS'].includes(p.status);
     if (!isDistributed || !isPostDistribution) return false;
@@ -407,6 +426,23 @@ export default function RegionalDashboard({ view }) {
           }}
         />
       </div>
+
+      {/* Regional Revenue by Audit Type */}
+      {revenueStats && revenueStats.regionBreakdown && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">💰 Regional Revenue by Audit Type ({formatRevenue(revenueStats.totalRevenue)} ETB)</h3>
+          <div className="grid grid-cols-5 gap-3">
+            {Object.entries(revenueStats.regionBreakdown.find(r => r.regionCode === (region || '').toUpperCase())?.revenueByAuditType || {
+              DESK_AUDIT: 0, ISSUE_AUDIT: 0, JOINT_AUDIT: 0, COMPREHENSIVE_AUDIT: 0, TRANSFER_PRICING: 0
+            }).map(([type, rev]) => (
+              <div key={type} className="text-center p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">{formatRevenue(rev)}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Loading state */}
       {plansLoading && (

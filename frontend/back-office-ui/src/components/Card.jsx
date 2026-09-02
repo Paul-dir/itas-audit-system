@@ -30,8 +30,8 @@ function Card({
   };
 
   const baseClasses = `
-    rounded-xl border border-slate-800/80 bg-[#161f28]
-    transition-all duration-200
+    rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#161f28] text-slate-900 dark:text-white
+    shadow-sm transition-all duration-200
     ${accent ? accentColors[accent] : ''}
     ${variantClasses[variant]}
     ${className}

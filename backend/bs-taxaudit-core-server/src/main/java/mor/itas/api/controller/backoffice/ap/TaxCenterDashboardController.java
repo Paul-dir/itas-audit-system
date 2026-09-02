@@ -64,6 +64,9 @@ public class TaxCenterDashboardController {
                         map.put("planId", allocation.getAnnualPlan().getId().toString());
                         map.put("planName", allocation.getAnnualPlan().getName());
                         map.put("planYear", allocation.getAnnualPlan().getYear());
+                        map.put("planStatus", allocation.getAnnualPlan().getStatus() != null 
+                            ? allocation.getAnnualPlan().getStatus().name() 
+                            : "UNKNOWN");
                     }
                     map.put("taxCenterId", allocation.getTaxCenterCode());
                     map.put("regionCode", allocation.getRegionCode());

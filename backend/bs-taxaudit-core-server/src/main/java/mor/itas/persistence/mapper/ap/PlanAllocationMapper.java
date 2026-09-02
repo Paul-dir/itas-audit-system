@@ -34,6 +34,8 @@ public class PlanAllocationMapper {
         allocation.setTcJustification(entity.getTcJustification());
         allocation.setTcFeedbackSubmitted(entity.getTcFeedbackSubmitted());
         allocation.setTcFeedbackSubmittedAt(entity.getTcFeedbackSubmittedAt());
+        allocation.setEstimatedRevenue(entity.getEstimatedRevenue());
+        allocation.setRevenueByAuditType(entity.getRevenueByAuditType());
         allocation.setCreatedAt(entity.getCreatedAt());
         allocation.setUpdatedAt(entity.getUpdatedAt());
 
@@ -60,6 +62,8 @@ public class PlanAllocationMapper {
         entity.setTcJustification(domain.getTcJustification());
         entity.setTcFeedbackSubmitted(domain.getTcFeedbackSubmitted());
         entity.setTcFeedbackSubmittedAt(domain.getTcFeedbackSubmittedAt());
+        entity.setEstimatedRevenue(domain.getEstimatedRevenue());
+        entity.setRevenueByAuditType(domain.getRevenueByAuditType());
         entity.setCreatedAt(domain.getCreatedAt() != null ? domain.getCreatedAt() : OffsetDateTime.now());
         entity.setUpdatedAt(domain.getUpdatedAt());
 
