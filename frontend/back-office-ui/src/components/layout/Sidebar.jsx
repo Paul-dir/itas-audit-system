@@ -123,6 +123,20 @@ const NAV_SECTIONS = {
       items: [
         { id: 'cases', label: 'My Cases', icon: Search }
       ]
+    },
+    {
+      title: 'TP AUDIT EXECUTION',
+      items: [
+        { id: 'phase-1', label: 'Risk Assessment', icon: CheckSquare },
+        { id: 'phase-2', label: 'Working Hypothesis', icon: ClipboardList },
+        { id: 'phase-3', label: 'Planning & Meeting', icon: Target },
+        { id: 'phase-4', label: 'Field Work', icon: Building2 },
+        { id: 'phase-5', label: 'Economic Analysis', icon: Activity },
+        { id: 'phase-6', label: 'TP Report', icon: ClipboardList },
+        { id: 'phase-assessment', label: 'Assessment', icon: Star },
+        { id: 'phase-7', label: 'Notice & Objection', icon: Star },
+        { id: 'phase-8', label: 'Audit Closure', icon: CheckSquare }
+      ]
     }
   ],
   senior_management: [

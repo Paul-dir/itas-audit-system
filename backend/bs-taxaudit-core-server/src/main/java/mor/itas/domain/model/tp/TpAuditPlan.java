@@ -34,6 +34,11 @@ public class TpAuditPlan {
     
     private String informationRequirements;
     private String resourceAllocation;
+
+    // Sprint 2 Additions (FR-04.5.1-01 to 03, FR-04.2-04 to 06)
+    private MaterialityRecord materiality;
+    private IndustryResearchRecord industryResearch;
+    private AuditSamplingRecord auditSampling;
     
     @Builder.Default
     private List<String> assignedAuditorIds = new ArrayList<>();
@@ -62,5 +67,42 @@ public class TpAuditPlan {
         private String targetArea;
         private String assignedAuditorId;
         private boolean completed;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MaterialityRecord {
+        private double thresholdAmount;
+        private String currency; // ETB
+        private double materialityPercentage; // e.g. 5.0%
+        private String basis; // REVENUE, PROFIT, TRANSACTION_AMOUNT
+        private String objectiveAndScope;
+        private String contextAndResources;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IndustryResearchRecord {
+        private String sectorClassification;
+        private String businessModelAnalysis;
+        private String marketCharacteristics;
+        private String economicRisks;
+        private String industryBenchmarksSummary;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AuditSamplingRecord {
+        private String samplingMethod; // STRATIFIED, SYSTEMATIC, RANDOM, JUDGMENTAL
+        private String populationDefinition;
+        private String selectionCriteria;
+        private int calculatedSampleSize;
+        private String justification;
     }
 }

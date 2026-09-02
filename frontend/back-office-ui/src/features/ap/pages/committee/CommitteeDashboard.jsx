@@ -16,9 +16,12 @@ export default function CommitteeDashboard({ view }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Committee Dashboard</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span>Transfer Pricing & Joint Audit Review Committee</span>
+            <Badge color="purple">TP Review Committee</Badge>
+          </h2>
           <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-            {user.auditType && `Audit Type: ${user.auditType.replace(/_/g, ' ')}`}
+            {user.auditType && `Committee Specialization: ${user.auditType.replace(/_/g, ' ').toUpperCase()}`}
             {user.region && ` • Region: ${user.region}`}
             {user.taxCenter && ` • Tax Center: ${user.taxCenter}`}
           </p>

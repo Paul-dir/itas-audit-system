@@ -48,4 +48,21 @@ public class TpAuditPlanUseCase {
         auditCase.setTpAuditPlan(plan);
         auditCaseRepository.save(auditCase);
     }
+
+    @Transactional
+    public void approveAuditPlan(UUID caseId, String comments, String currentUserId) {
+        log.info("Process Owner approving TP Audit Plan for case: {}", caseId);
+        ApAuditCaseEntity auditCase = auditCaseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        TpAuditPlanEntity plan = auditCase.getTpAuditPlan();
+        if (plan != null) {
+            plan.setStatus("APPROVED");
+            plan.setApprovedBy(currentUserId);
+            plan.setApprovedAt(java.time.OffsetDateTime.now());
+        }
+
+        auditCase.setTpCurrentPhase("PLANNING_APPROVAL");
+        auditCaseRepository.save(auditCase);
+    }
 }

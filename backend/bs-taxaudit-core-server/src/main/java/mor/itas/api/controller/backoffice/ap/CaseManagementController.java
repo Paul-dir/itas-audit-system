@@ -365,8 +365,9 @@ public class CaseManagementController {
                         continue;
                     }
 
-                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER state
+                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER, ASSIGNED_TO_COMMITTEE, or IN_PROGRESS state
                     if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
+                            && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())
                             && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())) {
                         errors.add("Case " + caseId + ": invalid status " + entity.getStatus());
                         continue;

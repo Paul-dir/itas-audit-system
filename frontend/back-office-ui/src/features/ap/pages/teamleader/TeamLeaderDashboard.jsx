@@ -4,6 +4,7 @@ import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
 import { formatRevenue } from '../../utils/revenueFormatter.js';
+import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
 
 const API = '/api/v1/backoffice/ap/cases';
 
@@ -55,6 +56,7 @@ export default function TeamLeaderDashboard() {
   const [searchQ, setSearchQ]     = useState('');
   const [filterAT, setFilterAT]   = useState('ALL');
   const [viewCase, setViewCase]   = useState(null);
+  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
   const [assignModal, setAssignModal]     = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignResult, setAssignResult]   = useState(null);
@@ -71,7 +73,7 @@ export default function TeamLeaderDashboard() {
       const atParam = user?.auditType ? `&auditType=${encodeURIComponent(user.auditType)}` : '';
       const param = isCommitteeUser
         ? `committeeId=${user.id}${tcCode ? '&taxCenter=' + encodeURIComponent(tcCode) : ''}${atParam}`
-        : `teamLeader=${user.id}${tcCode ? '&taxCenter=' + encodeURIComponent(tcCode) : ''}${atParam}`;
+        : `teamLeader=${user.id}`;
       const r = await fetch(`${API}?${param}`, {
         headers: { 'X-Actor-Id': user.id }
       });
@@ -174,9 +176,9 @@ export default function TeamLeaderDashboard() {
           }
         }
       }
-      // For TL/Committee: pending tab includes ASSIGNED (TL) and ASSIGNED_TO_COMMITTEE (Committee)
-      if (tab === 'pending'     && !['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) && c.status !== 'ASSIGNED_TO_COMMITTEE') return false;
-      if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS') return false;
+      // Tab filters for Team Leader view
+      if (tab === 'pending'     && (c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS')) return false;
+      if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS' && c.status !== 'IN_PROGRESS') return false;
       if (tab === 'completed'   && !['COMPLETED','CLOSED'].includes(c.frontendStatus)) return false;
       if (filterAT !== 'ALL' && c.auditTypeDef?.id !== filterAT) return false;
       if (searchQ) {
@@ -204,8 +206,8 @@ export default function TeamLeaderDashboard() {
 
   const stats = useMemo(() => ({
     total:      scopedCases.length,
-    pending:    scopedCases.filter(c => ['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_COMMITTEE').length,
-    inProgress: scopedCases.filter(c => c.frontendStatus === 'IN_PROGRESS').length,
+    pending:    scopedCases.filter(c => c.frontendStatus !== 'IN_PROGRESS' && c.status !== 'IN_PROGRESS' && !['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
+    inProgress: scopedCases.filter(c => c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS').length,
     completed:  scopedCases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
   }), [scopedCases]);
 
@@ -216,7 +218,7 @@ export default function TeamLeaderDashboard() {
   ];
 
   // ── Selection ────────────────────────────────────────────────────────────────
-  const selectableInTab = filtered.filter(c => ['ASSIGNED', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_COMMITTEE');
+  const selectableInTab = filtered.filter(c => ['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT', 'IN_PROGRESS'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_TEAM_LEADER' || c.status === 'ASSIGNED_TO_COMMITTEE');
   const toggleAll = () => setSelected(prev =>
     prev.length === selectableInTab.length ? [] : selectableInTab.map(c => c.id));
   const toggle = id => setSelected(prev =>
@@ -304,7 +306,7 @@ export default function TeamLeaderDashboard() {
       )}
 
       {/* Selection banner */}
-      {selected.length > 0 && !isCommitteeUser && (
+      {selected.length > 0 && (
         <div className="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-xl p-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
             {selected.length} case{selected.length > 1 ? 's' : ''} selected
@@ -312,9 +314,8 @@ export default function TeamLeaderDashboard() {
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={() => setSelected([])}>Clear</Button>
             <Button size="sm" variant="success" icon={Send}
-              onClick={() => { setAssignResult(null); setAssignModal(true); }}
-              disabled={auditors.length === 0}>
-              Assign to Auditors
+              onClick={() => { setAssignResult(null); setAssignModal(true); }}>
+              {isCommitteeUser ? 'Assign to Team Leader' : 'Assign to Auditors'}
             </Button>
           </div>
         </div>
@@ -347,14 +348,19 @@ export default function TeamLeaderDashboard() {
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
               <tr>
-                {!isCommitteeUser && (
-                  <th className="px-4 py-3">
-                    <input type="checkbox"
-                      checked={selectableInTab.length > 0 && selected.length === selectableInTab.length}
-                      onChange={toggleAll} className="w-4 h-4 rounded" />
-                  </th>
-                )}
-                {['Taxpayer','Risk','Audit Type','Status','Assigned Auditor',''].map((h,i) => (
+                <th className="px-4 py-3">
+                  <input type="checkbox"
+                    checked={selectableInTab.length > 0 && selected.length === selectableInTab.length}
+                    onChange={toggleAll} className="w-4 h-4 rounded" />
+                </th>
+                {[
+                  'Taxpayer',
+                  'Risk',
+                  'Audit Type',
+                  'Status',
+                  isCommitteeUser ? 'Assigned Team Leader' : 'Assigned Auditor',
+                  ''
+                ].map((h,i) => (
                   <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
                 ))}
               </tr>
@@ -367,16 +373,15 @@ export default function TeamLeaderDashboard() {
               ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
                 const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
                 const auditor = auditors.find(a => (a.userId||a.id) === c.assignedAuditorId);
+                const assignedTlName = c.assignedTeamLeaderId || null;
                 return (
                   <tr key={c.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
-                    {!isCommitteeUser && (
-                      <td className="px-4 py-3">
-                        <input type="checkbox" checked={selected.includes(c.id)}
-                          onChange={() => toggle(c.id)}
-                          disabled={c.frontendStatus !== 'ASSIGNED'}
-                          className="w-4 h-4 rounded disabled:opacity-40" />
-                      </td>
-                    )}
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selected.includes(c.id)}
+                        onChange={() => toggle(c.id)}
+                        disabled={!['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'IN_PROGRESS', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) && c.status !== 'ASSIGNED_TO_TEAM_LEADER' && c.status !== 'ASSIGNED_TO_COMMITTEE'}
+                        className="w-4 h-4 rounded disabled:opacity-40" />
+                    </td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
                       <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
@@ -395,12 +400,20 @@ export default function TeamLeaderDashboard() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {auditor
-                        ? <span className="font-medium text-gray-900 dark:text-white">{auditor.name}</span>
-                        : <span className="text-gray-400">Not assigned</span>}
+                      {isCommitteeUser ? (
+                        assignedTlName
+                          ? <span className="font-medium text-purple-700 dark:text-purple-300">{assignedTlName}</span>
+                          : <span className="text-gray-400">Not assigned</span>
+                      ) : (
+                        auditor
+                          ? <span className="font-medium text-gray-900 dark:text-white">{auditor.name}</span>
+                          : <span className="text-gray-400">Not assigned</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -463,8 +476,8 @@ export default function TeamLeaderDashboard() {
         </Modal>
       )}
 
-      {/* Assign to Auditors Modal */}
-      {assignModal && !isCommitteeUser && (
+      {/* Assign to Auditors / Team Leader Modal */}
+      {assignModal && (
         <Modal open onClose={() => setAssignModal(false)} title="Assign Cases to Auditors" size="lg"
           footer={
             <div className="flex justify-between w-full">
@@ -504,6 +517,16 @@ export default function TeamLeaderDashboard() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Transfer Pricing Execution Workspace Modal */}
+      {tpWorkspaceCase && (
+        <TpAuditWorkspace
+          caseData={tpWorkspaceCase}
+          user={user}
+          onClose={() => setTpWorkspaceCase(null)}
+          onRefresh={fetchCases}
+        />
       )}
     </div>
   );

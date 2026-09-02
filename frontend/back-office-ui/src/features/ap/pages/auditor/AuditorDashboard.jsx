@@ -1,48 +1,107 @@
-import { useState, useMemo } from 'react';
-import { Search as SearchIcon, Clock, CheckCircle, PlayCircle, Eye, BarChart3 } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search as SearchIcon, Clock, CheckCircle, PlayCircle, Eye, BarChart3, Layers, Layers3 } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Textarea, Input, Pagination } from '../../../../components/ui/index.jsx';
-import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
+import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef } from '../../data/constants.js';
 import CaseDetailModal from '../shared/CaseDetailModal.jsx';
+import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
+
+const API = '/api/v1/backoffice/ap/cases';
 
 export default function AuditorDashboard({ view }) {
   const { state, actions, selectors } = useApp();
   const { user } = useAuth();
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [statusModal, setStatusModal] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
+  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
+  const [initialPhase, setInitialPhase] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState('ALL');
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const myCases = selectors.getCasesForAuditor(user.id);
+  const PHASE_MAP = {
+    'phase-1': 'DETAILED_RISK_ASSESSMENT',
+    'phase-2': 'WORKING_HYPOTHESIS',
+    'phase-3': 'PLANNING',
+    'phase-4': 'FIELD_WORK',
+    'phase-5': 'ANALYSIS',
+    'phase-6': 'REPORT',
+    'phase-assessment': 'ASSESSMENT',
+    'phase-7': 'NOTICE',
+    'phase-8': 'COMPLETION'
+  };
+
+  const fetchMyCases = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}?auditor=${user.id}`, {
+        headers: { 'X-Actor-Id': user.id }
+      });
+      if (r.ok) {
+        const res = await r.json();
+        const fetched = (res.data || []).map(c => ({
+          ...c,
+          id: c.id || c.caseNumber,
+          taxpayerName: c.taxpayerName || c.taxpayerId,
+          tin: c.taxpayerId,
+          sector: c.sector || 'Unknown',
+          riskLevel: c.riskLevel || (c.riskScore >= 80 ? 'CRITICAL' : c.riskScore >= 60 ? 'HIGH' : 'MEDIUM'),
+          frontendStatus: c.frontendStatus || normalizeBackendStatus(c.status),
+          auditTypeDef: getAuditTypeDef(c.auditType),
+        }));
+        setCases(fetched);
+      }
+    } catch (e) {
+      console.error('fetchMyCases error', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchMyCases();
+  }, [fetchMyCases]);
+
+  useEffect(() => {
+    if (view && PHASE_MAP[view]) {
+      setInitialPhase(PHASE_MAP[view]);
+      if (cases.length > 0) {
+        const activeCase = cases.find(c => c.auditType === 'TRANSFER_PRICING' || c.auditTypeDef?.id === 'TRANSFER_PRICING') || cases[0];
+        if (activeCase) {
+          setTpWorkspaceCase(activeCase);
+        }
+      }
+    } else if (view === 'dashboard' || view === 'cases') {
+      setTpWorkspaceCase(null);
+    }
+  }, [view, cases]);
+
+  const myCases = cases.length > 0 ? cases : selectors.getCasesForAuditor(user.id);
   
   // Get available years from plans associated with this auditor's cases
   const availableYears = useMemo(() => {
-    const years = [...new Set(myCases.map(c => {
-      const plan = state.plans.find(p => p.id === c.planId);
-      return plan?.year;
-    }).filter(Boolean))].sort((a, b) => b - a);
+    const years = [...new Set(myCases.map(c => c.planYear || 2026))].sort((a, b) => b - a);
     return years;
-  }, [myCases, state.plans]);
+  }, [myCases]);
 
   // Filter by year
   const yearFilteredCases = useMemo(() => {
     if (selectedYear === 'ALL') return myCases;
-    return myCases.filter(c => {
-      const plan = state.plans.find(p => p.id === c.planId);
-      return plan?.year === parseInt(selectedYear);
-    });
-  }, [myCases, selectedYear, state.plans]);
+    return myCases.filter(c => String(c.planYear || 2026) === String(selectedYear));
+  }, [myCases, selectedYear]);
 
-  const inProgress = yearFilteredCases.filter(c => c.status === 'IN_PROGRESS');
-  const completed = yearFilteredCases.filter(c => c.status === 'COMPLETED');
+  const inProgress = yearFilteredCases.filter(c => c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS');
+  const completed = yearFilteredCases.filter(c => ['COMPLETED', 'CLOSED'].includes(c.frontendStatus || c.status));
 
   const filtered = yearFilteredCases.filter(c =>
-    !search || c.taxpayerName.toLowerCase().includes(search.toLowerCase()) || c.tin.includes(search)
+    !search || (c.taxpayerName && c.taxpayerName.toLowerCase().includes(search.toLowerCase())) || (c.tin && c.tin.includes(search))
   );
 
   const handleUpdateStatus = () => {
@@ -51,6 +110,7 @@ export default function AuditorDashboard({ view }) {
     setStatusModal(null);
     setNewStatus('');
     setNotes('');
+    fetchMyCases();
   };
 
   const riskColor = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
@@ -76,17 +136,41 @@ export default function AuditorDashboard({ view }) {
       return s ? <Badge color={s.color} dot>{s.label}</Badge> : <Badge>{v}</Badge>;
     }},
     { key: 'startDate', label: 'Started', render: v => <span className="text-xs text-gray-400 dark:text-gray-500">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
-    { key: '_act', label: '', render: (_, row) => (
-      <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
-        <Button size="xs" variant="ghost" icon={Eye} onClick={() => setSelectedCase(row)}>View</Button>
-        {['IN_PROGRESS'].includes(row.status) && (
-          <Button size="xs" variant="primary" icon={PlayCircle} onClick={() => { setStatusModal(row); setNewStatus('COMPLETED'); setNotes(''); }}>
-            Update
-          </Button>
-        )}
-      </div>
-    )},
+    { key: '_act', label: '', render: (_, row) => {
+      const isTp = row.auditType === 'TRANSFER_PRICING' || row.auditTypeDef?.id === 'TRANSFER_PRICING';
+      return (
+        <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
+          {isTp ? (
+            <Button size="xs" variant="primary" icon={Layers3} className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => setTpWorkspaceCase(row)}>
+              Execute TP Audit
+            </Button>
+          ) : (
+            <Button size="xs" variant="ghost" icon={Eye} onClick={() => setSelectedCase(row)}>View</Button>
+          )}
+          {['IN_PROGRESS'].includes(row.status || row.frontendStatus) && (
+            <Button size="xs" variant="secondary" icon={PlayCircle} onClick={() => { setStatusModal(row); setNewStatus('COMPLETED'); setNotes(''); }}>
+              Update
+            </Button>
+          )}
+        </div>
+      );
+    }},
   ];
+
+  if (tpWorkspaceCase) {
+    return (
+      <TpAuditWorkspace
+        caseData={tpWorkspaceCase}
+        user={user}
+        initialPhase={initialPhase}
+        onClose={() => setTpWorkspaceCase(null)}
+        onRefresh={() => {
+          fetchMyCases();
+          setTpWorkspaceCase(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
