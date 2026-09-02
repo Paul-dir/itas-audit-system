@@ -36,6 +36,9 @@ public class AnnualAuditPlanMapper {
             entity.setDistribution(domain.getDistribution());
         }
 
+        entity.setEstimatedRevenue(domain.getEstimatedRevenue());
+        entity.setEstimatedRevenueDistribution(domain.getEstimatedRevenueDistribution());
+
         List<PlanAllocationEntity> allocationEntities = domain.getAllocations().stream().map(a -> {
             PlanAllocationEntity ae = new PlanAllocationEntity();
             ae.setId(a.getId());
@@ -46,6 +49,8 @@ public class AnnualAuditPlanMapper {
             ae.setTcAdjustedCount(a.getTcAdjustedCount());
             ae.setTcJustification(a.getTcJustification());
             ae.setTcFeedbackSubmitted(a.getTcFeedbackSubmitted());
+            ae.setEstimatedRevenue(a.getEstimatedRevenue());
+            ae.setRevenueByAuditType(a.getRevenueByAuditType());
             ae.setCreatedAt(a.getCreatedAt().toInstant().atOffset(java.time.ZoneOffset.UTC));
             return ae;
         }).collect(Collectors.toList());
@@ -69,6 +74,8 @@ public class AnnualAuditPlanMapper {
             allocation.setTcAdjustedCount(ae.getTcAdjustedCount());
             allocation.setTcJustification(ae.getTcJustification());
             allocation.setTcFeedbackSubmitted(ae.getTcFeedbackSubmitted());
+            allocation.setEstimatedRevenue(ae.getEstimatedRevenue());
+            allocation.setRevenueByAuditType(ae.getRevenueByAuditType());
             allocation.setCreatedAt(ae.getCreatedAt());
             return allocation;
         }).collect(Collectors.toList());
@@ -83,6 +90,9 @@ public class AnnualAuditPlanMapper {
             plan.setDistribution(entity.getDistribution());
         }
         
+        plan.setEstimatedRevenue(entity.getEstimatedRevenue());
+        plan.setEstimatedRevenueDistribution(entity.getEstimatedRevenueDistribution());
+
         // Add each allocation to the plan
         for (PlanAllocation allocation : allocations) {
             plan.addAllocation(allocation);

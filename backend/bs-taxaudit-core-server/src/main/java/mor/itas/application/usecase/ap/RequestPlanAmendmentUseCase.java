@@ -33,10 +33,10 @@ public class RequestPlanAmendmentUseCase implements RequestPlanAmendmentPort {
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
         PlanStatusEnum status = plan.getStatus();
-        if (status != PlanStatusEnum.SUBMITTED_TO_DIRECTOR && status != PlanStatusEnum.FEEDBACK_COLLECTED) {
+        if (status != PlanStatusEnum.SUBMITTED_TO_DIRECTOR && status != PlanStatusEnum.FEEDBACK_COLLECTED && status != PlanStatusEnum.AWAITING_REGIONAL_FEEDBACK) {
             throw new IllegalStateException(
                 "Cannot request amendment. Current status: " + status +
-                ". Plan must be in SUBMITTED_TO_DIRECTOR or FEEDBACK_COLLECTED status."
+                ". Plan must be in SUBMITTED_TO_DIRECTOR, FEEDBACK_COLLECTED, or AWAITING_REGIONAL_FEEDBACK status."
             );
         }
         

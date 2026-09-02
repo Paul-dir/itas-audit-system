@@ -93,9 +93,9 @@ public class DistributePlanToTaxCentersUseCase {
 
         // 2. Validate plan status
         String status = plan.getStatus().name();
-        if (!status.equals("AWAITING_REGIONAL_FEEDBACK") && !status.equals("APPROVED_TO_REGIONS")) {
+        if (!status.equals("AWAITING_REGIONAL_FEEDBACK") && !status.equals("APPROVED_TO_REGIONS") && !status.equals("REGIONAL_APPROVED") && !status.equals("SUBMITTED_TO_REGIONAL")) {
             throw new IllegalStateException(
-                "Plan must be AWAITING_REGIONAL_FEEDBACK or APPROVED_TO_REGIONS to distribute to tax centers. Current: " + plan.getStatus()
+                "Plan must be AWAITING_REGIONAL_FEEDBACK, APPROVED_TO_REGIONS, REGIONAL_APPROVED, or SUBMITTED_TO_REGIONAL to distribute to tax centers. Current: " + plan.getStatus()
             );
         }
 
@@ -178,7 +178,7 @@ public class DistributePlanToTaxCentersUseCase {
 
         // 8. Update plan status if coming from APPROVED_TO_REGIONS
         if (plan.getStatus() == mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.APPROVED_TO_REGIONS) {
-            plan.setStatus(mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.AWAITING_REGIONAL_FEEDBACK);
+            plan.setStatus(mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.SENT_TO_TAX_CENTERS);
         }
         plan.setUpdatedAt(OffsetDateTime.now());
 

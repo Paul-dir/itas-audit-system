@@ -3,6 +3,7 @@ import {
   CheckCircle, XCircle, RotateCcw, Send, Eye, FileText, Clock,
   CheckSquare, Map, AlertCircle, ArrowRight, Edit3, Zap,
 } from 'lucide-react';
+import { formatRevenue, formatCaseCount } from '../../utils/revenueFormatter.js';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, StatCard, Button, Modal, Textarea, Alert, Table, Empty, Tabs, Badge } from '../../../../components/ui/index.jsx';
@@ -33,6 +34,23 @@ export default function DirectorDashboard({ view }) {
   const [loadingPendingPlans, setLoadingPendingPlans] = useState(false);
   const [activePlans, setActivePlans] = useState([]);
   const [allRegions, setAllRegions] = useState([]);  // ✅ NEW: Store all regions
+  const [revenueStats, setRevenueStats] = useState(null);
+
+  // Load national revenue stats
+  useEffect(() => {
+    const loadRevenue = async () => {
+      try {
+        const res = await fetch('/api/v1/backoffice/ap/revenue/national');
+        if (res.ok) {
+          const data = await res.json();
+          setRevenueStats(data);
+        }
+      } catch (err) {
+        console.error('Failed to load revenue stats:', err);
+      }
+    };
+    loadRevenue();
+  }, []);
 
   // Load pending director review plans on mount
   useEffect(() => {
@@ -89,8 +107,8 @@ export default function DirectorDashboard({ view }) {
   }, [user?.id]);
 
   const stats = selectors.getPlanStats();
-  // ✅ Use activePlans from DB for all filters (state.plans may be stale)
-  const allPlans = activePlans.length > 0 ? activePlans : state.plans;
+  // ✅ Use state.plans directly as primary data source (synced via AppContext reloadPlans)
+  const allPlans = state.plans.length > 0 ? state.plans : activePlans;
   // First-time submissions (no amendment revisions yet)
   const pending = allPlans.filter(p => p.status === 'SUBMITTED_TO_DIRECTOR' && !p.revisions?.some(r => r.type === 'amendment') && !p.amendmentComment);
   // Resubmissions after amendment cycle (has amendmentComment or amendment revisions)
@@ -101,15 +119,15 @@ export default function DirectorDashboard({ view }) {
   const seniorRejected = allPlans.filter(p => p.status === 'SENIOR_MGMT_REJECTED');
   const submittedToSenior = allPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT');
   const approved = allPlans.filter(p =>
-    ['DIRECTOR_APPROVED','AWAITING_REGIONAL_FEEDBACK','FEEDBACK_COLLECTED',
-     'AMENDMENT_REQUIRED','SUBMITTED_TO_SENIOR_MGMT','SENIOR_MGMT_APPROVED','SENIOR_MGMT_REJECTED','FINALIZED'].includes(p.status)
+    ['DIRECTOR_APPROVED', 'AWAITING_REGIONAL_FEEDBACK', 'FEEDBACK_COLLECTED',
+      'AMENDMENT_REQUIRED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED', 'SENIOR_MGMT_REJECTED', 'FINALIZED'].includes(p.status)
   );
 
   const doAction = () => {
     if (!reviewPlan || !actionType) return;
     if ((actionType === 'revise' || actionType === 'amendment') && !comment.trim()) return;
     setLoading(true);
-    
+
     (async () => {
       try {
         if (actionType === 'approve') {
@@ -127,7 +145,6 @@ export default function DirectorDashboard({ view }) {
           actions.requestRevision(reviewPlan.id, user.id, comment);
         } else if (actionType === 'amendment') {
           await actions.sendAmendmentToPlanningTeam(reviewPlan.id, user.id, comment);
-          // Reload both pending and active plans so the amended plan leaves Regional Feedback tab
           await actions.loadPendingDirectorPlans(user.id);
           const plans = await actions.loadActivePlans(user.id);
           setActivePlans(plans);
@@ -150,7 +167,7 @@ export default function DirectorDashboard({ view }) {
           const plans = await actions.loadActivePlans(user.id);
           setActivePlans(plans);
         }
-        
+
         setLoading(false);
         setReviewPlan(null);
         setComment('');
@@ -171,20 +188,24 @@ export default function DirectorDashboard({ view }) {
 
   const planCols = (showActions = true) => [
     { key: 'id', label: 'ID', render: v => <span className="font-mono text-xs text-gray-400 dark:text-gray-500">{v}</span> },
-    { key: 'name', label: 'Plan', render: (v, row) => (
-      <div>
-        <p className="font-medium text-sm text-gray-900 dark:text-white">{v || row.planName || 'N/A'}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.year || row.planYear}</p>
-      </div>
-    )},
+    {
+      key: 'name', label: 'Plan', render: (v, row) => (
+        <div>
+          <p className="font-medium text-sm text-gray-900 dark:text-white">{v || row.planName || 'N/A'}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">FY {row.year || row.planYear}</p>
+        </div>
+      )
+    },
     { key: 'totalCases', label: 'Cases', render: v => <span className="font-semibold tabular-nums">{v?.toLocaleString()}</span> },
     { key: 'status', label: 'Status', render: v => <PlanStatusBadge status={v} /> },
-    { key: 'submittedToDirectorAt', label: 'Submitted', render: (v, row) => (
-      <div className="text-xs">
-        <p className="text-gray-600 dark:text-gray-400">{v ? new Date(v).toLocaleDateString() : '-'}</p>
-        <p className="text-gray-400 dark:text-gray-500">{row.submittedToDirectorBy || '-'}</p>
-      </div>
-    )},
+    {
+      key: 'submittedToDirectorAt', label: 'Submitted', render: (v, row) => (
+        <div className="text-xs">
+          <p className="text-gray-600 dark:text-gray-400">{v ? new Date(v).toLocaleDateString() : '-'}</p>
+          <p className="text-gray-400 dark:text-gray-500">{row.submittedToDirectorBy || '-'}</p>
+        </div>
+      )
+    },
     ...(showActions ? [{
       key: '_act', label: '', render: (_, row) => (
         <div className="flex gap-1.5 justify-end flex-wrap" onClick={e => e.stopPropagation()}>
@@ -194,6 +215,7 @@ export default function DirectorDashboard({ view }) {
           {row.status === 'SUBMITTED_TO_DIRECTOR' && !row.revisions?.some(r => r.type === 'amendment') && !row.amendmentComment && (
             <>
               <Button size="xs" variant="success" icon={CheckCircle} onClick={() => openAction(row, 'approve')}>Approve</Button>
+              <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>Route to Regions/LTO</Button>
               <Button size="xs" variant="warning" icon={RotateCcw} onClick={() => openAction(row, 'revise')}>Revise</Button>
             </>
           )}
@@ -204,22 +226,30 @@ export default function DirectorDashboard({ view }) {
               <Button size="xs" variant="success" icon={CheckCircle} onClick={() => openAction(row, 'approve')}>
                 ✓ Approve → Sr. Mgmt
               </Button>
+              <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>Route to Regions/LTO</Button>
               <Button size="xs" variant="warning" icon={RotateCcw} onClick={() => openAction(row, 'amendment')}>
                 Send for Amendment
               </Button>
             </>
           )}
 
-          {/* DIRECTOR_APPROVED: send to regions for feedback */}
-          {row.status === 'DIRECTOR_APPROVED' && (
+          {/* DIRECTOR_APPROVED or SUBMITTED_TO_REGIONAL: send/route to regions for feedback */}
+          {(row.status === 'DIRECTOR_APPROVED' || row.status === 'SUBMITTED_TO_REGIONAL') && (
             <Button size="xs" variant="primary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>
-              Send to Regions
+              Route to Regions/LTO
             </Button>
           )}
 
-          {/* AWAITING_REGIONAL_FEEDBACK: Director can send for amendment or view feedback */}
-          {row.status === 'AWAITING_REGIONAL_FEEDBACK' && (
+          {/* AWAITING_REGIONAL_FEEDBACK / REGIONAL_APPROVED: Director can forward directly to Senior Mgmt or send for amendment */}
+          {(row.status === 'AWAITING_REGIONAL_FEEDBACK' || row.status === 'REGIONAL_APPROVED') && (
             <>
+              <Button size="xs" variant="primary" icon={ArrowRight} onClick={() => openAction(row, 'submit_senior')}>
+                Forward to Senior Mgmt
+              </Button>
+
+              <Button size="xs" variant="secondary" icon={Send} onClick={() => openAction(row, 'send_to_regions_pre')}>
+                Re-route to Regions/LTO
+              </Button>
               <Button size="xs" variant="ghost" icon={Eye} onClick={() => setSelectedPlan(row)}>
                 View Feedback
               </Button>
@@ -231,9 +261,14 @@ export default function DirectorDashboard({ view }) {
 
           {/* FEEDBACK_COLLECTED: All regions submitted — send for amendment */}
           {row.status === 'FEEDBACK_COLLECTED' && (
-            <Button size="xs" variant="warning" icon={Edit3} onClick={() => openAction(row, 'amendment')}>
-              Send for Amendment
-            </Button>
+            <>
+              <Button size="xs" variant="primary" icon={ArrowRight} onClick={() => openAction(row, 'submit_senior')}>
+                Forward to Senior Mgmt
+              </Button>
+              <Button size="xs" variant="warning" icon={Edit3} onClick={() => openAction(row, 'amendment')}>
+                Send for Amendment
+              </Button>
+            </>
           )}
 
           {/* SENIOR_MGMT_REJECTED: Director handles — resubmit to Senior or send back for amendment */}
@@ -248,10 +283,10 @@ export default function DirectorDashboard({ view }) {
             </>
           )}
 
-          {/* SENIOR_MGMT_APPROVED: Director deploys the plan */}
-          {row.status === 'SENIOR_MGMT_APPROVED' && (
+          {/* SENIOR_MGMT_APPROVED or FINALIZED: Director deploys the plan */}
+          {(row.status === 'SENIOR_MGMT_APPROVED' || row.status === 'FINALIZED') && (
             <Button size="xs" variant="success" icon={Zap} onClick={() => openAction(row, 'send_regions')}>
-              Deploy to Regions
+              Deploy to Regions & LTO
             </Button>
           )}
         </div>
@@ -260,12 +295,12 @@ export default function DirectorDashboard({ view }) {
   ];
 
   const ACTION_META = {
-    approve:           { title: 'Approve Plan',              variant: 'success', icon: CheckCircle,  commentLabel: 'Approval Note (optional)',       required: false },
-    revise:            { title: 'Request Revision',          variant: 'warning', icon: RotateCcw,    commentLabel: 'Revision Instructions *',         required: true  },
-    amendment:         { title: 'Send for Amendment',        variant: 'warning', icon: Edit3,        commentLabel: 'Amendment Instructions *',        required: true  },
-    submit_senior:     { title: 'Submit to Senior Management',variant: 'primary', icon: ArrowRight,  commentLabel: 'Notes for Senior Management',     required: false },
-    send_regions:      { title: 'Send Approved Plan to All Regions', variant: 'success', icon: Zap,  commentLabel: 'Message to Regions (optional)',   required: false },
-    send_to_regions_pre: { title: 'Send to Regions for Feedback', variant: 'primary', icon: Send,  commentLabel: 'Notes for Regional Directors',    required: false },
+    approve: { title: 'Approve Plan', variant: 'success', icon: CheckCircle, commentLabel: 'Approval Note (optional)', required: false },
+    revise: { title: 'Request Revision', variant: 'warning', icon: RotateCcw, commentLabel: 'Revision Instructions *', required: true },
+    amendment: { title: 'Send for Amendment', variant: 'warning', icon: Edit3, commentLabel: 'Amendment Instructions *', required: true },
+    submit_senior: { title: 'Submit to Senior Management', variant: 'primary', icon: ArrowRight, commentLabel: 'Notes for Senior Management', required: false },
+    send_regions: { title: 'Send Approved Plan to All Regions', variant: 'success', icon: Zap, commentLabel: 'Message to Regions (optional)', required: false },
+    send_to_regions_pre: { title: 'Send to Regions for Feedback', variant: 'primary', icon: Send, commentLabel: 'Notes for Regional Directors', required: false },
   };
 
   const meta = ACTION_META[actionType] || {};
@@ -281,80 +316,194 @@ export default function DirectorDashboard({ view }) {
 
   return (
     <div className="space-y-6">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Pending Review"    value={pending.length + amendedResubmissions.length} icon={Clock}      color="yellow" sub="Awaiting your decision"   />
-        <StatCard label="Feedback Collected" value={feedbackCollected.length} icon={Map}    color="teal"   sub="Regional feedback"        />
-        <StatCard label="At Senior Mgmt"   value={submittedToSenior.length}  icon={ArrowRight}  color="indigo" sub="Awaiting final approval" />
-        <StatCard label="Senior Approved"   value={seniorApproved.length}  icon={CheckSquare} color="green" sub="Ready to deploy" />
+      {/* Top Header Title */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Director Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Overview of audit plans, workflow status, and approval actions</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400 font-medium">FY 2026</span>
+          <Button variant="primary" size="sm" icon={Zap} onClick={() => actions.loadActivePlans(user?.id)}>
+            Refresh Data
+          </Button>
+        </div>
       </div>
 
-      {/* Alert banners */}
-      {(pending.length > 0 || amendedResubmissions.length > 0) && (
-        <Alert type="info" title={`${pending.length + amendedResubmissions.length} plan${pending.length + amendedResubmissions.length > 1 ? 's' : ''} awaiting your review`}>
-          {amendedResubmissions.length > 0 && <span className="font-semibold text-blue-700">{amendedResubmissions.length} amended resubmission(s) ready for Senior Management forwarding. </span>}
-          {pending.length > 0 && 'Approve or request revisions on newly submitted audit plans.'}
-        </Alert>
-      )}
-      {feedbackCollected.length > 0 && (
-        <Alert type="warning" title={`${feedbackCollected.length} plan${feedbackCollected.length > 1 ? 's have' : ' has'} all regional feedback collected`}>
-          Review the regional feedback and send the plan back to the planning team for amendment. The planning team must amend and resubmit before you can forward to Senior Management.
-        </Alert>
-      )}
-      {submittedToSenior.length > 0 && (
-        <Alert type="info" title={`${submittedToSenior.length} plan${submittedToSenior.length > 1 ? 's' : ''} with Senior Management`}>
-          These plans have been forwarded to Senior Management for final approval. You can track their progress here.
-        </Alert>
-      )}
-      {seniorRejected.length > 0 && (
-        <Alert type="error" title={`${seniorRejected.length} plan${seniorRejected.length > 1 ? 's' : ''} rejected by Senior Management`}>
-          Review Senior Management's feedback and either send the plan back for amendment or resubmit directly to Senior Management.
-        </Alert>
-      )}
-      {seniorApproved.length > 0 && (
-        <Alert type="success" title={`${seniorApproved.length} plan${seniorApproved.length > 1 ? 's' : ''} approved by Senior Management`}>
-          Click <strong>"Deploy to Regions"</strong> to deploy the plan — this will distribute cases to all regions and tax centers.
-        </Alert>
-      )}
+      {/* KPI Stat Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="Active Plans" value={approved.length} icon={FileText} color="blue" sub={`${approved.length} total active plans`} />
+        <StatCard label="Pending Review" value={pending.length + amendedResubmissions.length} icon={Clock} color="yellow" sub="Awaiting your decision" />
+        <StatCard label="Regional Feedback" value={feedbackCollected.length} icon={Map} color="purple" sub="Feedback submitted" />
+        <StatCard label="Senior Approved" value={seniorApproved.length} icon={CheckSquare} color="green" sub="Ready for regional deployment" />
+        <StatCard label="Est. Revenue" value={revenueStats ? formatRevenue(revenueStats.totalRevenue) : '...'} icon={Zap} color="teal" sub={`${formatCaseCount(revenueStats?.totalCases || 0)} total planned cases`} />
+      </div>
 
-      {/* Plan table with tabs */}
-      <Card padding={false}>
-        <div className="px-6 pt-4 pb-0">
-          <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      {/* Audit Plan Workflow Stepper */}
+      <Card className="p-4 bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#1e2736]">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Audit Plan Workflow Lifecycle</h3>
+          <span className="text-xs text-gray-400">Live Stage Tracker</span>
         </div>
-        <div className="p-4">
-          {tab === 'pending' && (
-            pending.length === 0 && amendedResubmissions.length === 0
-              ? <Empty icon={CheckCircle} title="No pending plans" description="All submitted plans have been reviewed." />
-              : <Table columns={planCols(true)} rows={[...pending, ...amendedResubmissions]} onRowClick={row => setSelectedPlan(row)} />
-          )}
-          {tab === 'feedback' && (
-            feedbackCollected.length === 0
-              ? <Empty icon={Map} title="No regional feedback yet" description="Plans will appear here once regions start submitting their feedback." />
-              : <Table columns={planCols(true)} rows={feedbackCollected} onRowClick={row => setSelectedPlan(row)} />
-          )}
-          {tab === 'submitted_to_senior' && (
-            submittedToSenior.length === 0
-              ? <Empty icon={Clock} title="No plans at Senior Management" description="Plans awaiting senior management approval will appear here." />
-              : <Table columns={planCols(true)} rows={submittedToSenior} onRowClick={row => setSelectedPlan(row)} />
-          )}
-          {tab === 'senior_rejected' && (
-            seniorRejected.length === 0
-              ? <Empty icon={AlertCircle} title="No Senior Management rejections" description="Plans rejected by Senior Management will appear here." />
-              : <Table columns={planCols(true)} rows={seniorRejected} onRowClick={row => setSelectedPlan(row)} />
-          )}
-          {tab === 'senior_approved' && (
-            seniorApproved.length === 0
-              ? <Empty icon={CheckSquare} title="No approved plans awaiting deployment" description="Plans approved by Senior Management will appear here." />
-              : <Table columns={planCols(true)} rows={seniorApproved} onRowClick={row => setSelectedPlan(row)} />
-          )}
-          {tab === 'approved' && (
-            approved.length === 0
-              ? <Empty icon={FileText} title="No active plans yet" />
-              : <Table columns={planCols(true)} rows={approved} onRowClick={row => setSelectedPlan(row)} />
-          )}
+        <div className="grid grid-cols-6 gap-2 text-center text-xs font-semibold">
+          <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
+            <p className="text-gray-400 text-[10px]">STAGE 1</p>
+            <p className="text-gray-700 dark:text-gray-200 font-bold mt-0.5">Submitted</p>
+            <Badge color="yellow" className="mt-1">{pending.length}</Badge>
+          </div>
+          <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30">
+            <p className="text-blue-500 text-[10px]">STAGE 2</p>
+            <p className="text-blue-700 dark:text-blue-300 font-bold mt-0.5">Director Approved</p>
+            <Badge color="blue" className="mt-1">{readyToSend.length}</Badge>
+          </div>
+          <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/30">
+            <p className="text-purple-500 text-[10px]">STAGE 3</p>
+            <p className="text-purple-700 dark:text-purple-300 font-bold mt-0.5">Regional Feedback</p>
+            <Badge color="purple" className="mt-1">{feedbackCollected.length}</Badge>
+          </div>
+          <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30">
+            <p className="text-indigo-500 text-[10px]">STAGE 4</p>
+            <p className="text-indigo-700 dark:text-indigo-300 font-bold mt-0.5">At Senior Mgmt</p>
+            <Badge color="indigo" className="mt-1">{submittedToSenior.length}</Badge>
+          </div>
+          <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30">
+            <p className="text-emerald-500 text-[10px]">STAGE 5</p>
+            <p className="text-emerald-700 dark:text-emerald-300 font-bold mt-0.5">Senior Approved</p>
+            <Badge color="green" className="mt-1">{seniorApproved.length}</Badge>
+          </div>
+          <div className="p-2.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/30">
+            <p className="text-teal-500 text-[10px]">STAGE 6</p>
+            <p className="text-teal-700 dark:text-teal-300 font-bold mt-0.5">Deployed</p>
+            <Badge color="teal" className="mt-1">{approved.filter(p => p.status === 'FINALIZED').length}</Badge>
+          </div>
         </div>
       </Card>
+
+      {/* Main Content Grid: Left Table View & Right Widget Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left 3 columns: Tabbed Plans Table */}
+        <div className="lg:col-span-3 space-y-4">
+          <Card padding={false}>
+            <div className="px-6 pt-4 pb-0 border-b border-gray-100 dark:border-[#1e2736]">
+              <Tabs tabs={tabs} active={tab} onChange={setTab} />
+            </div>
+
+            {/* Alert banners inside table container */}
+            <div className="p-4 space-y-3">
+              {(pending.length > 0 || amendedResubmissions.length > 0) && (
+                <Alert type="info" title={`${pending.length + amendedResubmissions.length} plan(s) awaiting your review`}>
+                  {amendedResubmissions.length > 0 && <span className="font-semibold text-blue-700">{amendedResubmissions.length} amended resubmission(s) ready for Senior Management forwarding. </span>}
+                  {pending.length > 0 && 'Approve or request revisions on newly submitted audit plans.'}
+                </Alert>
+              )}
+              {feedbackCollected.length > 0 && (
+                <Alert type="warning" title={`${feedbackCollected.length} plan(s) have regional feedback collected`}>
+                  Review regional feedback and send back for amendment before forwarding to Senior Management.
+                </Alert>
+              )}
+              {submittedToSenior.length > 0 && (
+                <Alert type="info" title={`${submittedToSenior.length} plan(s) with Senior Management`}>
+                  These plans have been forwarded to Senior Management for final approval. You can track their progress here.
+                </Alert>
+              )}
+              {seniorApproved.length > 0 && (
+                <Alert type="success" title={`${seniorApproved.length} plan(s) approved by Senior Management`}>
+                  Click <strong>"Deploy to Regions"</strong> to deploy the plan — this will distribute cases to all regions and tax centers.
+                </Alert>
+              )}
+            </div>
+
+            <div className="p-4 pt-0">
+              {tab === 'pending' && (
+                pending.length === 0 && amendedResubmissions.length === 0
+                  ? <Empty icon={CheckCircle} title="No pending plans" description="All submitted plans have been reviewed." />
+                  : <Table columns={planCols(true)} rows={[...pending, ...amendedResubmissions]} onRowClick={row => setSelectedPlan(row)} />
+              )}
+              {tab === 'feedback' && (
+                feedbackCollected.length === 0
+                  ? <Empty icon={Map} title="No regional feedback yet" description="Plans will appear here once regions start submitting their feedback." />
+                  : <Table columns={planCols(true)} rows={feedbackCollected} onRowClick={row => setSelectedPlan(row)} />
+              )}
+              {tab === 'submitted_to_senior' && (
+                submittedToSenior.length === 0
+                  ? <Empty icon={Clock} title="No plans at Senior Management" description="Plans awaiting senior management approval will appear here." />
+                  : <Table columns={planCols(true)} rows={submittedToSenior} onRowClick={row => setSelectedPlan(row)} />
+              )}
+              {tab === 'senior_rejected' && (
+                seniorRejected.length === 0
+                  ? <Empty icon={AlertCircle} title="No Senior Management rejections" description="Plans rejected by Senior Management will appear here." />
+                  : <Table columns={planCols(true)} rows={seniorRejected} onRowClick={row => setSelectedPlan(row)} />
+              )}
+              {tab === 'senior_approved' && (
+                seniorApproved.length === 0
+                  ? <Empty icon={CheckSquare} title="No approved plans awaiting deployment" description="Plans approved by Senior Management will appear here." />
+                  : <Table columns={planCols(true)} rows={seniorApproved} onRowClick={row => setSelectedPlan(row)} />
+              )}
+              {tab === 'approved' && (
+                approved.length === 0
+                  ? <Empty icon={FileText} title="No active plans yet" />
+                  : <Table columns={planCols(true)} rows={approved} onRowClick={row => setSelectedPlan(row)} />
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Right 1 column: Sidebar Quick Widgets */}
+        <div className="space-y-4">
+          <Card className="p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Button variant="secondary" className="w-full justify-start" size="sm" icon={Eye} onClick={() => setTab('pending')}>
+                Review Pending Plans ({pending.length})
+              </Button>
+              <Button variant="secondary" className="w-full justify-start" size="sm" icon={Map} onClick={() => setTab('feedback')}>
+                Track Regional Feedback ({feedbackCollected.length})
+              </Button>
+              <Button variant="secondary" className="w-full justify-start" size="sm" icon={CheckSquare} onClick={() => setTab('senior_approved')}>
+                Deploy Senior Approved Plans
+              </Button>
+            </div>
+          </Card>
+
+          {/* Regional Coverage Widget */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Regional Coverage</h3>
+              <Badge color="blue">{allRegions.length || 11} Regions</Badge>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Active regional distribution & feedback collection</p>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-slate-800">
+                <span className="text-gray-600 dark:text-gray-400 font-medium">Feedback Completed</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{feedbackCollected.length}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-slate-800">
+                <span className="text-gray-600 dark:text-gray-400 font-medium">Pending Review</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{pending.length}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-gray-600 dark:text-gray-400 font-medium">Ready to Deploy</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{seniorApproved.length}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* National Revenue Breakdown Widget */}
+          {revenueStats && revenueStats.auditTypeBreakdown && (
+            <Card className="p-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Est. Revenue by Audit Type</h3>
+              <div className="space-y-2 text-xs">
+                {revenueStats.auditTypeBreakdown.map((item) => (
+                  <div key={item.auditType} className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-slate-800 last:border-0">
+                    <span className="text-gray-600 dark:text-gray-400 font-medium">{item.auditType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{formatRevenue(item.estimatedRevenue)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* Action Modal */}
       <Modal
@@ -375,7 +524,7 @@ export default function DirectorDashboard({ view }) {
                 console.log('   Plan ID:', reviewPlan?.id);
                 console.log('   User ID:', user?.id);
                 console.log('   Comment:', comment);
-                
+
                 if (!reviewPlan?.id) {
                   alert('❌ Error: Plan ID is missing');
                   return;
@@ -384,21 +533,21 @@ export default function DirectorDashboard({ view }) {
                   alert('❌ Error: User ID is missing. Please log in again.');
                   return;
                 }
-                
+
                 setLoading(true);
                 (async () => {
                   try {
                     console.log('📤 Calling sendToRegions API...');
                     const result = await actions.sendToRegions(reviewPlan.id, user.id, comment);
                     console.log('✅ Plan sent successfully:', result);
-                    
+
                     // Show success message
                     alert('✅ Plan sent to regions successfully!');
-                    
+
                     setReviewPlan(null);
                     setActionType(null);
                     setComment('');
-                    
+
                     // Reload BOTH pending and active plans to show updated status
                     console.log('🔄 Reloading all plans...');
                     await actions.loadPendingDirectorPlans(user.id);
@@ -418,7 +567,7 @@ export default function DirectorDashboard({ view }) {
                 doAction();
               }
             }}
-            disabled={meta.required && !comment.trim() || (actionType === 'send_to_regions_pre' && reviewPlan?.status !== 'DIRECTOR_APPROVED')}
+            disabled={meta.required && !comment.trim()}
           >
             {meta.title}
           </Button>
@@ -436,7 +585,7 @@ export default function DirectorDashboard({ view }) {
                   const totalCases = Object.values(feedbackData).reduce((sum, v) => sum + (v?.totalRequested || v?.totalCapacity || 0), 0);
                   return (
                     <div key={region} className={`rounded-lg p-3 text-xs ${isSubmitted ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                      <p className="font-medium text-gray-700 dark:text-slate-200 capitalize mb-1">{region.replace(/_/g,' ')} {isSubmitted ? '✓ Submitted' : '(Default)'}</p>
+                      <p className="font-medium text-gray-700 dark:text-slate-200 capitalize mb-1">{region.replace(/_/g, ' ')} {isSubmitted ? '✓ Submitted' : '(Default)'}</p>
                       <p className="text-gray-600 dark:text-slate-400">
                         {totalCases.toLocaleString()} total cases across {Object.keys(feedbackData).length} audit types
                       </p>
@@ -548,8 +697,8 @@ export default function DirectorDashboard({ view }) {
                 actionType === 'amendment'
                   ? 'Specify what the planning team should change based on regional feedback...'
                   : actionType === 'revise'
-                  ? 'Explain what needs to be changed before approval...'
-                  : 'Optional notes...'
+                    ? 'Explain what needs to be changed before approval...'
+                    : 'Optional notes...'
               }
               value={comment}
               onChange={e => setComment(e.target.value)}

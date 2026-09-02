@@ -9,6 +9,8 @@ function reducer(state, action) {
   switch (action.type) {
     case 'LOAD':
       return action.payload;
+    case 'SET_PLANS':
+      return { ...state, plans: action.payload };
     case 'CREATE_PLAN':
       return { ...state, plans: [...state.plans, action.payload] };
     case 'UPDATE_PLAN':
@@ -723,20 +725,21 @@ function AppProvider({ children }) {
 
     loadPendingDirectorPlans: async (directorId) => {
       try {
-        const response = await fetch(`/api/v1/backoffice/ap/plans/pending-director-review`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': directorId || 'director' }
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn('⚠️ Failed to fetch pending director plans:', errorText);
-          return [];
+        const { default: planService } = await import('../features/ap/services/planService.js');
+        // Fetch pending plans from backend
+        let pendingPlans = [];
+        try {
+          pendingPlans = await planService.getPendingDirectorReviewPlans(directorId);
+        } catch (err) {
+          console.warn('⚠️ Fallback fetching pending director plans via getPendingDirectorReviewPlans:', err);
         }
 
-        const result = await response.json();
-        console.log('✅ Loaded pending director plans:', result.data?.length || 0);
-        return result.data || [];
+        // Also reload all plans to keep state synchronized
+        const allPlans = await planService.getPlans();
+        dispatch({ type: 'LOAD', payload: { ...state, plans: allPlans } });
+
+        console.log('✅ Loaded pending director plans:', pendingPlans.length);
+        return pendingPlans.length > 0 ? pendingPlans : allPlans.filter(p => ['SUBMITTED_TO_DIRECTOR', 'SENIOR_MGMT_REJECTED'].includes(p.status));
       } catch (error) {
         console.error('❌ Failed to load pending director plans:', error);
         return [];
@@ -764,6 +767,8 @@ function AppProvider({ children }) {
         return [];
       }
     },
+
+    setPlans: (plans) => dispatch({ type: 'SET_PLANS', payload: plans }),
   };
 
   const selectors = {

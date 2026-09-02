@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Building2, Clock, CheckCircle, Send, Eye, AlertTriangle, Check, ArrowLeft, FileText, Shield, Play, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Textarea, Empty, ConfirmModal } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Modal, Badge, Alert, Textarea, Empty, ConfirmModal, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES } from '../../data/constants.js';
+import { formatRevenue } from '../../utils/revenueFormatter.js';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
 
 export default function TaxCenterDashboard({ view }) {
@@ -22,6 +23,14 @@ export default function TaxCenterDashboard({ view }) {
   const [cascading, setCascading] = useState(null); // planId being cascaded
   const [cascadeResult, setCascadeResult] = useState(null);
   const [cascadeModal, setCascadeModal] = useState(false);
+  const [revenueStats, setRevenueStats] = useState(null);
+  const [casePage, setCasePage] = useState(1);
+  const [caseItemsPerPage, setCaseItemsPerPage] = useState(10);
+
+  const allCasesList = auditCases?.cases || [];
+  const totalCaseCount = auditCases?.totalCases || allCasesList.length;
+  const totalCasePages = Math.ceil(totalCaseCount / caseItemsPerPage) || 1;
+  const paginatedCases = allCasesList.slice((casePage - 1) * caseItemsPerPage, casePage * caseItemsPerPage);
 
   const mapTaxCenterToBackendFormat = (tcFromUser) => {
     if (!tcFromUser) return null;
@@ -45,8 +54,26 @@ export default function TaxCenterDashboard({ view }) {
     return mapping[regionFromUser] || regionFromUser;
   };
 
-  const taxCenter = mapTaxCenterToBackendFormat(user.taxCenter);
-  const region = mapRegionToBackendFormat(user.region);
+  const taxCenter = mapTaxCenterToBackendFormat(user?.taxCenter);
+  const region = mapRegionToBackendFormat(user?.region);
+
+  // Load tax center revenue stats
+  useEffect(() => {
+    const loadRevenue = async () => {
+      try {
+        const tcCode = taxCenter || user?.taxCenterCode;
+        if (!tcCode) return;
+        const res = await fetch(`/api/v1/backoffice/ap/revenue/taxcenter?taxCenterCode=${encodeURIComponent(tcCode)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRevenueStats(data);
+        }
+      } catch (err) {
+        console.error('Failed to load revenue stats:', err);
+      }
+    };
+    loadRevenue();
+  }, [user, taxCenter]);
 
   // Fetch allocations from backend
   const loadTcAllocations = useCallback(async () => {
@@ -96,10 +123,14 @@ export default function TaxCenterDashboard({ view }) {
   useEffect(() => { loadCases(); }, [loadCases]);
 
   // ── Separate allocations ──
-  // pendingCascade: not acknowledged AND no cases exist yet for this plan
-  // pendingFeedback: acknowledged but no cases → already provided feedback
-  // readyForCascade: has cases already created
-  const pendingCascade = tcAllocations.filter(a => !a.acknowledged);
+  // pendingFeedback: pre-approval plan review stage (AWAITING_REGIONAL_FEEDBACK) -> Submit capacity feedback ONLY (NO case creation)
+  // pendingCascade: post-approval deployed plan stage (APPROVED_TO_REGIONS / SENT_TO_TAX_CENTERS / FINALIZED) -> Create Cases via Risk Engine
+  const pendingFeedback = tcAllocations.filter(a => 
+    !a.acknowledged && (a.planStatus === 'AWAITING_REGIONAL_FEEDBACK' || !['APPROVED_TO_REGIONS', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus))
+  );
+  const pendingCascade = tcAllocations.filter(a => 
+    !a.acknowledged && ['APPROVED_TO_REGIONS', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus)
+  );
   const acknowledged = tcAllocations.filter(a => a.acknowledged);
 
   // Check if a plan already has cases
@@ -110,6 +141,10 @@ export default function TaxCenterDashboard({ view }) {
 
   // ── CASCADE: trigger backend to create cases from plan allocation ──
   const handleCascade = async (allocation) => {
+    if (planHasCases(allocation.planId)) {
+      alert("This audit plan has already been cascaded into cases. Re-cascading is disabled to protect existing audit assignments.");
+      return;
+    }
     setCascading(allocation.planId);
     try {
       const response = await fetch(
@@ -132,9 +167,11 @@ export default function TaxCenterDashboard({ view }) {
         ...result.data
       });
       setCascadeModal(true);
-      // Reload cases
+      // Reload cases and allocations
       await loadCases();
       await loadTcAllocations();
+      // Force reload window/state so other dashboards pick up FINALIZED status
+      window.location.reload();
     } catch (error) {
       console.error('Cascade failed:', error);
       alert(`❌ Cascade Failed\n\n${error.message}`);
@@ -245,30 +282,108 @@ export default function TaxCenterDashboard({ view }) {
         <StatCard label="Total Cases" value={totalCasesCount > 0 ? totalCasesCount.toLocaleString() : totalAllocations.toLocaleString()}
           icon={CheckCircle} color="green"
           sub={totalCasesCount > 0 ? 'Generated by risk engine' : 'Allocated from plans'} />
-        <StatCard label="Pending Cascade" value={pendingCascade.length} icon={Clock} color="yellow"
+        <StatCard label="Pending Feedback" value={pendingFeedback.length} icon={Clock} color="orange"
+          sub={pendingFeedback.length > 0 ? 'Review & submit feedback' : 'No feedback pending'} />
+        <StatCard label="Pending Cascade" value={pendingCascade.length} icon={Play} color="yellow"
           sub={pendingCascade.length > 0 ? 'Ready to create cases' : 'All cascaded'} />
-        <StatCard label="Acknowledged" value={acknowledged.length} icon={CheckCircle} color="green"
-          sub={acknowledged.length > 0 ? `Feedback submitted for ${acknowledged.length} plan(s)` : 'None yet'} />
       </div>
+
+      {/* TC Revenue by Audit Type - ONLY for current logged in tax center */}
+      {revenueStats && revenueStats.taxCenterBreakdown && revenueStats.taxCenterBreakdown.some(tc => tc.taxCenterCode === taxCenter) && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+            💰 Estimated Revenue by Audit Type ({taxCenter})
+          </h3>
+          <div className="grid grid-cols-5 gap-3">
+            {revenueStats.taxCenterBreakdown
+              .filter(tc => tc.taxCenterCode === taxCenter)
+              .map((tc) => (
+                Object.entries(tc.revenueByAuditType || {}).map(([type, rev]) => (
+                  <div key={`${tc.taxCenterCode}-${type}`} className="text-center p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{formatRevenue(rev)}</p>
+                    <p className="text-xs text-blue-600 font-semibold">{tc.taxCenterCode}</p>
+                  </div>
+                ))
+              ))}
+          </div>
+        </Card>
+      )}
+
+      {pendingFeedback.length > 0 && (
+        <Alert type="info" title="Plans awaiting capacity feedback">
+          The Regional Director has distributed draft allocations for review. Click <strong>"Submit Feedback"</strong> to review auditor capacity and submit feedback. (No cases will be created at this stage).
+        </Alert>
+      )}
 
       {pendingCascade.length > 0 && (
         <Alert type="warning" title="Plans ready for case cascade">
-          These plans have been deployed by your Regional Director. Click <strong>"Create Cases"</strong> to fetch taxpayers, run risk engine classification, and generate audit cases.
+          These plans have been fully approved and deployed by your Regional Director. Click <strong>"Create Cases"</strong> to run the risk engine classification and generate audit cases.
         </Alert>
       )}
 
-      {acknowledged.length > 0 && (
-        <Alert type="success" title="Acknowledgment submitted">
-          You have acknowledged {acknowledged.length} plan allocation(s).
-        </Alert>
+      {/* ═══ PENDING FEEDBACK TABLE (Pre-Approval Review) ═══ */}
+      {pendingFeedback.length > 0 && (
+        <Card padding={false}>
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">📝 Pending Capacity Feedback (Pre-Approval Review)</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Draft plan allocations waiting for tax center capacity review and feedback submission</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-700">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Plan Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Allocated Cases</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Region</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Stage</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingFeedback.map(alloc => (
+                  <tr key={alloc.allocationId}
+                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    onClick={() => openFeedback(alloc)}>
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-gray-900 dark:text-white">{alloc.planName || `Plan`}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">FY {alloc.planYear}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-gray-900 dark:text-white">{alloc.proposedCount?.toLocaleString() || 0}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{alloc.regionCode || 'N/A'}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge color="blue" dot>Awaiting Feedback</Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="secondary" icon={Eye}
+                          onClick={(e) => { e.stopPropagation(); openFeedback(alloc); }}>
+                          Review Allocation
+                        </Button>
+                        <Button size="sm" variant="primary" icon={Send}
+                          onClick={(e) => { e.stopPropagation(); openFeedback(alloc); }}>
+                          Submit Feedback
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
-      {/* ═══ PENDING CASCADE TABLE ═══ */}
+      {/* ═══ PENDING CASCADE TABLE (Post-Approval Deployment) ═══ */}
       {pendingCascade.length > 0 && (
         <Card padding={false}>
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">⏳ Pending Cascade</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Deployed plans waiting to be cascaded to audit cases via the risk engine</p>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">🚀 Pending Case Cascade (Post-Approval Execution)</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Approved & deployed plans waiting to be cascaded to audit cases via the risk engine</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -297,7 +412,7 @@ export default function TaxCenterDashboard({ view }) {
                       <p className="text-sm text-gray-600 dark:text-gray-400">{alloc.regionCode || 'N/A'}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <Badge color="yellow" dot>Pending Cascade</Badge>
+                      <Badge color="yellow" dot>Approved - Ready for Cascade</Badge>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
@@ -427,7 +542,7 @@ export default function TaxCenterDashboard({ view }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {(auditCases.cases || []).slice(0, 20).map((c, idx) => (
+                  {paginatedCases.map((c, idx) => (
                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{c.caseNumber}</td>
                       <td className="px-4 py-2 text-gray-900 dark:text-white">{c.taxpayerId}</td>
@@ -453,9 +568,14 @@ export default function TaxCenterDashboard({ view }) {
                 </tbody>
               </table>
             </div>
-            {auditCases.totalCases > 20 && (
-              <p className="text-xs text-gray-400 text-center mt-3">Showing top 20 of {auditCases.totalCases.toLocaleString()} cases</p>
-            )}
+            <Pagination
+              currentPage={casePage}
+              totalPages={totalCasePages}
+              totalItems={totalCaseCount}
+              itemsPerPage={caseItemsPerPage}
+              onPageChange={setCasePage}
+              onItemsPerPageChange={(newVal) => { setCaseItemsPerPage(newVal); setCasePage(1); }}
+            />
           </div>
         </Card>
       )}

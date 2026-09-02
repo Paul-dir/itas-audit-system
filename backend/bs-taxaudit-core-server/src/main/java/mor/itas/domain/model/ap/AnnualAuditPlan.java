@@ -2,6 +2,8 @@ package mor.itas.domain.model.ap;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.math.BigDecimal;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * AnnualAuditPlan Domain Model - Represents an annual audit plan through 4-level approval workflow
@@ -55,7 +57,11 @@ public class AnnualAuditPlan {
     // Metadata
     private OffsetDateTime updatedAt;
     private Long version;
-    
+
+    // Revenue
+    private BigDecimal estimatedRevenue;
+    private JsonNode estimatedRevenueDistribution;
+
     // Constructors
     public AnnualAuditPlan() {
         this.allocations = new ArrayList<>();
@@ -175,7 +181,13 @@ public class AnnualAuditPlan {
     }
     
     public boolean canBeSubmittedToRegionalByDirector() {
-        return status == PlanStatus.DIRECTOR_APPROVED;
+        return status == PlanStatus.DIRECTOR_APPROVED
+            || status == PlanStatus.SUBMITTED_TO_DIRECTOR
+            || status == PlanStatus.SUBMITTED_TO_REGIONAL
+            || status == PlanStatus.REGIONAL_APPROVED
+            || status == PlanStatus.SENT_TO_TAX_CENTERS
+            || status == PlanStatus.TC_FEEDBACK_SUBMITTED
+            || status == PlanStatus.FINALIZED;
     }
     
     public boolean canBeApprovedByRegionalDirector() {
@@ -397,7 +409,23 @@ public class AnnualAuditPlan {
     public void setAmendmentComment(String amendmentComment) {
         this.amendmentComment = amendmentComment;
     }
-    
+
+    public BigDecimal getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
+    }
+
+    public JsonNode getEstimatedRevenueDistribution() {
+        return estimatedRevenueDistribution;
+    }
+
+    public void setEstimatedRevenueDistribution(JsonNode estimatedRevenueDistribution) {
+        this.estimatedRevenueDistribution = estimatedRevenueDistribution;
+    }
+
     @Override
     public String toString() {
         return "AnnualAuditPlan{" +

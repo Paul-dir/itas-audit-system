@@ -2,13 +2,10 @@ package mor.itas.application.usecase.ap;
 
 import mor.itas.application.port.outboundport.taxpayer.TaxpayerPort;
 import mor.itas.application.port.outboundport.usermanagement.UserManagementPort;
-import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
-import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
-import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;
-import mor.itas.persistence.jpa.entity.ap.PlanStatusEnum;
-import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;
-import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
-import mor.itas.persistence.jpa.repository.ap.PlanAllocationRepository;
+import mor.itas.persistence.jpa.entity.ap.*;
+import mor.itas.persistence.jpa.repository.ap.*;
+
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +39,7 @@ public class CascadePlanToCasesUseCase {
     private final AnnualAuditPlanJpaRepository planRepository;
     private final PlanAllocationRepository allocationRepository;
     private final ApAuditCaseRepository auditCaseRepository;
+    private final RegionalDeploymentRepository deploymentRepository;
     private final TaxpayerPort taxpayerPort;
     private final UserManagementPort userManagementPort;
 
@@ -97,6 +95,7 @@ public class CascadePlanToCasesUseCase {
 
         // ── Step 1: Delete existing cases for this plan (idempotent) ──
         long deletedCount = auditCaseRepository.deleteByPlanId(planId);
+        auditCaseRepository.flush();  // Force the DELETE to execute before new inserts
         System.err.println("🗑️ Deleted " + deletedCount + " existing cases for plan " + planId);
 
         // Get all tax center allocations for this plan
@@ -111,6 +110,11 @@ public class CascadePlanToCasesUseCase {
         Map<String, Integer> casesByAuditType = new LinkedHashMap<>();
         Map<String, Integer> casesByTeamLeader = new LinkedHashMap<>();
         AtomicInteger caseNumberCounter = new AtomicInteger(1);
+
+        // Revenue tracking: allocationId → auditType → revenue
+        Map<UUID, Map<String, Long>> allocationRevenueByType = new HashMap<>();
+        // Regional revenue: regionCode → auditType → revenue
+        Map<String, Map<String, Long>> regionalRevenueByType = new HashMap<>();
 
         // ── Step 2: Pre-load team leaders and committee members per tax center ──
         // Structure: taxCenterCode → auditType → List<userId>
@@ -158,9 +162,18 @@ public class CascadePlanToCasesUseCase {
 
             if (taxCenterCode == null || taxCenterCode.isEmpty()) continue;
 
-            // Map frontend code to backend code: AA-TC1 -> TC-AA-01
+            // Map frontend code to backend code: addis_ababa-tc1 -> TC-AA-01, AA-TC1 -> TC-AA-01
             String backendTaxCenterCode = taxCenterCode;
-            if (!taxCenterCode.startsWith("TC-")) {
+            if (taxCenterCode.toLowerCase().startsWith("addis_ababa-tc")) {
+                int num = Integer.parseInt(taxCenterCode.substring("addis_ababa-tc".length()));
+                backendTaxCenterCode = String.format("TC-AA-%02d", num);
+            } else if (taxCenterCode.toLowerCase().startsWith("amhara-tc") || taxCenterCode.toLowerCase().startsWith("ba-tc")) {
+                int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
+                backendTaxCenterCode = String.format("TC-BA-%02d", num);
+            } else if (taxCenterCode.toLowerCase().startsWith("oromia-tc") || taxCenterCode.toLowerCase().startsWith("bb-tc")) {
+                int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
+                backendTaxCenterCode = String.format("TC-BB-%02d", num);
+            } else if (!taxCenterCode.startsWith("TC-")) {
                 String[] parts = taxCenterCode.split("-TC");
                 if (parts.length == 2) {
                     backendTaxCenterCode = String.format("TC-%s-%02d", parts[0], Integer.parseInt(parts[1]));
@@ -293,25 +306,11 @@ public class CascadePlanToCasesUseCase {
                     caseEntity.setCreatedAt(OffsetDateTime.now());
                     caseEntity.setUpdatedAt(OffsetDateTime.now());
 
-                    // ── Auto-assign team leader or committee member (round-robin) ──
-                    if (!assigneeIds.isEmpty()) {
-                        int idx = tlRoundRobin.merge(backendType, 0, Integer::sum) % assigneeIds.size();
-                        tlRoundRobin.put(backendType, idx + 1);
-                        String assigneeId = assigneeIds.get(idx);
-
-                        if (isCommittee) {
-                            // Joint Audit and Transfer Pricing → assigned to committee member
-                            caseEntity.setAssignedTeamLeaderId(assigneeId);
-                            caseEntity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE);
-                        } else {
-                            // Desk, Comprehensive, Issue → assigned to team leader
-                            caseEntity.setAssignedTeamLeaderId(assigneeId);
-                            caseEntity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER);
-                        }
-                        casesByTeamLeader.merge(assigneeId, 1, Integer::sum);
-                    } else {
-                        caseEntity.setStatus(ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT);
-                    }
+                    // ── All cases start as PENDING_ASSIGNMENT ──
+                    // Manual or explicit assignment happens after case creation via Case Management / Committee UI
+                    caseEntity.setAssignedTeamLeaderId(null);
+                    caseEntity.setAssignedAuditorId(null);
+                    caseEntity.setStatus(ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT);
 
                     // Save to database
                     auditCaseRepository.save(caseEntity);
@@ -319,11 +318,58 @@ public class CascadePlanToCasesUseCase {
                     totalCasesCreated++;
 
                     casesByAuditType.merge(backendType, 1, Integer::sum);
+
+                    // ── Revenue tracking ──
+                    long caseRevenue = caseEntity.getEstimatedRevenue() != null ? caseEntity.getEstimatedRevenue() : 0L;
+                    if (caseRevenue > 0) {
+                        allocationRevenueByType
+                            .computeIfAbsent(allocation.getId(), k -> new HashMap<>())
+                            .merge(backendType, caseRevenue, Long::sum);
+                        regionalRevenueByType
+                            .computeIfAbsent(regionCode != null ? regionCode : "UNKNOWN", k -> new HashMap<>())
+                            .merge(backendType, caseRevenue, Long::sum);
+                    }
                 }
             }
 
             casesByTaxCenter.put(taxCenterCode, tcCasesCreated);
             System.err.println("✅ " + taxCenterCode + ": " + tcCasesCreated + " cases created from " + taxpayers.size() + " taxpayers");
+        }
+
+        // ── Update allocations with revenue data ──
+        for (PlanAllocationEntity allocation : allocations) {
+            Map<String, Long> revByType = allocationRevenueByType.getOrDefault(allocation.getId(), Collections.emptyMap());
+            if (!revByType.isEmpty()) {
+                long totalRev = revByType.values().stream().mapToLong(Long::longValue).sum();
+                allocation.setEstimatedRevenue(java.math.BigDecimal.valueOf(totalRev));
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    allocation.setRevenueByAuditType(mapper.valueToTree(revByType));
+                } catch (Exception e) {
+                    System.err.println("⚠️ Failed to serialize revenue by audit type: " + e.getMessage());
+                }
+                allocationRepository.save(allocation);
+                System.err.println("💰 Allocation " + allocation.getTaxCenterCode() + " revenue: " + totalRev + " ETB (" + revByType + ")");
+            }
+        }
+
+        // ── Update regional deployments with revenue data ──
+        for (Map.Entry<String, Map<String, Long>> regionEntry : regionalRevenueByType.entrySet()) {
+            String regionCode = regionEntry.getKey();
+            Map<String, Long> revByType = regionEntry.getValue();
+            long totalRev = revByType.values().stream().mapToLong(Long::longValue).sum();
+            try {
+                var deploymentOpt = deploymentRepository.findByPlanIdAndRegionCode(planId, regionCode);
+                if (deploymentOpt.isPresent()) {
+                    var deployment = deploymentOpt.get();
+                    deployment.setEstimatedRevenue(totalRev);
+                    deployment.setRevenueByAuditType(revByType);
+                    deploymentRepository.save(deployment);
+                    System.err.println("💰 Regional deployment " + regionCode + " revenue: " + totalRev + " ETB");
+                }
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to update regional deployment for " + regionCode + ": " + e.getMessage());
+            }
         }
 
         // Update plan status to FINALIZED if cases were created
@@ -424,11 +470,13 @@ public class CascadePlanToCasesUseCase {
     }
 
     /**
-     * Generate a unique case number: YEAR-REGION-TC-NNNN
+     * Generate a globally unique case number: YEAR-PLANSHORT-REGION-TC-NNNN
+     * PLANSHORT is first 8 chars of plan UUID to avoid cross-plan conflicts
      */
     private String generateCaseNumber(AnnualAuditPlanEntity plan, String region, String taxCenter, AtomicInteger counter) {
         String year = String.valueOf(plan.getYear());
+        String planShort = plan.getId().toString().substring(0, 8);
         String seq = String.format("%04d", counter.getAndIncrement());
-        return year + "-" + region + "-" + taxCenter + "-" + seq;
+        return year + "-" + planShort + "-" + region + "-" + taxCenter + "-" + seq;
     }
 }

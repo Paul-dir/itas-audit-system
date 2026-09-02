@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { TrendingUp, AlertTriangle, Target, Database, Filter, Download, Play, CheckCircle, Eye, RefreshCw } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Badge, Table, Input, Select, Modal, Alert, Tabs } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Badge, Table, Input, Select, Modal, Alert, Tabs, Pagination } from '../../../../components/ui/index.jsx';
+import { formatRevenue } from '../../utils/revenueFormatter.js';
 import { AUDIT_TYPES } from '../../data/constants.js';
 
 export default function RiskEngineDashboard() {
@@ -20,6 +21,8 @@ export default function RiskEngineDashboard() {
   const [selectedPlanForCases, setSelectedPlanForCases] = useState(null);
   const [mappingModal, setMappingModal] = useState(false);
   const [mappingResults, setMappingResults] = useState(null);
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Backend taxpayer data
   const [taxpayers, setTaxpayers] = useState([]);
@@ -86,6 +89,24 @@ export default function RiskEngineDashboard() {
     fetchTaxpayers();
   }, [userTaxCenter, user.id]);
 
+  const [livePlans, setLivePlans] = useState([]);
+
+  // Fetch fresh active plans directly from backend
+  useEffect(() => {
+    const fetchFreshPlans = async () => {
+      try {
+        const plans = await actions.loadActivePlans(user?.id);
+        setLivePlans(plans || []);
+        if (plans && plans.length > 0) {
+          actions.setPlans(plans);
+        }
+      } catch (err) {
+        console.error('Failed to load live plans in RiskEngine:', err);
+      }
+    };
+    fetchFreshPlans();
+  }, [user?.id, actions]);
+
   // Filter taxpayers
   const filteredTaxpayers = useMemo(() => {
     return taxpayers.filter(tp => {
@@ -118,12 +139,13 @@ export default function RiskEngineDashboard() {
     return stats;
   }, [filteredTaxpayers]);
 
-  // Available plans from state (deployed/approved plans)
+  // Available plans from live backend state
   const availablePlans = useMemo(() => {
-    return state.plans.filter(p =>
+    const plansToUse = livePlans.length > 0 ? livePlans : state.plans;
+    return plansToUse.filter(p =>
       ['APPROVED_TO_REGIONS', 'FINALIZED', 'SENIOR_MGMT_APPROVED'].includes(p.status)
     );
-  }, [state.plans]);
+  }, [livePlans, state.plans]);
 
   // Selection
   const toggleTaxpayerSelection = (id) => {
@@ -209,9 +231,9 @@ export default function RiskEngineDashboard() {
       const at = AUDIT_TYPES.find(a => a.id === v);
       return <Badge color={at?.color || 'gray'}>{at?.shortName || v}</Badge>;
     }},
-    { key: 'annualRevenue', label: 'Revenue', render: v => <span className="text-xs text-gray-600">{(v / 1000000).toFixed(1)}M</span> },
+    { key: 'annualRevenue', label: 'Revenue', render: v => <span className="text-xs text-gray-600">{formatRevenue(v)}</span> },
     { key: 'estimatedRevenue', label: 'Est. Recovery', render: v => (
-      <span className="text-xs font-semibold text-green-700">{(v / 1000000).toFixed(1)}M ETB</span>
+      <span className="text-xs font-semibold text-green-700">{formatRevenue(v)} ETB</span>
     ) },
   ];
 
@@ -249,7 +271,7 @@ export default function RiskEngineDashboard() {
         <StatCard label="High Risk" value={riskStats.HIGH} icon={TrendingUp} color="orange" sub="Priority audits" />
         <StatCard label="Medium Risk" value={riskStats.MEDIUM} icon={Target} color="yellow" sub="Regular monitoring" />
         <StatCard label="Low Risk" value={riskStats.LOW} icon={CheckCircle} color="green" sub="Compliant" />
-        <StatCard label="Est. Revenue" value={`${(filteredTaxpayers.reduce((s, tp) => s + (tp.estimatedRevenue || 0), 0) / 1_000_000).toFixed(0)}M`} icon={Target} color="green" sub="ETB expected recovery" />
+        <StatCard label="Est. Revenue" value={formatRevenue(filteredTaxpayers.reduce((s, tp) => s + (tp.estimatedRevenue || 0), 0))} icon={Target} color="green" sub="ETB expected recovery" />
       </div>
 
       <Card padding={false}>
@@ -307,7 +329,15 @@ export default function RiskEngineDashboard() {
               </div>
             </div>
 
-            <Table columns={columns} rows={filteredTaxpayers} emptyMessage={taxpayersLoading ? 'Loading...' : 'No taxpayers match your filters'} />
+            <Table columns={columns} rows={filteredTaxpayers.slice((page - 1) * itemsPerPage, page * itemsPerPage)} emptyMessage={taxpayersLoading ? 'Loading...' : 'No taxpayers match your filters'} />
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil(filteredTaxpayers.length / itemsPerPage) || 1}
+              totalItems={filteredTaxpayers.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setPage}
+              onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+            />
           </div>
         )}
 
@@ -330,12 +360,19 @@ export default function RiskEngineDashboard() {
                         </div>
                         <p className="text-sm text-gray-500 mt-1">FY {plan.planYear}</p>
                       </div>
-                      <Button size="sm" variant="primary" icon={Play}
-                        onClick={() => {
-                          setSelectedPlanForCases(plan.id);
-                          setSelectedTaxpayers(filteredTaxpayers.map(tp => tp.id));
-                          openCreateCasesModal();
-                        }}>Map & Create</Button>
+                      {plan.status === 'FINALIZED' ? (
+                        <Button size="sm" variant="success" icon={CheckCircle}
+                          onClick={() => alert(`✅ Plan "${plan.name}" is already FINALIZED with cascaded cases. Navigate to Case Management under Tax Center to view and assign cases.`)}>
+                          Finalized (View Cases)
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="primary" icon={Play}
+                          onClick={() => {
+                            setSelectedPlanForCases(plan.id);
+                            setSelectedTaxpayers(filteredTaxpayers.map(tp => tp.id));
+                            openCreateCasesModal();
+                          }}>Map & Create</Button>
+                      )}
                     </div>
                   </Card>
                 ))}

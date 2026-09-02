@@ -6,6 +6,7 @@ import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.model.ap.TaxCenterFeedback;
 import mor.itas.domain.service.ap.TaxCenterFeedbackService;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -50,6 +51,7 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
     private static final Map<String, List<TaxCenterFeedback>> feedbackStorage = new HashMap<>();
     
     @Override
+    @Transactional
     public void submitFeedback(
             UUID planId,
             String taxCenterId,
@@ -150,7 +152,10 @@ public class SubmitTaxCenterFeedbackUseCase implements SubmitTaxCenterFeedbackPo
      */
     private boolean isValidStatusForFeedbackSubmission(String status) {
         return "ALLOCATED".equals(status) ||
-               "AWAITING_REGIONAL_FEEDBACK".equals(status);
+               "AWAITING_REGIONAL_FEEDBACK".equals(status) ||
+               "REGIONAL_APPROVED".equals(status) ||
+               "SENT_TO_TAX_CENTERS".equals(status) ||
+               "SUBMITTED_TO_REGIONAL".equals(status);
     }
     
     /**

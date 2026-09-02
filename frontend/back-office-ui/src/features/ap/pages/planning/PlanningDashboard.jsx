@@ -139,6 +139,11 @@ export default function PlanningDashboard({ view }) {
 
   const handleSubmit = async (plan) => {
     try {
+      if (['AMENDMENT_REQUIRED', 'SENIOR_MGMT_REJECTED'].includes(plan.status)) {
+        setConfirmSubmit(null);
+        setAmendmentEditPlan(plan);
+        return;
+      }
       await actions.submitToDirector(plan.id, user.id);
       setConfirmSubmit(null);
     } catch (error) {
@@ -195,16 +200,14 @@ export default function PlanningDashboard({ view }) {
 
       {/* Plans tab */}
       {activeTab === 'plans' && (
-        <div className="grid grid-cols-3 gap-6">
-          {/* Left: Main content (2 cols) */}
-          <div className="col-span-2 space-y-6">
-            {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Total Plans" value={stats.total} icon={ClipboardList} color="blue" />
-              <StatCard label="Draft" value={stats.draft} icon={Edit} color="gray" />
-              <StatCard label="Pending Approval" value={stats.pendingDirector + stats.pendingSenior} icon={Clock} color="yellow" />
-              <StatCard label="Finalized" value={stats.finalized} icon={CheckCircle} color="green" />
-            </div>
+        <div className="space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Total Plans" value={stats.total} icon={ClipboardList} color="blue" />
+            <StatCard label="Draft" value={stats.draft} icon={Edit} color="gray" />
+            <StatCard label="Pending Approval" value={stats.pendingDirector + stats.pendingSenior} icon={Clock} color="yellow" />
+            <StatCard label="Finalized" value={stats.finalized} icon={CheckCircle} color="green" />
+          </div>
 
             {/* Amendment Plans Alert */}
             {amendmentPlans.length > 0 && (
@@ -268,116 +271,6 @@ export default function PlanningDashboard({ view }) {
               </div>
               {plans.length === 0 ? <div className="py-8"><Empty icon={FileText} title="No plans yet" description="View the risk analysis first, then create your first audit plan." action={<Button icon={Plus} onClick={() => setShowCreate(true)}>Create Plan</Button>} /></div> : <Table columns={columns} rows={plans} onRowClick={(row) => setSelectedPlan(row)} />}
             </Card>
-          </div>
-
-          {/* Right: Config Panel (1 col) */}
-          <div className="col-span-1">
-            <Card className="sticky top-4">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-3 border-b border-gray-200 dark:border-slate-600">
-                  <Settings size={18} className="text-blue-600" />
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">Planning Config</h4>
-                    <span className="text-[10px] text-blue-600">Planning Only</span>
-                  </div>
-                </div>
-
-                {/* Audit Types */}
-                <div className="space-y-2">
-                  <button onClick={() => toggleSection('auditTypes')} className="flex w-full items-center justify-between px-2 py-1.5 hover:bg-gray-50 rounded dark:bg-slate-700">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Audit Types <span className="text-xs text-gray-500 ml-1">({planningConfig.auditTypes.length})</span></span>
-                    {expandedSections.auditTypes ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                  {expandedSections.auditTypes && (
-                    <div className="space-y-2 pl-2 max-h-48 overflow-y-auto">
-                      {planningConfig.auditTypes.map(at => (
-                        <div key={at.id}>
-                          {editingId === at.id && editingType === 'auditType' ? (
-                            <div className="bg-blue-50 border border-blue-300 rounded p-2 space-y-1">
-                              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500" />
-                              <div className="grid grid-cols-2 gap-1">
-                                <input type="number" value={formData.effortPerCase} onChange={(e) => setFormData({ ...formData, effortPerCase: parseInt(e.target.value) })} className="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500" />
-                                <select value={formData.complexity} onChange={(e) => setFormData({ ...formData, complexity: e.target.value })} className="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-                                  <option>Low</option>
-                                  <option>Medium</option>
-                                  <option>High</option>
-                                  <option>Very High</option>
-                                </select>
-                              </div>
-                              <div className="flex gap-1">
-                                <Button size="xs" variant="success" icon={Check} onClick={saveEdit}>Save</Button>
-                                <Button size="xs" variant="ghost" icon={X} onClick={() => setEditingId(null)}>Cancel</Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="border border-gray-200 rounded p-2 flex items-center justify-between hover:bg-gray-50 dark:bg-gray-800 dark:bg-slate-700">
-                              <div>
-                                <p className="text-xs font-medium text-gray-900 dark:text-white">{at.name}</p>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <span className="text-[10px] text-gray-600 dark:text-slate-400">{at.effortPerCase}h</span>
-                                  <Badge variant="gray" className={`text-[9px] ${complexityColors[at.complexity]}`}>{at.complexity}</Badge>
-                                </div>
-                              </div>
-                              <div className="flex gap-1">
-                                <button onClick={() => startEdit(at, 'auditType')} className="p-0.5 hover:bg-gray-200 rounded text-amber-600"><Edit2 size={12} /></button>
-                                <button onClick={() => deleteItem(at.id, 'auditType')} className="p-0.5 hover:bg-gray-200 rounded text-red-600"><Trash2 size={12} /></button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <Button size="xs" variant="ghost" icon={Plus} onClick={() => addNew('auditType')} className="w-full text-blue-600 hover:bg-blue-50">Add Type</Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Skills */}
-                <div className="space-y-2">
-                  <button onClick={() => toggleSection('skills')} className="flex w-full items-center justify-between px-2 py-1.5 hover:bg-gray-50 rounded dark:bg-slate-700">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Skills <span className="text-xs text-gray-500 ml-1">({planningConfig.skills.length})</span></span>
-                    {expandedSections.skills ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                  {expandedSections.skills && (
-                    <div className="space-y-1 pl-2 max-h-32 overflow-y-auto">
-                      {planningConfig.skills.map(skill => (
-                        <div key={skill.id}>
-                          {editingId === skill.id && editingType === 'skill' ? (
-                            <div className="bg-blue-50 border border-blue-300 rounded p-1.5 space-y-1">
-                              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full text-xs px-1.5 py-0.5 border border-gray-300 rounded focus:outline-none focus:border-blue-500" />
-                              <div className="grid grid-cols-2 gap-0.5">
-                                <select value={formData.level} onChange={(e) => setFormData({ ...formData, level: parseInt(e.target.value) })} className="text-xs px-1 py-0.5 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-                                  <option value={1}>Foundation</option>
-                                  <option value={2}>Advanced</option>
-                                  <option value={3}>Expert</option>
-                                </select>
-                                <input type="text" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="text-xs px-1 py-0.5 border border-gray-300 rounded focus:outline-none focus:border-blue-500" />
-                              </div>
-                              <div className="flex gap-0.5">
-                                <Button size="xs" variant="success" icon={Check} onClick={saveEdit}>Save</Button>
-                                <Button size="xs" variant="ghost" icon={X} onClick={() => setEditingId(null)}>Cancel</Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="border border-gray-200 rounded p-1.5 flex items-center justify-between hover:bg-gray-50 dark:bg-gray-800 dark:bg-slate-700">
-                              <div>
-                                <p className="text-xs font-medium text-gray-900 dark:text-white">{skill.name}</p>
-                                <span className="text-[9px] text-gray-600 dark:text-slate-400">{levelLabels[skill.level]}</span>
-                              </div>
-                              <div className="flex gap-0.5">
-                                <button onClick={() => startEdit(skill, 'skill')} className="p-0.5 hover:bg-gray-200 rounded text-amber-600"><Edit2 size={11} /></button>
-                                <button onClick={() => deleteItem(skill.id, 'skill')} className="p-0.5 hover:bg-gray-200 rounded text-red-600"><Trash2 size={11} /></button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <Button size="xs" variant="ghost" icon={Plus} onClick={() => addNew('skill')} className="w-full text-blue-600 hover:bg-blue-50 text-xs">Add Skill</Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-          </div>
         </div>
       )}
 

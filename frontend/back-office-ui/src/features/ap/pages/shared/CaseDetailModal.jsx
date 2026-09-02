@@ -179,6 +179,73 @@ export default function CaseDetailModal({ caseData, onClose, users = [] }) {
           </div>
         </div>
 
+        {/* Detailed Audit Profile: Filing, Payments, VAT & Discrepancies */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">📊 Financial & Filing Audit History</p>
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 space-y-4">
+            {/* Filing & Payment History Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Filing Compliance</span>
+                <span className="text-emerald-600 font-bold text-sm">85% (3 Late Filings)</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">VAT Declarations</span>
+                <span className="text-blue-600 font-bold text-sm">ETB 14.2M Declared</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Bank Turnover Variance</span>
+                <span className="text-amber-600 font-bold text-sm">+28% Unreported</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Est. Tax Understatement</span>
+                <span className="text-red-600 font-bold text-sm">ETB 3.85M</span>
+              </div>
+            </div>
+
+            {/* Transaction & Audit Discrepancies Table */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2">🔍 Audit Findings & Discrepancies Log</p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                <table className="min-w-full text-xs text-left">
+                  <thead className="bg-slate-100 dark:bg-slate-700 font-semibold text-slate-600 dark:text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2">Tax Period</th>
+                      <th className="px-3 py-2">Category</th>
+                      <th className="px-3 py-2">Reported</th>
+                      <th className="px-3 py-2">Audited / Bank Data</th>
+                      <th className="px-3 py-2">Discrepancy</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    <tr>
+                      <td className="px-3 py-2 font-mono">2025-Q3</td>
+                      <td className="px-3 py-2">VAT Sales Turnover</td>
+                      <td className="px-3 py-2">ETB 4,200,000</td>
+                      <td className="px-3 py-2">ETB 5,800,000</td>
+                      <td className="px-3 py-2 font-bold text-red-600">+ETB 1,600,000</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 font-mono">2025-Q4</td>
+                      <td className="px-3 py-2">Withholding Tax (WHT)</td>
+                      <td className="px-3 py-2">ETB 310,000</td>
+                      <td className="px-3 py-2">ETB 850,000</td>
+                      <td className="px-3 py-2 font-bold text-red-600">+ETB 540,000</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 font-mono">2026-Q1</td>
+                      <td className="px-3 py-2">Transfer Pricing Margin</td>
+                      <td className="px-3 py-2">2.5% Profit</td>
+                      <td className="px-3 py-2">12.0% Arm's Length</td>
+                      <td className="px-3 py-2 font-bold text-amber-600">Sub-arm's length</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Notes */}
         {caseData.notes && (
           <div>

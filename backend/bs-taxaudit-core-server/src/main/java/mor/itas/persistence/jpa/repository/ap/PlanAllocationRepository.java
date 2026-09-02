@@ -47,4 +47,9 @@ public interface PlanAllocationRepository extends JpaRepository<PlanAllocationEn
      * Find allocations by plan and region (for both regional and tax center level)
      */
     List<PlanAllocationEntity> findByAnnualPlanIdAndRegionCode(UUID planId, String regionCode);
+
+    /**
+     * Find allocation for a specific tax center in a plan
+     */
+    List<PlanAllocationEntity> findByAnnualPlanIdAndTaxCenterCode(UUID planId, String taxCenterCode);
 }
