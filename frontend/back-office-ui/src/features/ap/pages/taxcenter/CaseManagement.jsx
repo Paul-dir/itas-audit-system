@@ -73,6 +73,48 @@ export default function CaseManagement() {
   // Team leaders for this tax center (from user management API)
   const [teamLeaders, setTeamLeaders] = useState([]);
 
+// Helper to normalize tax center keys for cross-matching
+const normalizeTcKey = (tc) => {
+  if (!tc) return '';
+  const s = tc.toString().trim().toLowerCase();
+  if (s.includes('aa-tc1') || s.includes('addis_ababa-tc1') || s.includes('tc-aa-01')) return 'aa-tc1';
+  if (s.includes('aa-tc2') || s.includes('addis_ababa-tc2') || s.includes('tc-aa-02')) return 'aa-tc2';
+  if (s.includes('aa-tc3') || s.includes('addis_ababa-tc3') || s.includes('tc-aa-03')) return 'aa-tc3';
+  if (s.includes('federal-lto1') || s.includes('fed-lto1') || s.includes('tc-fed-01') || s.includes('lto1')) return 'federal-lto1';
+  if (s.includes('oromia-tc1') || s.includes('bb-tc1') || s.includes('tc-bb-01')) return 'oromia-tc1';
+  if (s.includes('amhara-tc1') || s.includes('ba-tc1') || s.includes('tc-ba-01')) return 'amhara-tc1';
+  return s;
+};
+
+  // Audit referrals state
+  const [referrals, setReferrals] = useState([]);
+  const [selectedReferral, setSelectedReferral] = useState(null);
+  const [assignReferralModal, setAssignReferralModal] = useState(false);
+  const [targetTLForReferral, setTargetTLForReferral] = useState('');
+  const [referralDurationDays, setReferralDurationDays] = useState('30');
+
+  // Load audit referrals
+  useEffect(() => {
+    const saved = localStorage.getItem('mor_audit_referrals');
+    if (saved) {
+      try {
+        setReferrals(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse referrals:', e);
+      }
+    }
+  }, []);
+
+  // Filter referrals strictly for THIS tax center
+  const tcFilteredReferrals = useMemo(() => {
+    const managerTcKey = normalizeTcKey(user?.taxCenter || tcCode);
+    return referrals.filter(ref => {
+      if (!managerTcKey) return true;
+      const targetTcKey = normalizeTcKey(ref.targetTaxCenter);
+      return managerTcKey === targetTcKey;
+    });
+  }, [referrals, user?.taxCenter, tcCode]);
+
   // ── Fetch cases ─────────────────────────────────────────────────────────────
   const fetchCases = useCallback(async () => {
     if (!tcCode) return;
@@ -163,9 +205,55 @@ export default function CaseManagement() {
 
   const tabs = [
     { id:'pending',   label:'Pending Assignment', count: stats.pending   },
+    { id:'referrals', label:'Directorate Referrals', count: tcFilteredReferrals.length },
     { id:'assigned',  label:'Assigned / In Progress', count: stats.assigned  },
     { id:'completed', label:'Completed',          count: stats.completed },
   ];
+
+  // Assign Referral Case Handler
+  const handleAssignReferral = (ref) => {
+    if (!ref) return;
+    const targetTL = targetTLForReferral || (teamLeaders[0]?.userId || teamLeaders[0]?.id || 'u-tl-aa1a');
+    const updatedReferrals = referrals.map(r => {
+      if (r.id === ref.id) {
+        const isComm = r.auditType === 'transfer_pricing' || r.auditType === 'joint_audit';
+        return {
+          ...r,
+          status: isComm ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER',
+          assignedTeamLeaderId: targetTL,
+          assignedTeamLeaderName: teamLeaders.find(t => (t.userId||t.id) === targetTL)?.name || targetTL,
+          assignedAt: new Date().toISOString(),
+          durationDays: referralDurationDays,
+          startDate: new Date().toISOString().split('T')[0],
+          expectedEndDate: new Date(Date.now() + Number(referralDurationDays) * 86400000).toISOString().split('T')[0],
+        };
+      }
+      return r;
+    });
+    setReferrals(updatedReferrals);
+    localStorage.setItem('mor_audit_referrals', JSON.stringify(updatedReferrals));
+
+    // Also inject into active cases list
+    const newCase = mapCase({
+      id: `case-${ref.id}`,
+      caseNumber: ref.caseNumber,
+      taxpayerId: ref.taxpayerId,
+      taxpayerName: ref.taxpayerName,
+      sector: ref.sector,
+      auditType: ref.auditType.toUpperCase(),
+      riskScore: ref.priority === 'CRITICAL' ? 95 : ref.priority === 'HIGH' ? 80 : 50,
+      estimatedRevenue: ref.estimatedRevenue,
+      status: ref.auditType === 'transfer_pricing' || ref.auditType === 'joint_audit' ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER',
+      assignedTeamLeaderId: targetTL,
+      createdBy: ref.requestingEntity,
+      createdAt: new Date().toISOString(),
+    });
+
+    setCases(prev => [newCase, ...prev]);
+    setAssignReferralModal(false);
+    setSelectedReferral(null);
+    alert(`✅ Case ${ref.caseNumber} successfully assigned to ${newCase.status === 'ASSIGNED_TO_COMMITTEE' ? 'Joint/TP Audit Committee' : 'Team Leader'}!`);
+  };
 
   // ── Selection ────────────────────────────────────────────────────────────────
   const toggleAll = () => {
@@ -342,73 +430,143 @@ export default function CaseManagement() {
           </Select>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
-              <tr>
-                <th className="px-4 py-3">
-                  <input type="checkbox"
-                    checked={filtered.filter(c=>c.frontendStatus==='PENDING').length > 0 &&
-                             selected.length === filtered.filter(c=>c.frontendStatus==='PENDING').length}
-                    onChange={toggleAll}
-                    className="w-4 h-4 rounded" />
-                </th>
-                {['Taxpayer','Plan Year','Risk','Audit Type','Status','Assigned To',''].map((h,i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
-                  {loading ? 'Loading…' : 'No cases found'}
-                </td></tr>
-              ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
-                const atDef = c.auditTypeDef;
-                const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
-                return (
-                  <tr key={c.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-3">
-                      <input type="checkbox" checked={selected.includes(c.id)}
-                        onChange={() => toggle(c.id)}
-                        disabled={c.frontendStatus !== 'PENDING'}
-                        className="w-4 h-4 rounded disabled:opacity-40" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge color="purple" size="sm">FY {c.planYear || 2026}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge color={atDef?.color || 'gray'} size="sm">
-                        {atDef?.shortName || c.auditType}
-                        {c.isCommittee && <span className="ml-1 opacity-70">(Cmte)</span>}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge color={statusDef?.color || 'gray'} dot size="sm">
-                        {statusDef?.label || c.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">
-                      {c.assignedTeamLeaderId
-                        ? <span className="font-medium">{teamLeaders.find(t=>(t.userId||t.id)===c.assignedTeamLeaderId)?.name || c.assignedTeamLeaderId}</span>
-                        : <span className="text-gray-400">Not assigned</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
+        {tab === 'referrals' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Case / Taxpayer</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Requesting Entity</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Audit Type</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-slate-200">Priority</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-slate-200">Status</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Assigned Team Leader</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-slate-200">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {tcFilteredReferrals.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
+                      No statutory referral requests assigned to {tcCode || 'your Tax Center'}.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  tcFilteredReferrals.map(ref => (
+                    <tr key={ref.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
+                      <td className="px-4 py-3">
+                        <div className="font-mono font-bold text-blue-600 dark:text-blue-400">{ref.caseNumber}</div>
+                        <div className="font-semibold text-gray-900 dark:text-white mt-0.5">{ref.taxpayerName}</div>
+                        <div className="text-[11px] text-gray-500 font-mono">TIN: {ref.taxpayerId} | {ref.sector}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-gray-800 dark:text-gray-200">{ref.requestingEntity}</div>
+                        <div className="text-[11px] text-gray-500">{ref.referralReason}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color="purple" size="sm">
+                          {ref.auditType.replace(/_/g, ' ').toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge color={ref.priority === 'CRITICAL' ? 'red' : ref.priority === 'HIGH' ? 'orange' : 'yellow'} size="sm">
+                          {ref.priority}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge color={ref.status === 'PENDING_TAX_CENTER_REVIEW' ? 'orange' : 'green'} dot size="sm">
+                          {ref.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-700 dark:text-slate-300">
+                        {ref.assignedTeamLeaderName || ref.assignedTeamLeaderId || <span className="text-gray-400 font-normal">Pending Assignment</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="success"
+                          icon={Send}
+                          disabled={ref.status !== 'PENDING_TAX_CENTER_REVIEW'}
+                          onClick={() => { setSelectedReferral(ref); setAssignReferralModal(true); }}
+                        >
+                          {ref.status === 'PENDING_TAX_CENTER_REVIEW' ? 'Assign Team' : 'Assigned'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                <tr>
+                  <th className="px-4 py-3">
+                    <input type="checkbox"
+                      checked={filtered.filter(c=>c.frontendStatus==='PENDING').length > 0 &&
+                               selected.length === filtered.filter(c=>c.frontendStatus==='PENDING').length}
+                      onChange={toggleAll}
+                      className="w-4 h-4 rounded" />
+                  </th>
+                  {['Taxpayer','Plan Year','Risk','Audit Type','Status','Assigned To',''].map((h,i) => (
+                    <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
+                    {loading ? 'Loading…' : 'No cases found'}
+                  </td></tr>
+                ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
+                  const atDef = c.auditTypeDef;
+                  const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
+                  return (
+                    <tr key={c.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
+                      <td className="px-4 py-3">
+                        <input type="checkbox" checked={selected.includes(c.id)}
+                          onChange={() => toggle(c.id)}
+                          disabled={c.frontendStatus !== 'PENDING'}
+                          className="w-4 h-4 rounded disabled:opacity-40" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color="purple" size="sm">FY {c.planYear || 2026}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color={atDef?.color || 'gray'} size="sm">
+                          {atDef?.shortName || c.auditType}
+                          {c.isCommittee && <span className="ml-1 opacity-70">(Cmte)</span>}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color={statusDef?.color || 'gray'} dot size="sm">
+                          {statusDef?.label || c.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">
+                        {c.assignedTeamLeaderId
+                          ? <span className="font-medium">{teamLeaders.find(t=>(t.userId||t.id)===c.assignedTeamLeaderId)?.name || c.assignedTeamLeaderId}</span>
+                          : <span className="text-gray-400">Not assigned</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
         <Pagination
           currentPage={page}
           totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
@@ -502,6 +660,79 @@ export default function CaseManagement() {
                 No team leaders found for {tcCode}. Cases will remain PENDING. Please register team leaders first.
               </Alert>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Assign Referral Modal */}
+      {assignReferralModal && selectedReferral && (
+        <Modal
+          open
+          onClose={() => setAssignReferralModal(false)}
+          title={`📌 Review & Assign Statutory Audit Referral — ${selectedReferral.caseNumber}`}
+          size="lg"
+          footer={
+            <div className="flex justify-between w-full">
+              <Button variant="secondary" onClick={() => setAssignReferralModal(false)}>Cancel</Button>
+              <Button variant="success" icon={Send} onClick={() => handleAssignReferral(selectedReferral)}>
+                Confirm & Route Case
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <Alert type="info">
+              Review directorate audit rationale, evaluate team leader workload, and set expected completion timeframe.
+            </Alert>
+
+            <div className="bg-slate-900 text-white rounded-xl p-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="font-mono text-blue-400 font-bold">{selectedReferral.caseNumber}</span>
+                <Badge color={selectedReferral.priority === 'CRITICAL' ? 'red' : 'orange'}>{selectedReferral.priority}</Badge>
+              </div>
+              <h4 className="text-base font-bold text-white">{selectedReferral.taxpayerName}</h4>
+              <p className="text-slate-300">TIN: {selectedReferral.taxpayerId} | Sector: {selectedReferral.sector}</p>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1">
+              <p className="font-semibold text-gray-700 dark:text-gray-300">Requesting Directorate Rationale:</p>
+              <p className="text-gray-800 dark:text-gray-200">{selectedReferral.referralReason}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Assign to Team Leader / Committee <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-xl text-xs font-semibold"
+                  value={targetTLForReferral || (teamLeaders[0]?.userId || teamLeaders[0]?.id || '')}
+                  onChange={e => setTargetTLForReferral(e.target.value)}
+                >
+                  {teamLeaders.map(tl => (
+                    <option key={tl.id || tl.userId} value={tl.userId || tl.id}>
+                      {tl.name || tl.fullName} ({tl.auditType?.replace(/_/g, ' ') || 'General TL'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Audit Target Completion Duration (Days)
+                </label>
+                <select
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-xl text-xs font-semibold"
+                  value={referralDurationDays}
+                  onChange={e => setReferralDurationDays(e.target.value)}
+                >
+                  <option value="15">15 Days (Urgent Clearance Audit)</option>
+                  <option value="30">30 Days (Standard Audit Deadline)</option>
+                  <option value="60">60 Days (Comprehensive Audit)</option>
+                  <option value="90">90 Days (Transfer Pricing Audit)</option>
+                </select>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

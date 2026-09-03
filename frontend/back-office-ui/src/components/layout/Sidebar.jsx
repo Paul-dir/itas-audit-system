@@ -123,8 +123,34 @@ const NAV_SECTIONS = {
       items: [
         { id: 'cases', label: 'My Cases', icon: Search }
       ]
+    },
+    {
+      title: 'TP AUDIT EXECUTION',
+      items: [
+        { id: 'phase-1', label: 'Risk Assessment', icon: CheckSquare },
+        { id: 'phase-2', label: 'Working Hypothesis', icon: ClipboardList },
+        { id: 'phase-3', label: 'Planning & Meeting', icon: Target },
+        { id: 'phase-4', label: 'Field Work', icon: Building2 },
+        { id: 'phase-5', label: 'Economic Analysis', icon: Activity },
+        { id: 'phase-6', label: 'TP Report', icon: ClipboardList },
+        { id: 'phase-assessment', label: 'Assessment', icon: Star },
+        { id: 'phase-7', label: 'Notice & Objection', icon: Star },
+        { id: 'phase-8', label: 'Audit Closure', icon: CheckSquare }
+      ]
+    },
+    {
+      title: 'ISSUE AUDIT EXECUTION',
+      items: [
+        { id: 'issue-phase-1', label: 'Auditee Notification & Selection', icon: CheckSquare },
+        { id: 'issue-phase-2', label: 'Evidence & On-Site Verification', icon: Building2 },
+        { id: 'issue-phase-3', label: 'Audit Findings & Report Drafting', icon: ClipboardList },
+        { id: 'issue-phase-4', label: 'Multi-Level Review Chain', icon: Star },
+        { id: 'issue-phase-5', label: 'Director Decision & Follow-Up', icon: CheckSquare }
+      ]
     }
+
   ],
+
   senior_management: [
     {
       title: 'OVERVIEW',
@@ -134,6 +160,20 @@ const NAV_SECTIONS = {
       title: 'GOVERNANCE',
       items: [
         { id: 'approval', label: 'National Plan Approval', icon: Star }
+      ]
+    }
+  ],
+
+  audit_requester: [
+    {
+      title: 'OVERVIEW',
+      items: [{ id: 'dashboard', label: 'Referral Dashboard', icon: LayoutDashboard }]
+    },
+    {
+      title: 'STATUTORY AUDIT REFERRALS',
+      items: [
+        { id: 'referrals', label: 'My Referrals & Flags', icon: ClipboardList },
+        { id: 'new_referral', label: 'Submit Audit Referral', icon: Target }
       ]
     }
   ]
@@ -148,6 +188,7 @@ const ROLE_LABELS = {
   committee:        'Joint Audit Committee',
   auditor:          'Auditor',
   senior_management:'Senior Management',
+  audit_requester:  'Directorate Audit Requester',
 };
 
 export default function Sidebar({ activeView, onNavigate }) {
@@ -201,46 +242,68 @@ export default function Sidebar({ activeView, onNavigate }) {
 
       {/* ── Navigation ── */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-6">
-        {(NAV_SECTIONS[user.role] || []).map((section, idx) => (
-          <div key={idx}>
-            <p className="px-3 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {section.title}
-            </p>
-            <ul className="space-y-1">
-              {section.items.map(item => {
-                const Icon = item.icon;
-                const active = activeView === item.id;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick(item.id)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 cursor-pointer ${
-                        active
-                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                          : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <Icon size={16} strokeWidth={active ? 2 : 1.5} />
-                        {item.label}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        {item.badge && (
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold border border-emerald-500/20">
-                            {item.badge}
-                          </span>
-                        )}
-                        {active && <ChevronRight size={14} className="text-white/60" />}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+        {(NAV_SECTIONS[user.role] || []).map((section, idx) => {
+          let userType = (user?.auditType || '').toUpperCase().replace(/_/g, '');
+          if (!userType && user?.name) {
+            const lowerName = user.name.toLowerCase();
+            if (lowerName.includes('tp') || lowerName.includes('transfer pricing')) userType = 'TRANSFERPRICING';
+            if (lowerName.includes('issue')) userType = 'ISSUE';
+          }
+
+          if (section.title === 'TP AUDIT EXECUTION') {
+            if (userType !== 'TRANSFERPRICING' && userType !== 'TP') {
+              return null;
+            }
+          }
+          if (section.title === 'ISSUE AUDIT EXECUTION') {
+            if (userType !== 'ISSUE' && userType !== 'ISSUEAUDIT') {
+              return null;
+            }
+          }
+
+          return (
+            <div key={idx}>
+              <p className="px-3 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                {section.title}
+              </p>
+              <ul className="space-y-1">
+                {section.items.map(item => {
+                  const Icon = item.icon;
+                  const active = activeView === item.id;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleNavClick(item.id)}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 cursor-pointer ${
+                          active
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Icon size={16} strokeWidth={active ? 2 : 1.5} />
+                          {item.label}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          {item.badge && (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold border border-emerald-500/20">
+                              {item.badge}
+                            </span>
+                          )}
+                          {active && <ChevronRight size={14} className="text-white/60" />}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
+
+
 
       {/* ── Logout ── */}
       <div className="px-3 pb-4 border-t border-white/10 pt-3">

@@ -1,6 +1,7 @@
 package mor.itas.persistence.jpa.entity.ap;
 
 import jakarta.persistence.*;
+import mor.itas.persistence.jpa.entity.tp.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -108,6 +109,38 @@ public class ApAuditCaseEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    // ── TP-Specific Child Entities ────────────────────────────────────────────
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpRiskAssessmentEntity tpRiskAssessment;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpWorkingHypothesisEntity tpWorkingHypothesis;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpAuditPlanEntity tpAuditPlan;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpPlanningMeetingEntity tpPlanningMeeting;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpFieldWorkDataEntity tpFieldWorkData;
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpAnalysisDataEntity tpAnalysisData;
+
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpAuditReportEntity> tpAuditReports = new java.util.ArrayList<>();
+
+    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TpAuditNoticeEntity tpAuditNotice;
+
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpObjectionEntity> tpObjections = new java.util.ArrayList<>();
+
+    /** Current workflow phase for TP cases (e.g. DETAILED_RISK_ASSESSMENT, PLANNING, FIELD_WORK…) */
+    @Column(name = "tp_current_phase", length = 64)
+    private String tpCurrentPhase;
+
     // ── Constructors ──────────────────────────────────────────────────────────
     public ApAuditCaseEntity() {
     }
@@ -191,4 +224,34 @@ public class ApAuditCaseEntity {
 
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessment; }
+    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessment = tpRiskAssessment; }
+
+    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypothesis; }
+    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypothesis = tpWorkingHypothesis; }
+
+    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlan; }
+    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlan = tpAuditPlan; }
+
+    public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeeting; }
+    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeeting = tpPlanningMeeting; }
+
+    public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkData; }
+    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkData = tpFieldWorkData; }
+
+    public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisData; }
+    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisData = tpAnalysisData; }
+
+    public java.util.List<TpAuditReportEntity> getTpAuditReports() { return tpAuditReports; }
+    public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) { this.tpAuditReports = tpAuditReports; }
+
+    public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotice; }
+    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotice = tpAuditNotice; }
+
+    public java.util.List<TpObjectionEntity> getTpObjections() { return tpObjections; }
+    public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) { this.tpObjections = tpObjections; }
+
+    public String getTpCurrentPhase() { return tpCurrentPhase; }
+    public void setTpCurrentPhase(String tpCurrentPhase) { this.tpCurrentPhase = tpCurrentPhase; }
 }

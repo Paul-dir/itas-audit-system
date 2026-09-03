@@ -365,8 +365,9 @@ public class CaseManagementController {
                         continue;
                     }
 
-                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER state
+                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER, ASSIGNED_TO_COMMITTEE, or IN_PROGRESS state
                     if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
+                            && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())
                             && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())) {
                         errors.add("Case " + caseId + ": invalid status " + entity.getStatus());
                         continue;
@@ -424,6 +425,55 @@ public class CaseManagementController {
             return ResponseEntity.ok(GenericResponse.error("NOT_FOUND", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.ok(GenericResponse.error("STATUS_ERROR", e.getMessage()));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REFERRAL AUDIT CASES (STRICT TAX CENTER ISOLATION)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final List<Map<String, Object>> REFERRAL_STORE = Collections.synchronizedList(new ArrayList<>());
+
+    @PostMapping("/referrals")
+    public ResponseEntity<GenericResponse<Map<String, Object>>> createReferral(
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(value = "X-Actor-Id", required = false) String actorId) {
+        try {
+            String targetTc = (String) body.get("targetTaxCenter");
+            String normalizedTC = normalizeTaxCenterCode(targetTc);
+            body.put("targetTaxCenterCode", normalizedTC != null ? normalizedTC : targetTc);
+            body.put("createdAt", OffsetDateTime.now().toString());
+            body.put("status", "PENDING_TAX_CENTER_REVIEW");
+            REFERRAL_STORE.add(body);
+            return ResponseEntity.ok(GenericResponse.success(body));
+        } catch (Exception e) {
+            return ResponseEntity.ok(GenericResponse.error("REFERRAL_CREATE_ERROR", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/referrals")
+    public ResponseEntity<GenericResponse<List<Map<String, Object>>>> getReferrals(
+            @RequestParam(required = false) String taxCenter,
+            @RequestParam(required = false) String requestingEntity) {
+        try {
+            String normalizedTC = normalizeTaxCenterCode(taxCenter);
+            List<Map<String, Object>> filtered = REFERRAL_STORE.stream()
+                    .filter(ref -> {
+                        if (normalizedTC == null || normalizedTC.isBlank()) return true;
+                        String target = (String) ref.get("targetTaxCenter");
+                        String targetCode = (String) ref.get("targetTaxCenterCode");
+                        String normTarget = normalizeTaxCenterCode(target);
+                        return normalizedTC.equalsIgnoreCase(normTarget) || normalizedTC.equalsIgnoreCase(targetCode) || normalizedTC.equalsIgnoreCase(target);
+                    })
+                    .filter(ref -> {
+                        if (requestingEntity == null || requestingEntity.isBlank()) return true;
+                        String req = (String) ref.get("requestingEntity");
+                        return req != null && req.toLowerCase().contains(requestingEntity.toLowerCase());
+                    })
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(GenericResponse.success(filtered, filtered.size(), (long) filtered.size()));
+        } catch (Exception e) {
+            return ResponseEntity.ok(GenericResponse.error("REFERRAL_QUERY_ERROR", e.getMessage()));
         }
     }
 
