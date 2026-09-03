@@ -14,6 +14,11 @@ export const SEED_USERS = [
   // Senior Management
   { id: 'u-sm-01', name: 'Rahel Hailu',       email: 'rahel.hailu@mor.gov.et',        role: 'senior_management', region: null,          taxCenter: null,          password: 'password123' },
   { id: 'u-sm-02', name: 'Biruk Assefa',      email: 'biruk.assefa@mor.gov.et',       role: 'senior_management', region: null,          taxCenter: null,          password: 'password123' },
+  // External & Internal Directorate Audit Requesters
+  { id: 'u-req-01', name: 'Getachew Zewde (Tax Clearance)', email: 'clearance.officer@mor.gov.et', role: 'audit_requester', region: 'federal_level', taxCenter: 'federal-lto1', password: 'password123' },
+  { id: 'u-req-02', name: 'Tigist Worku (Business Closure)', email: 'closure.directorate@mor.gov.et', role: 'audit_requester', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', password: 'password123' },
+  { id: 'u-req-03', name: 'Deriba Alemayehu (Fraud & Intel)', email: 'fraud.intel@mor.gov.et', role: 'audit_requester', region: 'federal_level', taxCenter: 'federal-lto1', password: 'password123' },
+  { id: 'u-req-04', name: 'Ministry of Trade (External)', email: 'external.motri@gov.et', role: 'audit_requester', region: 'addis_ababa', taxCenter: 'addis_ababa-tc2', password: 'password123' },
   // Regional Directors
   { id: 'u-rd-fed', name: 'Solomon Worku (Federal LTO)', email: 'solomon.worku@mor.gov.et', role: 'regional_director', region: 'federal_level', taxCenter: null, password: 'password123' },
   { id: 'u-rd-aa', name: 'Getnet Alemu',      email: 'getnet.alemu@mor.gov.et',       role: 'regional_director', region: 'addis_ababa', taxCenter: null,          password: 'password123' },
@@ -79,10 +84,11 @@ export const SEED_USERS = [
   { id: 'u-aud-aa1f', name: 'Eden Tesfaye (Joint Auditor)',    email: 'eden.tesfaye@mor.gov.et',      role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1c', password: 'password123' },
   { id: 'u-aud-aa1g', name: 'Fikremariam B. (Comp Auditor)',  email: 'fikremariam.b@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1d', password: 'password123' },
   { id: 'u-aud-aa1h', name: 'Saron Getachew (Comp Auditor)',  email: 'saron.getachew@mor.gov.et',    role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1d', password: 'password123' },
-  { id: 'u-aud-aa1i', name: 'Michael Desta (TP Auditor)',   email: 'michael.desta@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1e', password: 'password123' },
-  { id: 'u-aud-aa1j', name: 'Eyerusalem M. (TP Auditor)',   email: 'eyerusalem.m@mor.gov.et',      role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1e', password: 'password123' },
-  { id: 'u-aud-aa1k', name: 'Abdi Kedir (Issue Auditor)',      email: 'abdi.kedir@mor.gov.et',        role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1f', password: 'password123' },
-  { id: 'u-aud-aa1l', name: 'Mahlet Bekele (Issue Auditor)',   email: 'mahlet.bekele@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1f', password: 'password123' },
+  { id: 'u-aud-aa1i', name: 'Michael Desta (TP Auditor)',   email: 'michael.desta@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1e', auditType: 'transfer_pricing', password: 'password123' },
+  { id: 'u-aud-aa1j', name: 'Eyerusalem M. (TP Auditor)',   email: 'eyerusalem.m@mor.gov.et',      role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1e', auditType: 'transfer_pricing', password: 'password123' },
+  { id: 'u-aud-aa1k', name: 'Abdi Kedir (Issue Auditor)',      email: 'abdi.kedir@mor.gov.et',        role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1f', auditType: 'issue_audit',      password: 'password123' },
+  { id: 'u-aud-aa1l', name: 'Mahlet Bekele (Issue Auditor)',   email: 'mahlet.bekele@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', teamLeader: 'u-tl-aa1f', auditType: 'issue_audit',      password: 'password123' },
+
   
   // Auditors — AA-TC2 (Multiple auditors per TL)
   { id: 'u-aud-aa2a', name: 'Meseret Hailu',   email: 'meseret.hailu@mor.gov.et',     role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc2', teamLeader: 'u-tl-aa2a', password: 'password123' },

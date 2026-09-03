@@ -16,6 +16,7 @@ import AuditorDashboard from './features/ap/pages/auditor/AuditorDashboard.jsx';
 import CommitteeDashboard from './features/ap/pages/committee/CommitteeDashboard.jsx';
 import RiskAnalysisDashboard from './features/ap/pages/planning/RiskAnalysisDashboard.jsx';
 import RiskEngineDashboard from './features/ap/pages/riskengine/RiskEngineDashboard.jsx';
+import AuditRequesterDashboard from './features/ap/pages/requester/AuditRequesterDashboard.jsx';
 import { Spinner } from './components/ui/index.jsx';
 
 const PAGE_TITLES = {
@@ -66,6 +67,11 @@ const PAGE_TITLES = {
     dashboard: { title: 'Senior Management',  subtitle: 'Final approval of national audit plans' },
     approval:  { title: 'Plan Approval',      subtitle: 'Plans awaiting senior management approval' },
   },
+  audit_requester: {
+    dashboard: { title: 'Directorate Referral Dashboard', subtitle: 'Submit & track statutory audit case referrals' },
+    referrals: { title: 'My Referrals & Flags',            subtitle: 'Cases flagged for tax clearance, closure & fraud audit' },
+    new_referral: { title: 'Submit Audit Referral',       subtitle: 'Flag taxpayer for desk, comprehensive or TP audit' },
+  },
 };
 
 function RoleRouter({ user, view }) {
@@ -94,6 +100,7 @@ function RoleRouter({ user, view }) {
   if (role === 'team_leader')      return <TeamLeaderDashboard view={view} />;
   if (role === 'auditor')          return <AuditorDashboard view={view} />;
   if (role === 'committee')        return <CommitteeDashboard view={view} />;
+  if (role === 'audit_requester')  return <AuditRequesterDashboard view={view} />;
 
   return (
     <div className="flex items-center justify-center h-64">
