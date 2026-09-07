@@ -64,12 +64,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
   const [historyWindowMode, setHistoryWindowMode] = useState('5_YEAR'); // '5_YEAR' or '10_YEAR'
   const [selectedYearBreakdown, setSelectedYearBreakdown] = useState(null);
 
-  const [auditedFinancials10Yr] = useState([
-    { year: 'FY 2015', turnover: 210000000, grossMargin: 24.2, ebit: 7.8, netProfit: 12400000, taxPaid: 3720000 },
-    { year: 'FY 2016', turnover: 235000000, grossMargin: 23.5, ebit: 7.1, netProfit: 11800000, taxPaid: 3540000 },
-    { year: 'FY 2017', turnover: 260000000, grossMargin: 22.8, ebit: 6.5, netProfit: 9500000, taxPaid: 2850000 },
-    { year: 'FY 2018', turnover: 295000000, grossMargin: 21.4, ebit: 5.4, netProfit: 6200000, taxPaid: 1860000 },
-    { year: 'FY 2019', turnover: 340000000, grossMargin: 20.1, ebit: 4.2, netProfit: 2100000, taxPaid: 630000 },
+  const [auditedFinancials10Yr, setAuditedFinancials10Yr] = useState([
     { year: 'FY 2020', turnover: 375000000, grossMargin: 19.8, ebit: 3.1, netProfit: -1200000, taxPaid: 500000 },
     { year: 'FY 2021', turnover: 395000000, grossMargin: 19.1, ebit: 2.5, netProfit: -2800000, taxPaid: 500000 },
     { year: 'FY 2022', turnover: 420000000, grossMargin: 18.5, ebit: 2.1, netProfit: -4200000, taxPaid: 500000 },
@@ -78,7 +73,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
   ]);
 
   const auditedFinancials = historyWindowMode === '5_YEAR' 
-    ? auditedFinancials10Yr.slice(5) 
+    ? auditedFinancials10Yr.slice(-5) 
     : auditedFinancials10Yr;
 
   const [controlledTransactions, setControlledTransactions] = useState([
@@ -343,6 +338,117 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
   const [sigtasPaymentDate, setSigtasPaymentDate] = useState('2026-09-02');
   const [archivalHash, setArchivalHash] = useState('SHA256:8f9b2c01e54a32d18471c99021e84a920b78491c');
 
+  const [fullBackendState, setFullBackendState] = useState(null);
+  const [loadingFullState, setLoadingFullState] = useState(false);
+
+  const loadFullState = useCallback(async () => {
+    if (!caseData?.id) return;
+    setLoadingFullState(true);
+    try {
+      const res = await fetch(`${BASE_API}/${caseData.id}/full-state`, {
+        headers: {
+          'X-Actor-Id': user?.id || user?.username || 'tp-auditor'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFullBackendState(data);
+
+        // 1. Financials & Controlled Transactions
+        if (data.fieldWork?.accountingFindings?.financials && Array.isArray(data.fieldWork.accountingFindings.financials)) {
+          setAuditedFinancials10Yr(data.fieldWork.accountingFindings.financials);
+        } else if (data.caseDetails?.estimatedRevenue) {
+          const rev = Number(data.caseDetails.estimatedRevenue);
+          setAuditedFinancials10Yr([
+            { year: 'FY 2020', turnover: Math.round(rev * 0.65), grossMargin: 19.8, ebit: 3.1, netProfit: -1200000, taxPaid: 500000 },
+            { year: 'FY 2021', turnover: Math.round(rev * 0.72), grossMargin: 19.1, ebit: 2.5, netProfit: -2800000, taxPaid: 500000 },
+            { year: 'FY 2022', turnover: Math.round(rev * 0.80), grossMargin: 18.5, ebit: 2.1, netProfit: -4200000, taxPaid: 500000 },
+            { year: 'FY 2023', turnover: Math.round(rev * 0.90), grossMargin: 16.2, ebit: 1.8, netProfit: -5800000, taxPaid: 500000 },
+            { year: 'FY 2024', turnover: rev, grossMargin: 14.8, ebit: 1.5, netProfit: -6400000, taxPaid: 500000 }
+          ]);
+        }
+
+        if (data.fieldWork?.transactionTrails?.controlledTransactions && Array.isArray(data.fieldWork.transactionTrails.controlledTransactions)) {
+          setControlledTransactions(data.fieldWork.transactionTrails.controlledTransactions);
+        }
+
+        // 2. Risk Assessment
+        if (data.riskAssessment) {
+          setRiskLevel(data.riskAssessment.riskLevel || 'HIGH');
+          if (data.riskAssessment.riskDetails?.indicators && Array.isArray(data.riskAssessment.riskDetails.indicators)) {
+            setRiskIndicators(data.riskAssessment.riskDetails.indicators);
+          }
+          if (data.riskAssessment.comments) {
+            setRiskComments(data.riskAssessment.comments);
+          }
+        }
+
+        // 3. Working Hypothesis
+        if (data.workingHypothesis) {
+          if (data.workingHypothesis.hypothesisDescription) setHypothesisDesc(data.workingHypothesis.hypothesisDescription);
+          if (data.workingHypothesis.identifiedIssue) setIdentifiedIssue(data.workingHypothesis.identifiedIssue);
+          if (data.workingHypothesis.economicRationale) setEconRationale(data.workingHypothesis.economicRationale);
+          if (data.workingHypothesis.revenueAtRisk) setRevenueAtRisk(data.workingHypothesis.revenueAtRisk);
+          if (data.workingHypothesis.calculationDetails) setCalcDetails(data.workingHypothesis.calculationDetails);
+        }
+
+        // 4. Audit Plan
+        if (data.auditPlan) {
+          if (data.auditPlan.objective) setPlanObj(data.auditPlan.objective);
+          if (data.auditPlan.scope) setPlanScope(data.auditPlan.scope);
+          if (data.auditPlan.status) setPlanApprovalDecision(data.auditPlan.status);
+        }
+
+        // 5. Analysis
+        if (data.analysis) {
+          if (data.analysis.selectedTpMethod) setSelectedMethod(data.analysis.selectedTpMethod);
+          if (data.analysis.armsLengthRangeMin != null) setIqrMin(Number(data.analysis.armsLengthRangeMin));
+          if (data.analysis.armsLengthRangeMax != null) setIqrMax(Number(data.analysis.armsLengthRangeMax));
+          if (data.analysis.taxpayerActualResult != null) setTaxpayerResult(Number(data.analysis.taxpayerActualResult));
+          if (data.analysis.varianceAmount != null) setVarianceAmt(Number(data.analysis.varianceAmount));
+        }
+
+        // 6. Reports
+        if (data.reports && data.reports.length > 0) {
+          const rep = data.reports[0];
+          if (rep.executiveSummary) setExecutiveSummary(rep.executiveSummary);
+          if (rep.status) setReportStatus(rep.status);
+          if (rep.version) setReportVersion(rep.version);
+        }
+
+        // 7. Exit Conference
+        if (data.exitConference) {
+          if (data.exitConference.venue) setEntryConferenceVenue(data.exitConference.venue);
+          if (data.exitConference.auditorNotes) setExitConferenceNotes(data.exitConference.auditorNotes);
+        }
+
+        // 8. Notices
+        if (data.notices) {
+          if (data.notices.noticeReferenceNumber) setNoticeReferenceId(data.notices.noticeReferenceNumber);
+          if (data.notices.issueDate) setNoticeDispatchDate(data.notices.issueDate);
+          if (data.notices.responseDeadline) setObjectionFilingDeadline(data.notices.responseDeadline);
+          if (data.notices.assessedPrincipalTax) setTaxAdjustment(Number(data.notices.assessedPrincipalTax));
+          if (data.notices.status) setAssessmentStatus(data.notices.status);
+        }
+
+        // 9. Objections
+        if (data.objections && data.objections.length > 0) {
+          const obj = data.objections[0];
+          if (obj.status) setTaxpayerObjectionStatus(obj.status);
+          if (obj.factualExplanation) setTaxpayerObjectionGrounds(obj.factualExplanation);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load TP case state:', err);
+    } finally {
+      setLoadingFullState(false);
+    }
+  }, [caseData?.id, user]);
+
+  useEffect(() => {
+    loadFullState();
+  }, [loadFullState]);
+
   // API submit handler helper
   const handlePost = async (endpoint, payload, successMsg) => {
     setLoading(true);
@@ -352,12 +458,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Actor-Id': user?.id || 'tp-chair'
+          'X-Actor-Id': user?.id || user?.username || 'tp-chair'
         },
         body: payload ? JSON.stringify(payload) : null
       });
       if (res.ok) {
         setMsg({ type: 'success', text: successMsg || 'Saved successfully!' });
+        await loadFullState();
         if (onRefresh) onRefresh();
       } else {
         const errText = await res.text();
@@ -380,14 +487,19 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
               <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-full dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/50">
                 TRANSFER PRICING AUDIT WORKBENCH
               </span>
-              <span className="text-xs text-slate-500 font-mono">Case #{caseData?.caseNumber || '2026-TP-AA-0207'}</span>
-              <Badge color="purple" dot className="font-mono">ASSIGNED BY TEAM LEADER</Badge>
+              <span className="text-xs text-slate-500 font-mono">Case #{fullBackendState?.caseDetails?.caseNumber || caseData?.caseNumber || 'N/A'}</span>
+              <Badge color="purple" dot className="font-mono">{fullBackendState?.caseDetails?.status || caseData?.status || 'ASSIGNED'}</Badge>
+              {fullBackendState?.actionHistory && (
+                <Badge color="emerald" size="sm">
+                  ⚡ {fullBackendState.actionHistory.length} Live DB Actions Logged
+                </Badge>
+              )}
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {caseData?.taxpayerName || 'Crest Textiles SC'}
+              {fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Transfer Pricing Taxpayer'}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              TIN: <span className="font-semibold text-slate-800 dark:text-slate-200">{caseData?.tin || 'ETH030999'}</span> | Sector: <span className="font-semibold text-slate-800 dark:text-slate-200">{caseData?.sector || 'Textile Manufacturing'}</span> | Office: <span className="font-semibold text-slate-800 dark:text-slate-200">Addis Ababa LTO</span>
+              TIN: <span className="font-semibold text-slate-800 dark:text-slate-200">{fullBackendState?.caseDetails?.taxpayerId || caseData?.tin || caseData?.taxpayerId || 'N/A'}</span> | Sector: <span className="font-semibold text-slate-800 dark:text-slate-200">{fullBackendState?.caseDetails?.sector || caseData?.sector || 'Manufacturing'}</span> | Tax Center: <span className="font-semibold text-slate-800 dark:text-slate-200">{fullBackendState?.caseDetails?.taxCenterCode || caseData?.taxCenterCode || 'Addis Ababa LTO'}</span> | Estimated Revenue: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatRevenue(fullBackendState?.caseDetails?.estimatedRevenue || caseData?.estimatedRevenue || 0)} ETB</span>
             </p>
           </div>
 
@@ -564,7 +676,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
 
                     <Card accent="indigo" className="p-4 space-y-1.5">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Local Ethiopian Enterprise</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">Crest Textiles SC</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">{caseData?.taxpayerName || fullBackendState?.caseDetails?.taxpayerName || 'Taxpayer'}</p>
                       <p className="text-xs text-slate-500">Ownership: <span className="font-semibold text-slate-800 dark:text-slate-200">99.8% Foreign Owned</span></p>
                     </Card>
 
@@ -1192,9 +1304,9 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <p className="text-xs uppercase font-sans text-slate-500">FORM TP-FR-01.1 — FORMAL RISK ASSESSMENT & AUDIT SELECTION REPORT</p>
                         </div>
                         <div className="grid grid-cols-2 text-xs font-sans gap-2">
-                          <p><strong>Taxpayer Name:</strong> {caseData?.taxpayerName || 'Crest Textiles SC'}</p>
-                          <p><strong>TIN:</strong> {caseData?.tin || 'ETH030999'}</p>
-                          <p><strong>Assessed Risk Score:</strong> 118 / 150 (CRITICAL)</p>
+                          <p><strong>Taxpayer Name:</strong> {fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}</p>
+                          <p><strong>TIN:</strong> {fullBackendState?.caseDetails?.taxpayerId || caseData?.tin || caseData?.taxpayerId || 'N/A'}</p>
+                          <p><strong>Assessed Risk Score:</strong> {fullBackendState?.caseDetails?.riskScore || caseData?.riskScore || 118} / 150 ({fullBackendState?.riskAssessment?.riskLevel || 'HIGH'})</p>
                           <p><strong>Revenue at Risk:</strong> {formatRevenue(revenueAtRisk)} ETB</p>
                           <p><strong>Audit Path:</strong> {selectedAuditPath}</p>
                           <p><strong>Approved By:</strong> {committeeChair}</p>
@@ -3626,14 +3738,14 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
 
                       <div className="grid grid-cols-2 gap-4 text-[11px] text-slate-300">
                         <div>
-                          <p><span className="text-slate-500">Taxpayer:</span> Crest Textiles SC (TIN: ETH030999)</p>
+                          <p><span className="text-slate-500">Taxpayer:</span> {caseData?.taxpayerName || fullBackendState?.caseDetails?.taxpayerName || 'Taxpayer'} (TIN: {caseData?.tin || caseData?.taxpayerId || fullBackendState?.caseDetails?.taxpayerId || 'N/A'})</p>
                           <p><span className="text-slate-500">Audit Scope:</span> FY 2020 – FY 2024 (5 Tax Years)</p>
-                          <p><span className="text-slate-500">Lead Auditor:</span> Tadesse Mamo (Senior TP Auditor)</p>
+                          <p><span className="text-slate-500">Lead Auditor:</span> {caseData?.assignedAuditorName || fullBackendState?.caseDetails?.assignedAuditorId || 'TP Senior Auditor'}</p>
                         </div>
                         <div className="text-right">
-                          <p><span className="text-slate-500">Document Ref:</span> MoR/LTO/TP-RPT/2026/089</p>
-                          <p><span className="text-slate-500">Total Tax Base Adjustment:</span> <span className="text-purple-400 font-bold">152,300,000 ETB</span></p>
-                          <p><span className="text-slate-500">CIT Tax Liability (30%):</span> <span className="text-emerald-400 font-bold">45,690,000 ETB</span></p>
+                          <p><span className="text-slate-500">Document Ref:</span> MoR/TP-RPT/{caseData?.caseNumber || '2026'}</p>
+                          <p><span className="text-slate-500">Total Tax Base Adjustment:</span> <span className="text-purple-400 font-bold">{formatRevenue(taxAdjustment)} ETB</span></p>
+                          <p><span className="text-slate-500">CIT Tax Liability (30%):</span> <span className="text-emerald-400 font-bold">{formatRevenue(Math.round(taxAdjustment * 0.30))} ETB</span></p>
                         </div>
                       </div>
 
@@ -4121,10 +4233,10 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                     <div className="p-4 bg-slate-900 text-slate-100 rounded-xl space-y-3 font-mono text-xs shadow-inner">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                         <span className="text-slate-400 font-bold uppercase">Assessment Demand Attached:</span>
-                        <span className="text-emerald-400 font-bold">63,052,200 ETB</span>
+                        <span className="text-emerald-400 font-bold">{formatRevenue(fullBackendState?.notices?.totalAssessmentAmount || 63052200)} ETB</span>
                       </div>
                       <div className="grid grid-cols-2 gap-4 text-slate-300">
-                        <p><span className="text-slate-500">Taxpayer:</span> Crest Textiles SC (ETH030999)</p>
+                        <p><span className="text-slate-500">Taxpayer:</span> {caseData?.taxpayerName || fullBackendState?.caseDetails?.taxpayerName || 'Taxpayer'} ({caseData?.tin || caseData?.taxpayerId || fullBackendState?.caseDetails?.taxpayerId || 'N/A'})</p>
                         <p><span className="text-slate-500">Objection Deadline:</span> <span className="text-amber-400 font-bold">{objectionFilingDeadline}</span></p>
                       </div>
                     </div>
@@ -4288,7 +4400,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         <span className="text-slate-400 font-bold uppercase">Dispatch Status Summary</span>
                         <span className="text-emerald-400 font-bold">NOTICE REF: {noticeReferenceId}</span>
                       </div>
-                      <p><span className="text-slate-500">Target Taxpayer:</span> Crest Textiles SC (TIN: ETH030999)</p>
+                      <p><span className="text-slate-500">Target Taxpayer:</span> {caseData?.taxpayerName || fullBackendState?.caseDetails?.taxpayerName || 'Taxpayer'} (TIN: {caseData?.tin || caseData?.taxpayerId || fullBackendState?.caseDetails?.taxpayerId || 'N/A'})</p>
                       <p><span className="text-slate-500">Delivery Channels:</span> Physical Hand Delivery (LTO Courier) + SIGTAS Portal Electronic Delivery</p>
                     </div>
 
@@ -4543,9 +4655,10 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                     <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 max-w-lg mx-auto text-left font-mono text-xs space-y-2">
                       <div className="flex justify-between border-b border-slate-800 pb-2">
                         <span className="text-slate-400 font-bold uppercase">Case Closure Certificate</span>
-                        <span className="text-emerald-400 font-bold">ETH030999</span>
+                        <span className="text-emerald-400 font-bold">{fullBackendState?.caseDetails?.taxpayerId || caseData?.tin || caseData?.taxpayerId || 'N/A'}</span>
                       </div>
-                      <p><span className="text-slate-500">Taxpayer:</span> Crest Textiles SC</p>
+                      <p><span className="text-slate-500">Taxpayer:</span> {fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}</p>
+                      <p><span className="text-slate-500">Case Number:</span> {fullBackendState?.caseDetails?.caseNumber || caseData?.caseNumber || 'N/A'}</p>
                       <p><span className="text-slate-500">Final Net Recovery:</span> <span className="text-emerald-400 font-bold">{formatRevenue(agreedSettlementAmount)} ETB</span></p>
                       <p><span className="text-slate-500">SIGTAS Receipt:</span> {sigtasReceiptNo}</p>
                     </div>
@@ -4557,9 +4670,9 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         icon={CheckCircle2} 
                         loading={loading}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 text-sm font-bold shadow-xl shadow-emerald-950"
-                        onClick={() => handlePost('/close', { agreedSettlementAmount, sigtasReceiptNo }, 'Transfer Pricing Audit Case #2026-TP-AA-0207 successfully CLOSED!')}
+                        onClick={() => handlePost('/assessment/close-and-kpi', { agreedSettlementAmount, sigtasReceiptNo }, `Transfer Pricing Audit Case #${fullBackendState?.caseDetails?.caseNumber || caseData?.caseNumber} successfully CLOSED!`)}
                       >
-                        Finalize & Formally Close TP Case #2026-TP-AA-0207
+                        Finalize & Formally Close TP Case #{fullBackendState?.caseDetails?.caseNumber || caseData?.caseNumber || ''}
                       </Button>
                     </div>
                   </Card>

@@ -35,6 +35,7 @@ public class TpExitConferenceEntity {
     @GeneratedValue
     private UUID id;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "audit_case_id", nullable = false, unique = true)
     private ApAuditCaseEntity auditCase;

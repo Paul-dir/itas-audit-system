@@ -22,6 +22,7 @@ public class TpObjectionEntity {
     @GeneratedValue
     private UUID id;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "audit_case_id", nullable = false)
     private ApAuditCaseEntity auditCase;

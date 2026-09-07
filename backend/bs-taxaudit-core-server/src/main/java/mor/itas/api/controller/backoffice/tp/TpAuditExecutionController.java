@@ -1,16 +1,28 @@
 package mor.itas.api.controller.backoffice.tp;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mor.itas.api.dto.request.tp.*;
+import mor.itas.application.service.notification.NotificationService;
+import mor.itas.application.service.tp.TpCaseInitializationService;
 import mor.itas.application.usecase.tp.*;
+import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
+import mor.itas.persistence.jpa.entity.tp.*;
+import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
+import mor.itas.persistence.jpa.repository.tp.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.*;
 
 /**
- * TP Audit Execution REST Controller — all phases under /tp sub-package.
+ * TP Audit Execution REST Controller — covering all Transfer Pricing phases (BUC-TA-013 through BUC-TA-018).
  * Base: /api/v1/backoffice/tp/cases/{caseId}
  */
 @RestController
@@ -28,14 +40,83 @@ public class TpAuditExecutionController {
     private final TpAuditReportUseCase auditReportUseCase;
     private final TpNoticeAndObjectionUseCase noticeAndObjectionUseCase;
 
-    // ── Phase 1: Risk Assessment ─────────────────────────────────────────────
+    private final TpCaseInitializationService tpCaseInitializationService;
+    private final ApAuditCaseRepository caseRepository;
+    private final TpRiskAssessmentRepository riskAssessmentRepository;
+    private final TpWorkingHypothesisRepository workingHypothesisRepository;
+    private final TpAuditPlanRepository auditPlanRepository;
+    private final TpPlanningMeetingRepository planningMeetingRepository;
+    private final TpFieldWorkDataRepository fieldWorkDataRepository;
+    private final TpAnalysisDataRepository analysisDataRepository;
+    private final TpAuditReportRepository auditReportRepository;
+    private final TpAuditNoticeRepository auditNoticeRepository;
+    private final TpObjectionRepository objectionRepository;
+    private final TpInformationRequestLogRepository idrRepository;
+    private final TpExitConferenceRepository exitConferenceRepository;
+    private final TpCompetitorPriceUploadRepository competitorPriceUploadRepository;
+    private final TpExternalPriceMatchRepository externalPriceMatchRepository;
+    private final TpAuditActionHistoryRepository actionHistoryRepository;
+    private final NotificationService notificationService;
+    private final ObjectMapper objectMapper;
+
+    // ── Full Case State Endpoint ─────────────────────────────────────────────
+
+    @GetMapping("/full-state")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> getFullState(
+            @PathVariable UUID caseId,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity caseEntity = tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+
+        Map<String, Object> state = new HashMap<>();
+
+        Map<String, Object> caseDetails = new HashMap<>();
+        caseDetails.put("id", caseEntity.getId());
+        caseDetails.put("caseNumber", caseEntity.getCaseNumber());
+        caseDetails.put("taxpayerId", caseEntity.getTaxpayerId());
+        caseDetails.put("taxpayerName", caseEntity.getTaxpayerName());
+        caseDetails.put("sector", caseEntity.getSector());
+        caseDetails.put("auditType", caseEntity.getAuditType());
+        caseDetails.put("riskScore", caseEntity.getRiskScore());
+        caseDetails.put("estimatedRevenue", caseEntity.getEstimatedRevenue());
+        caseDetails.put("status", caseEntity.getStatus());
+        caseDetails.put("taxCenterCode", caseEntity.getTaxCenterCode());
+        caseDetails.put("regionCode", caseEntity.getRegionCode());
+        caseDetails.put("assignedAuditorId", caseEntity.getAssignedAuditorId());
+        caseDetails.put("assignedTeamLeaderId", caseEntity.getAssignedTeamLeaderId());
+        caseDetails.put("committeeId", caseEntity.getCommitteeId());
+        caseDetails.put("createdAt", caseEntity.getCreatedAt());
+        state.put("caseDetails", caseDetails);
+
+        state.put("riskAssessment", riskAssessmentRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("workingHypothesis", workingHypothesisRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("auditPlan", auditPlanRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("planningMeetings", planningMeetingRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("fieldWork", fieldWorkDataRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("informationRequests", idrRepository.findByAuditCaseIdOrderByCreatedAtDesc(caseId));
+        state.put("analysis", analysisDataRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("competitorPrices", competitorPriceUploadRepository.findByAuditCaseIdOrderByPriceDateDesc(caseId));
+        state.put("priceMatches", externalPriceMatchRepository.findByAuditCaseIdOrderByGeneratedAtDesc(caseId));
+        state.put("reports", auditReportRepository.findByAuditCaseIdOrderByVersionDesc(caseId));
+        state.put("exitConference", exitConferenceRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("notices", auditNoticeRepository.findByAuditCaseId(caseId).orElse(null));
+        state.put("objections", objectionRepository.findByAuditCaseIdOrderByCreatedAtDesc(caseId));
+        state.put("actionHistory", actionHistoryRepository.findByAuditCaseIdOrderByActionTimestampAsc(caseId));
+
+        return ResponseEntity.ok(state);
+    }
+
+    // ── Phase 1: Risk Assessment & Working Hypothesis ────────────────────────
 
     @PostMapping("/risk-assessment")
     public ResponseEntity<Void> submitRiskAssessment(
             @PathVariable UUID caseId,
             @RequestBody TpRiskAssessmentRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         riskAssessmentUseCase.saveRiskAssessment(caseId, req.getRiskLevel(), req.getRiskDetails(), req.getComments(), actorId);
+        logAction(caseId, "RISK_ASSESSMENT_SAVED", "RISK_ASSESSMENT", actorId, "AUDITOR",
+                "Saved risk assessment: Level " + req.getRiskLevel(), req, null, "RISK_ASSESSED", null, null);
         return ResponseEntity.ok().build();
     }
 
@@ -43,32 +124,138 @@ public class TpAuditExecutionController {
     public ResponseEntity<Void> submitWorkingHypothesis(
             @PathVariable UUID caseId,
             @RequestBody TpWorkingHypothesisRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         workingHypothesisUseCase.saveWorkingHypothesis(caseId,
                 req.getHypothesisDescription(), req.getIdentifiedIssue(),
                 req.getEconomicRationale(), req.getRevenueAtRisk(), req.getCalculationDetails(), actorId);
+        logAction(caseId, "HYPOTHESIS_SAVED", "HYPOTHESIS", actorId, "AUDITOR",
+                "Formulated working hypothesis for issue: " + req.getIdentifiedIssue(), req, null, "HYPOTHESIS_ACTIVE", null, null);
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 2: Planning ────────────────────────────────────────────────────
+    // ── Phase 2: BUC-TA-013 (1.14 Plan Transfer Pricing Audit) ────────────────
 
     @PostMapping("/audit-plan")
     public ResponseEntity<Void> submitAuditPlan(
             @PathVariable UUID caseId,
             @RequestBody TpAuditPlanRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditPlanUseCase.saveAuditPlan(caseId, req.getObjective(), req.getScope(),
                 req.getMaterialityDetails(), req.getIndustryResearch(),
                 req.getSamplingMethod(), req.getPlannedProcedures(), actorId);
+        logAction(caseId, "AUDIT_PLAN_SUBMITTED", "PLANNING", actorId, "AUDITOR",
+                "Drafted and submitted TP Audit Plan for Process Owner review", req, "DRAFT", "SUBMITTED_FOR_REVIEW", null, null);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/audit-plan/request-revision")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> requestPlanRevision(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        String reason = (String) req.getOrDefault("reason", "Revisions requested to audit scope or materiality.");
+        TpAuditPlanEntity plan = auditPlanRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Audit plan not found for case: " + caseId));
+        plan.setStatus("REVISION_REQUESTED");
+        plan.setUpdatedBy(actorId);
+        auditPlanRepository.save(plan);
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && c.getAssignedAuditorId() != null) {
+            notificationService.sendNotification(c.getAssignedAuditorId(), "TP_PLAN_REVISION",
+                    "TP Plan Revision Requested",
+                    "Process Owner requested plan revisions: " + reason,
+                    caseId, null, "TP_AUDIT_PLAN", plan.getId());
+        }
+
+        logAction(caseId, "PLAN_REVISION_REQUESTED", "PLANNING", actorId, "PROCESS_OWNER",
+                "Requested TP plan revisions: " + reason, req, "SUBMITTED_FOR_REVIEW", "REVISION_REQUESTED", plan.getId(), "TP_PLAN");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "REVISION_REQUESTED");
+        res.put("planId", plan.getId());
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/audit-plan/additional-research")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> requestAdditionalResearch(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        String instructions = (String) req.getOrDefault("instructions", "Perform further industry benchmarking.");
+        TpAuditPlanEntity plan = auditPlanRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Audit plan not found for case: " + caseId));
+        plan.setStatus("ADDITIONAL_RESEARCH_REQUIRED");
+        plan.setUpdatedBy(actorId);
+        auditPlanRepository.save(plan);
+
+        logAction(caseId, "ADDITIONAL_RESEARCH_REQUIRED", "PLANNING", actorId, "PROCESS_OWNER",
+                "AF2: Process Owner requested additional industry research: " + instructions, req, "SUBMITTED_FOR_REVIEW", "ADDITIONAL_RESEARCH_REQUIRED", plan.getId(), "TP_PLAN");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "ADDITIONAL_RESEARCH_REQUIRED");
+        res.put("planId", plan.getId());
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/audit-plan/new-risk")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> logNewRiskDuringPlanning(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        String riskDesc = (String) req.getOrDefault("riskDescription", "New risk factor discovered during planning.");
+        logAction(caseId, "NEW_RISK_IDENTIFIED", "PLANNING", actorId, "AUDITOR",
+                "AF3: New TP risk identified during planning phase: " + riskDesc, req, null, null, null, null);
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "RECORDED");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/audit-plan/approve")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> approveAuditPlan(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        TpAuditPlanEntity plan = auditPlanRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Audit plan not found for case: " + caseId));
+        plan.setStatus("APPROVED");
+        plan.setApprovedBy(actorId);
+        plan.setApprovedAt(OffsetDateTime.now());
+        auditPlanRepository.save(plan);
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null) {
+            c.setStatus("IN_PROGRESS");
+            caseRepository.save(c);
+            if (c.getAssignedAuditorId() != null) {
+                notificationService.sendNotification(c.getAssignedAuditorId(), "TP_PLAN_APPROVED",
+                        "TP Audit Plan Approved",
+                        "Audit plan approved by Process Owner. Fieldwork may commence.",
+                        caseId, null, "TP_AUDIT_PLAN", plan.getId());
+            }
+        }
+
+        logAction(caseId, "PLAN_APPROVED", "PLANNING", actorId, "PROCESS_OWNER",
+                "Process Owner approved TP Audit Plan and Program", req, "SUBMITTED_FOR_REVIEW", "APPROVED", plan.getId(), "TP_PLAN");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "APPROVED");
+        res.put("planId", plan.getId());
+        return ResponseEntity.ok(res);
     }
 
     @PostMapping("/planning-meeting")
     public ResponseEntity<Void> recordPlanningMeeting(
             @PathVariable UUID caseId,
             @RequestBody TpPlanningMeetingRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         planningMeetingUseCase.recordMeetingDetails(caseId, req.getScheduledDate(), req.getParticipants(), req.getAgenda(), actorId);
+        logAction(caseId, "PLANNING_MEETING_RECORDED", "PLANNING", actorId, "AUDITOR",
+                "Recorded planning meeting details", req, null, null, null, null);
         return ResponseEntity.ok().build();
     }
 
@@ -76,204 +263,725 @@ public class TpAuditExecutionController {
     public ResponseEntity<Void> recordMeetingDecision(
             @PathVariable UUID caseId,
             @RequestBody TpMeetingDecisionRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         planningMeetingUseCase.recordMeetingDecision(caseId, req.getDecision(), req.getDiscussionNotes(), actorId);
+        logAction(caseId, "PLANNING_MEETING_DECISION", "PLANNING", actorId, "AUDITOR",
+                "Meeting decision recorded: " + req.getDecision(), req, null, req.getDecision(), null, null);
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 3: Field Work ──────────────────────────────────────────────────
+    @PostMapping("/entry-conference")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> recordEntryConference(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        String venue = (String) req.getOrDefault("venue", "MoR Tax Office");
+
+        logAction(caseId, "ENTRY_CONFERENCE_CONDUCTED", "PLANNING", actorId, "AUDITOR",
+                "Held TP Entry Conference with taxpayer at " + venue, req, null, "ENTRY_CONFERENCE_COMPLETED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "RECORDED");
+        res.put("message", "Entry conference recorded successfully.");
+        return ResponseEntity.ok(res);
+    }
+
+    // ── Phase 3: BUC-TA-014 (1.15 Conduct TP Audit Fieldwork) ─────────────────
 
     @PostMapping("/field-work/accounting")
-    public ResponseEntity<Void> saveAccountingAssessment(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveAccountingAssessment(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.saveAccountingAssessment(caseId, req.getAccountingMethods(), req.getData(), actorId);
+        logAction(caseId, "ACCOUNTING_SYSTEMS_ASSESSED", "FIELD_WORK", actorId, "AUDITOR",
+                "Assessed taxpayer accounting and cost allocation systems", req, null, null, null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/field-work/transaction-trails")
-    public ResponseEntity<Void> saveTransactionTrails(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveTransactionTrails(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.saveTransactionTrails(caseId, req.getData(), actorId);
+        logAction(caseId, "TRANSACTION_TRAILS_DOCUMENTED", "FIELD_WORK", actorId, "AUDITOR",
+                "Documented end-to-end controlled transaction trails", req, null, null, null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/field-work/sample-selections")
-    public ResponseEntity<Void> saveSampleSelections(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveSampleSelections(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.saveSampleSelections(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/field-work/information-requests")
-    public ResponseEntity<Void> saveInformationRequests(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveInformationRequests(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.saveInformationRequest(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/field-work/idr/create")
+    @Transactional
+    public ResponseEntity<TpInformationRequestLogEntity> createInformationRequest(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        String reqType = (String) req.getOrDefault("requestType", "DOCUMENT");
+        String subject = (String) req.getOrDefault("subject", "Transfer Pricing Supporting Documentation Request");
+        String description = (String) req.getOrDefault("description", "Provide contracts, invoices, and allocation keys.");
+        int days = req.get("deadlineDays") != null ? ((Number) req.get("deadlineDays")).intValue() : 14;
+
+        String ref = "IDR-TP-" + caseEntity.getCaseNumber().replaceAll("[^a-zA-Z0-9]", "") + "-" + (System.currentTimeMillis() % 10000);
+
+        TpInformationRequestLogEntity idr = TpInformationRequestLogEntity.builder()
+                .auditCase(caseEntity)
+                .requestReference(ref)
+                .requestType(reqType)
+                .subject(subject)
+                .description(description)
+                .deadlineDate(LocalDate.now().plusDays(days))
+                .status("ISSUED")
+                .submittedBy(actorId)
+                .submittedAt(OffsetDateTime.now())
+                .approvedBy(actorId)
+                .approvedAt(OffsetDateTime.now())
+                .approvalComments("Issued by TP audit team")
+                .build();
+
+        TpInformationRequestLogEntity saved = idrRepository.save(idr);
+        logAction(caseId, "IDR_ISSUED", "FIELD_WORK", actorId, "AUDITOR",
+                "Issued Information & Document Request: " + ref + " (" + subject + ")", saved, "DRAFT", "ISSUED", saved.getId(), "TP_IDR");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/field-work/idr/{idrId}/respond")
+    @Transactional
+    public ResponseEntity<TpInformationRequestLogEntity> respondToIdr(
+            @PathVariable UUID caseId,
+            @PathVariable UUID idrId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpInformationRequestLogEntity idr = idrRepository.findById(idrId)
+                .orElseThrow(() -> new IllegalArgumentException("IDR not found: " + idrId));
+
+        String responseText = (String) req.getOrDefault("taxpayerResponse", "Documents submitted via portal.");
+        boolean evidenceUploaded = Boolean.TRUE.equals(req.get("evidenceUploaded"));
+
+        idr.setTaxpayerResponse(responseText);
+        idr.setEvidenceUploaded(evidenceUploaded);
+        idr.setResponseReceivedAt(OffsetDateTime.now());
+        idr.setStatus("RESPONSE_RECEIVED");
+        TpInformationRequestLogEntity saved = idrRepository.save(idr);
+
+        logAction(caseId, "IDR_RESPONSE_RECEIVED", "FIELD_WORK", actorId, "TAXPAYER",
+                "Taxpayer responded to " + idr.getRequestReference(), req, "ISSUED", "RESPONSE_RECEIVED", idr.getId(), "TP_IDR");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/field-work/site-visit")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> recordSiteVisit(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        String location = (String) req.getOrDefault("location", "Taxpayer Manufacturing Plant & Warehouse");
+        String observations = (String) req.getOrDefault("observations", "Inspected inventory tracking and functional substance.");
+
+        logAction(caseId, "SITE_VISIT_CONDUCTED", "FIELD_WORK", actorId, "AUDITOR",
+                "Conducted TP site visit at " + location + ". Notes: " + observations, req, null, null, null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "RECORDED");
+        res.put("message", "Site visit documented.");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/field-work/no-risk")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> recordFieldWorkNoRisk(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpFieldWorkDataEntity fw = fieldWorkDataRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Fieldwork record not found for case: " + caseId));
+        fw.setStatus("NO_RISK_FOUND");
+        fieldWorkDataRepository.save(fw);
+
+        logAction(caseId, "FIELDWORK_NO_RISK_FOUND", "FIELD_WORK", actorId, "AUDITOR",
+                "AF1: Fieldwork confirmed controlled transactions adhere to arm's length. Recommended closure without adjustment.", req, "IN_PROGRESS", "NO_RISK_FOUND", fw.getId(), "TP_FIELD_WORK");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "NO_RISK_FOUND");
+        return ResponseEntity.ok(res);
+    }
+
     @PostMapping("/field-work/fact-statement")
-    public ResponseEntity<Void> saveFactStatement(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveFactStatement(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         int v = req.getFactStatementVersion() != null ? req.getFactStatementVersion() : 1;
         String s = req.getFactStatementStatus() != null ? req.getFactStatementStatus() : "DRAFT";
         fieldWorkUseCase.saveFactStatement(caseId, req.getData(), v, s, actorId);
+        logAction(caseId, "FACT_STATEMENT_SAVED", "FIELD_WORK", actorId, "AUDITOR",
+                "Saved Fact Statement (v" + v + ", status: " + s + ")", req, null, s, null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/field-work/structured-discussions")
-    public ResponseEntity<Void> saveStructuredDiscussions(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveStructuredDiscussions(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.saveStructuredDiscussion(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/field-work/complete")
-    public ResponseEntity<Void> completeFieldWork(@PathVariable UUID caseId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> completeFieldWork(@PathVariable UUID caseId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         fieldWorkUseCase.transitionToAnalysis(caseId, actorId);
+        logAction(caseId, "FIELD_WORK_COMPLETED", "FIELD_WORK", actorId, "AUDITOR",
+                "Field work concluded; transitioned to Transfer Pricing Analysis", null, "IN_PROGRESS", "ANALYSIS_IN_PROGRESS", null, null);
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 4: Analysis ────────────────────────────────────────────────────
+    // ── Phase 4: BUC-TA-015 (1.16 Perform TP Analysis) ────────────────────────
 
     @PostMapping("/analysis/ratios")
-    public ResponseEntity<Void> saveRatioAnalysis(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveRatioAnalysis(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveRatioAnalysis(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/analysis/benchmarks")
-    public ResponseEntity<Void> saveBenchmarks(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveBenchmarks(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveBenchmarkComparisons(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/analysis/cross-border")
-    public ResponseEntity<Void> saveCrossBorder(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveCrossBorder(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveCrossBorderAssessments(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/analysis/customs-valuation")
-    public ResponseEntity<Void> saveCustomsValuation(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveCustomsValuation(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveCustomsValuationMatches(caseId, req.getData(), actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/analysis/method-selection")
-    public ResponseEntity<Void> saveTpMethodSelection(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveTpMethodSelection(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveTpMethodSelection(caseId, req.getSelectedTpMethod(), req.getData(), actorId);
+        logAction(caseId, "TP_METHOD_SELECTED", "ANALYSIS", actorId, "AUDITOR",
+                "Selected Transfer Pricing Method: " + req.getSelectedTpMethod(), req, null, req.getSelectedTpMethod(), null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/analysis/arms-length")
-    public ResponseEntity<Void> saveArmsLength(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> saveArmsLength(@PathVariable UUID caseId, @RequestBody TpAnalysisRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.saveArmsLengthAnalysis(caseId, req.getData(),
                 req.getArmsLengthRangeMin(), req.getArmsLengthRangeMax(),
                 req.getTaxpayerActualResult(), req.getVarianceAmount(), req.getVariancePercentage(), actorId);
+        logAction(caseId, "ARMS_LENGTH_ANALYZED", "ANALYSIS", actorId, "AUDITOR",
+                "Computed arm's length range: [" + req.getArmsLengthRangeMin() + " to " + req.getArmsLengthRangeMax() + "], Taxpayer: " + req.getTaxpayerActualResult(), req, null, null, null, null);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/analysis/recalculate")
+    @Transactional
+    public ResponseEntity<TpAnalysisDataEntity> recalculateIqr(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpAnalysisDataEntity analysis = analysisDataRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Analysis record not found for case: " + caseId));
+
+        if (req.get("selectedTpMethod") != null) {
+            analysis.setSelectedTpMethod((String) req.get("selectedTpMethod"));
+        }
+        if (req.get("armsLengthRangeMin") != null) {
+            analysis.setArmsLengthRangeMin(new BigDecimal(req.get("armsLengthRangeMin").toString()));
+        }
+        if (req.get("armsLengthRangeMax") != null) {
+            analysis.setArmsLengthRangeMax(new BigDecimal(req.get("armsLengthRangeMax").toString()));
+        }
+        if (req.get("taxpayerActualResult") != null) {
+            analysis.setTaxpayerActualResult(new BigDecimal(req.get("taxpayerActualResult").toString()));
+        }
+        if (req.get("varianceAmount") != null) {
+            analysis.setVarianceAmount(new BigDecimal(req.get("varianceAmount").toString()));
+        }
+        if (req.get("variancePercentage") != null) {
+            analysis.setVariancePercentage(new BigDecimal(req.get("variancePercentage").toString()));
+        }
+        analysis.setUpdatedBy(actorId);
+        TpAnalysisDataEntity saved = analysisDataRepository.save(analysis);
+
+        logAction(caseId, "IQR_BENCHMARK_RECALCULATED", "ANALYSIS", actorId, "AUDITOR",
+                "Recalculated Arm's Length IQR and Adjustment: ETB " + saved.getVarianceAmount(), req, null, "RECALCULATED", saved.getId(), "TP_ANALYSIS");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/analysis/arms-length-confirmed")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> confirmArmsLengthCompliance(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpAnalysisDataEntity analysis = analysisDataRepository.findByAuditCaseId(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Analysis record not found for case: " + caseId));
+
+        analysis.setVarianceAmount(BigDecimal.ZERO);
+        analysis.setVariancePercentage(BigDecimal.ZERO);
+        analysis.setStatus("ARM_LENGTH_COMPLIANT");
+        analysisDataRepository.save(analysis);
+
+        logAction(caseId, "ARMS_LENGTH_CONFIRMED", "ANALYSIS", actorId, "AUDITOR",
+                "AF3: Taxpayer's transfer prices confirmed at arm's length within IQR. No adjustment recommended.", req, null, "ARM_LENGTH_COMPLIANT", analysis.getId(), "TP_ANALYSIS");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "ARM_LENGTH_COMPLIANT");
+        return ResponseEntity.ok(res);
     }
 
     @PostMapping("/analysis/complete")
-    public ResponseEntity<Void> completeAnalysis(@PathVariable UUID caseId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> completeAnalysis(@PathVariable UUID caseId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         analysisUseCase.transitionToReport(caseId, actorId);
+        logAction(caseId, "ANALYSIS_COMPLETED", "ANALYSIS", actorId, "AUDITOR",
+                "Economic analysis concluded; transitioned to TP Audit Report phase", null, "ANALYSIS_IN_PROGRESS", "REPORT_IN_PROGRESS", null, null);
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 5: Report ──────────────────────────────────────────────────────
+    // ── Phase 5: BUC-TA-016 (1.17 Prepare and Review TP Audit Report) ──────────
 
     @PostMapping("/report/draft")
-    public ResponseEntity<UUID> draftReport(@PathVariable UUID caseId, @RequestBody TpAuditReportDraftRequest req, @RequestHeader("X-Actor-Id") String actorId) {
-        return ResponseEntity.ok(auditReportUseCase.draftReport(caseId,
+    public ResponseEntity<UUID> draftReport(@PathVariable UUID caseId, @RequestBody TpAuditReportDraftRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        UUID reportId = auditReportUseCase.draftReport(caseId,
                 req.getExecutiveSummary(), req.getAuditBackground(), req.getScope(),
                 req.getProceduresPerformed(), req.getFindingsAndConclusions(),
-                req.getIssuesAnalyzed(), req.getComplianceAssessment(), actorId));
+                req.getIssuesAnalyzed(), req.getComplianceAssessment(), actorId);
+        logAction(caseId, "REPORT_DRAFTED", "REPORT", actorId, "AUDITOR",
+                "Drafted initial TP Audit Report", req, "NONE", "DRAFT", reportId, "TP_REPORT");
+        return ResponseEntity.ok(reportId);
     }
 
     @PostMapping("/report/{reportId}/submit-for-team-leader-review")
-    public ResponseEntity<Void> submitForTLReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> submitForTLReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.submitForTeamLeaderReview(reportId, actorId);
+        logAction(caseId, "SUBMITTED_FOR_TL_REVIEW", "REPORT", actorId, "AUDITOR",
+                "Submitted TP Audit Report for Team Leader QA review", null, "DRAFT", "UNDER_TL_REVIEW", reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report/{reportId}/team-leader-review")
-    public ResponseEntity<Void> teamLeaderReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> teamLeaderReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.recordTeamLeaderReview(reportId, req.getDecision(), req.getComments(), actorId);
+        logAction(caseId, "TL_REVIEW_DECISION", "REPORT", actorId, "TEAM_LEADER",
+                "Team Leader recorded review decision: " + req.getDecision(), req, "UNDER_TL_REVIEW", req.getDecision(), reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report/{reportId}/submit-for-process-owner-review")
-    public ResponseEntity<Void> submitForPOReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> submitForPOReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.submitForProcessOwnerReview(reportId, actorId);
+        logAction(caseId, "SUBMITTED_FOR_PO_REVIEW", "REPORT", actorId, "TEAM_LEADER",
+                "Submitted TP Audit Report for Process Owner approval", null, "TL_APPROVED", "UNDER_PO_REVIEW", reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report/{reportId}/process-owner-review")
-    public ResponseEntity<Void> processOwnerReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> processOwnerReview(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.recordProcessOwnerReview(reportId, req.getDecision(), req.getComments(), actorId);
+        logAction(caseId, "PO_REVIEW_DECISION", "REPORT", actorId, "PROCESS_OWNER",
+                "Process Owner recorded review decision: " + req.getDecision(), req, "UNDER_PO_REVIEW", req.getDecision(), reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report/{reportId}/submit-for-final-approval")
-    public ResponseEntity<Void> submitForFinalApproval(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> submitForFinalApproval(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.submitForFinalApproval(reportId, actorId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report/{reportId}/final-approval")
-    public ResponseEntity<Void> finalApproval(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> finalApproval(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpReportReviewRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.recordFinalApproval(reportId, req.getDecision(), req.getComments(), actorId);
+        logAction(caseId, "FINAL_APPROVAL_DECISION", "REPORT", actorId, "PROCESS_OWNER",
+                "Final approval granted: " + req.getDecision(), req, null, req.getDecision(), reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/exit-conference/record")
+    @Transactional
+    public ResponseEntity<TpExitConferenceEntity> recordExitConference(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        TpExitConferenceEntity conf = exitConferenceRepository.findByAuditCaseId(caseId)
+                .orElseGet(() -> TpExitConferenceEntity.builder()
+                        .auditCase(caseEntity)
+                        .conferenceReference("EXC-TP-" + caseEntity.getCaseNumber().replaceAll("[^a-zA-Z0-9]", ""))
+                        .venue("MoR Tax Office — TP Conference Suite")
+                        .createdBy(actorId)
+                        .build());
+
+        if (req.get("venue") != null) conf.setVenue((String) req.get("venue"));
+        if (req.get("auditorNotes") != null) conf.setAuditorNotes((String) req.get("auditorNotes"));
+        if (req.get("taxpayerObservations") != null) conf.setTaxpayerObservations((String) req.get("taxpayerObservations"));
+        if (req.get("taxpayerSigned") != null) conf.setTaxpayerSigned(Boolean.TRUE.equals(req.get("taxpayerSigned")));
+        conf.setSchedulingStatus("HELD");
+        conf.setMeetingHeldAt(OffsetDateTime.now());
+
+        TpExitConferenceEntity saved = exitConferenceRepository.save(conf);
+
+        logAction(caseId, "EXIT_CONFERENCE_HELD", "REPORT", actorId, "AUDITOR",
+                "Conducted statutory Exit Conference with taxpayer at MoR Tax Office", req, "SCHEDULED", "HELD", saved.getId(), "TP_EXIT_CONF");
+
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/report/{reportId}/taxpayer-response")
-    public ResponseEntity<Void> taxpayerReportResponse(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpTaxpayerReportResponseRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> taxpayerReportResponse(@PathVariable UUID caseId, @PathVariable UUID reportId, @RequestBody TpTaxpayerReportResponseRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         auditReportUseCase.recordTaxpayerResponse(reportId, req.getAction(), req.getResponseDetail(), actorId);
+        logAction(caseId, "TAXPAYER_REPORT_RESPONSE", "REPORT", actorId, "TAXPAYER",
+                "Taxpayer response recorded: " + req.getAction(), req, null, req.getAction(), reportId, "TP_REPORT");
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 6: Notice ──────────────────────────────────────────────────────
+    @PostMapping("/report/{reportId}/escalate-fraud")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> escalateFraud(
+            @PathVariable UUID caseId,
+            @PathVariable UUID reportId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        String fraudReasons = (String) req.getOrDefault("reasons", "Substantial fictitious management fee invoices and bogus transactions detected.");
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null) {
+            c.setStatus("CRIMINAL_INVESTIGATION_REFERRAL");
+            caseRepository.save(c);
+        }
+
+        logAction(caseId, "FRAUD_CRIMINAL_REFERRAL", "REPORT", actorId, "AUDITOR",
+                "AF5: Indicators of deliberate tax fraud detected. Referred case to Criminal Investigation Division: " + fraudReasons, req, null, "CRIMINAL_INVESTIGATION_REFERRAL", reportId, "TP_REPORT");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "CRIMINAL_INVESTIGATION_REFERRAL");
+        res.put("message", "Case referred to Tax Fraud & Criminal Prosecution Department.");
+        return ResponseEntity.ok(res);
+    }
+
+    // ── Phase 6: BUC-TA-017 (1.18 Issue Audit Notices) ────────────────────────
+
+    @GetMapping("/notices")
+    public ResponseEntity<List<TpAuditNoticeEntity>> listNotices(@PathVariable UUID caseId) {
+        return ResponseEntity.ok(auditNoticeRepository.findByAuditCaseId(caseId).stream().toList());
+    }
 
     @PostMapping("/notice/generate")
-    public ResponseEntity<UUID> generateNotice(@PathVariable UUID caseId, @RequestBody TpNoticeGenerationRequest req, @RequestHeader("X-Actor-Id") String actorId) {
-        return ResponseEntity.ok(noticeAndObjectionUseCase.generateNotice(caseId,
+    public ResponseEntity<UUID> generateNotice(@PathVariable UUID caseId, @RequestBody TpNoticeGenerationRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        UUID noticeId = noticeAndObjectionUseCase.generateNotice(caseId,
                 req.getTaxpayerName(), req.getTin(), req.getAuditPeriod(),
                 req.getIssuesSummary(), req.getProposedAdjustmentsSummary(),
                 req.getAssessedPrincipalTax(), req.getPenalties(), req.getInterest(),
-                req.getIssueDate(), req.getResponseDeadline(), req.getDeliveryMethod(), actorId));
+                req.getIssueDate(), req.getResponseDeadline(), req.getDeliveryMethod(), actorId);
+        logAction(caseId, "NOTICE_GENERATED", "NOTICE", actorId, "AUDITOR",
+                "Drafted TP Audit Notice for ETB " + req.getAssessedPrincipalTax(), req, "DRAFT", "GENERATED", noticeId, "TP_NOTICE");
+        return ResponseEntity.ok(noticeId);
     }
 
     @PostMapping("/notice/{noticeId}/issue")
-    public ResponseEntity<Void> issueNotice(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestParam String deliveryStatus, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> issueNotice(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestParam String deliveryStatus, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         noticeAndObjectionUseCase.issueNotice(noticeId, deliveryStatus, actorId);
+        logAction(caseId, "NOTICE_ISSUED", "NOTICE", actorId, "AUDITOR",
+                "Notice issued to taxpayer with delivery status: " + deliveryStatus, null, "DRAFT", "ISSUED", noticeId, "TP_NOTICE");
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/notice/{noticeId}/dispatch")
+    @Transactional
+    public ResponseEntity<TpAuditNoticeEntity> dispatchNotice(
+            @PathVariable UUID caseId,
+            @PathVariable UUID noticeId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpAuditNoticeEntity notice = auditNoticeRepository.findById(noticeId)
+                .orElseThrow(() -> new IllegalArgumentException("Notice not found: " + noticeId));
+
+        String channel = (String) req.getOrDefault("deliveryMethod", "PORTAL");
+        notice.setDeliveryMethod(channel);
+        notice.setDeliveryStatus("DISPATCHED");
+        notice.setDeliveryTimestamp(OffsetDateTime.now());
+        TpAuditNoticeEntity saved = auditNoticeRepository.save(notice);
+
+        logAction(caseId, "NOTICE_DISPATCHED", "NOTICE", actorId, "AUDITOR",
+                "Dispatched TP Notice via " + channel, req, "ISSUED", "DISPATCHED", noticeId, "TP_NOTICE");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/notice/{noticeId}/delivery-confirm")
+    @Transactional
+    public ResponseEntity<TpAuditNoticeEntity> confirmNoticeDelivery(
+            @PathVariable UUID caseId,
+            @PathVariable UUID noticeId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        TpAuditNoticeEntity notice = auditNoticeRepository.findById(noticeId)
+                .orElseThrow(() -> new IllegalArgumentException("Notice not found: " + noticeId));
+
+        notice.setDeliveryStatus("DELIVERED");
+        notice.setDeliveryTimestamp(OffsetDateTime.now());
+        TpAuditNoticeEntity saved = auditNoticeRepository.save(notice);
+
+        logAction(caseId, "NOTICE_DELIVERY_CONFIRMED", "NOTICE", actorId, "AUDITOR",
+                "Delivery confirmed for TP Notice: " + notice.getNoticeReferenceNumber(), req, "DISPATCHED", "DELIVERED", noticeId, "TP_NOTICE");
+
+        return ResponseEntity.ok(saved);
+    }
+
     @PostMapping("/notice/{noticeId}/returned")
-    public ResponseEntity<Void> markReturned(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestParam String returnedReason, @RequestParam(required = false) String actionPlanDetails, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> markReturned(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestParam String returnedReason, @RequestParam(required = false) String actionPlanDetails, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         noticeAndObjectionUseCase.markNoticeReturned(noticeId, returnedReason, actionPlanDetails, actorId);
+        logAction(caseId, "NOTICE_RETURNED_UNDELIVERED", "NOTICE", actorId, "AUDITOR",
+                "AF1: Notice returned undelivered: " + returnedReason, null, "DISPATCHED", "RETURNED", noticeId, "TP_NOTICE");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/notice/{noticeId}/acknowledge")
-    public ResponseEntity<Void> acknowledgeNotice(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> acknowledgeNotice(@PathVariable UUID caseId, @PathVariable UUID noticeId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         noticeAndObjectionUseCase.acknowledgeNotice(noticeId, actorId);
+        logAction(caseId, "NOTICE_ACKNOWLEDGED", "NOTICE", actorId, "TAXPAYER",
+                "Taxpayer acknowledged receipt of TP Notice", null, "DELIVERED", "ACKNOWLEDGED", noticeId, "TP_NOTICE");
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 7: Objection ───────────────────────────────────────────────────
+    // ── Phase 7: BUC-TA-018 (1.19 Issue Assessment Notice & Conclude Audit) ────
+
+    @PostMapping("/assessment/generate-final-notice")
+    @Transactional
+    public ResponseEntity<TpAuditNoticeEntity> generateAssessmentNotice(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        BigDecimal principal = new BigDecimal(req.getOrDefault("principalTax", "26800000").toString());
+        BigDecimal penalty = new BigDecimal(req.getOrDefault("penalties", principal.multiply(new BigDecimal("0.50")).toString()).toString());
+        BigDecimal interest = new BigDecimal(req.getOrDefault("interest", "4250000").toString());
+        BigDecimal total = principal.add(penalty).add(interest);
+
+        TpAuditNoticeEntity notice = auditNoticeRepository.findByAuditCaseId(caseId)
+                .orElseGet(() -> TpAuditNoticeEntity.builder()
+                        .auditCase(caseEntity)
+                        .noticeReferenceNumber("NOT-TP-" + caseEntity.getCaseNumber().replaceAll("[^a-zA-Z0-9]", ""))
+                        .taxpayerName(caseEntity.getTaxpayerName())
+                        .tin(caseEntity.getTaxpayerId())
+                        .auditPeriod("FY 2020 – FY 2024")
+                        .build());
+
+        notice.setAssessedPrincipalTax(principal);
+        notice.setPenalties(penalty);
+        notice.setInterest(interest);
+        notice.setTotalAssessmentAmount(total);
+        notice.setIssueDate(LocalDate.now());
+        notice.setResponseDeadline(LocalDate.now().plusDays(30)); // Statutory 30-day window
+        notice.setStatus("OFFICIAL_ASSESSMENT_ISSUED");
+        notice.setDeliveryStatus("DELIVERED");
+
+        TpAuditNoticeEntity saved = auditNoticeRepository.save(notice);
+
+        logAction(caseId, "OFFICIAL_ASSESSMENT_ISSUED", "ASSESSMENT", actorId, "PROCESS_OWNER",
+                "Issued Official Transfer Pricing Assessment Notice: Total ETB " + total + " (Principal: " + principal + ", 50% Penalty: " + penalty + ", Interest: " + interest + ")",
+                req, "DRAFT", "OFFICIAL_ASSESSMENT_ISSUED", saved.getId(), "TP_ASSESSMENT");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/assessment/taxpayer-accept")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> taxpayerAcceptAssessment(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null) {
+            c.setStatus("SETTLED_ACCEPTED");
+            caseRepository.save(c);
+        }
+
+        auditNoticeRepository.findByAuditCaseId(caseId).ifPresent(n -> {
+            n.setStatus("ACCEPTED_SETTLED");
+            auditNoticeRepository.save(n);
+        });
+
+        logAction(caseId, "ASSESSMENT_ACCEPTED_SETTLED", "ASSESSMENT", actorId, "TAXPAYER",
+                "AF1: Taxpayer accepted transfer pricing assessment and committed to payment schedule.", req, "OFFICIAL_ASSESSMENT_ISSUED", "SETTLED_ACCEPTED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "SETTLED_ACCEPTED");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/assessment/taxpayer-object")
+    @Transactional
+    public ResponseEntity<TpObjectionEntity> taxpayerObjectToAssessment(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        String grounds = (String) req.getOrDefault("grounds", "Challenging comparable company selection and profit split allocation.");
+        String legalArgs = (String) req.getOrDefault("legalArguments", "Articles 15 and 28 of Transfer Pricing Directive No. 43/2015.");
+
+        TpAuditNoticeEntity notice = auditNoticeRepository.findByAuditCaseId(caseId).orElse(null);
+
+        TpObjectionEntity objection = TpObjectionEntity.builder()
+                .auditCase(caseEntity)
+                .noticeId(notice != null ? notice.getId() : null)
+                .taxpayerId(caseEntity.getTaxpayerId())
+                .objectionDate(OffsetDateTime.now())
+                .status("SUBMITTED")
+                .factualExplanation(grounds)
+                .legalArguments(legalArgs)
+                .disputedTpAnalysisSections("Benchmark comparability & functional risk weighting")
+                .build();
+
+        TpObjectionEntity saved = objectionRepository.save(objection);
+
+        logAction(caseId, "FORMAL_OBJECTION_FILED", "OBJECTION", actorId, "TAXPAYER",
+                "AF2: Taxpayer submitted formal objection against TP assessment within 30 days", req, "OFFICIAL_ASSESSMENT_ISSUED", "OBJECTION_SUBMITTED", saved.getId(), "TP_OBJECTION");
+
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/assessment/default-enforce")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> triggerDefaultEnforcement(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null) {
+            c.setStatus("ENFORCEMENT_COLLECTION_REFERRED");
+            caseRepository.save(c);
+        }
+
+        auditNoticeRepository.findByAuditCaseId(caseId).ifPresent(n -> {
+            n.setStatus("DEFAULT_ENFORCEMENT");
+            auditNoticeRepository.save(n);
+        });
+
+        logAction(caseId, "DEFAULT_ENFORCEMENT_INITIATED", "ASSESSMENT", actorId, "SYSTEM",
+                "AF3: 30-day statutory deadline expired with no payment or objection. Referred for bank account lien and asset seizure.", req, "OFFICIAL_ASSESSMENT_ISSUED", "ENFORCEMENT_COLLECTION_REFERRED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "ENFORCEMENT_COLLECTION_REFERRED");
+        res.put("message", "Sent to MoR Tax Recovery & Legal Enforcement Department.");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/assessment/close-and-kpi")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> closeCaseAndLogKpi(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("COMPLETED");
+        c.setCompletedAt(OffsetDateTime.now());
+        caseRepository.save(c);
+
+        logAction(caseId, "TP_AUDIT_CONCLUDED_ARCHIVED", "CLOSURE", actorId, "PROCESS_OWNER",
+                "Concluded Transfer Pricing Audit, archived case files, and updated MoR executive KPI dashboard", req, "IN_PROGRESS", "COMPLETED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "COMPLETED");
+        res.put("message", "Transfer Pricing Audit concluded successfully.");
+        return ResponseEntity.ok(res);
+    }
+
+    // ── Phase 8: Objections & Direct Closure ─────────────────────────────────
 
     @PostMapping("/objections")
-    public ResponseEntity<UUID> submitObjection(@PathVariable UUID caseId, @RequestBody TpObjectionRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<UUID> submitObjection(@PathVariable UUID caseId, @RequestBody TpObjectionRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         return ResponseEntity.ok(noticeAndObjectionUseCase.submitObjection(caseId,
                 req.getNoticeId(), req.getTaxpayerId(), req.getNoticeProvisionReferenced(),
                 req.getFactualExplanation(), req.getLegalArguments(), req.getDisputedTpAnalysisSections(), actorId));
     }
 
     @PostMapping("/objections/{objectionId}/review")
-    public ResponseEntity<Void> reviewObjection(@PathVariable UUID caseId, @PathVariable UUID objectionId, @RequestBody TpObjectionReviewRequest req, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> reviewObjection(@PathVariable UUID caseId, @PathVariable UUID objectionId, @RequestBody TpObjectionReviewRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         noticeAndObjectionUseCase.reviewObjection(objectionId, req.getReviewResult(), req.getAdjustedAssessmentAmount(), req.getReviewComments(), actorId);
+        logAction(caseId, "OBJECTION_REVIEWED", "OBJECTION", actorId, "REVIEW_OFFICER",
+                "Reviewed objection: " + req.getReviewResult(), req, "SUBMITTED", req.getReviewResult(), objectionId, "TP_OBJECTION");
         return ResponseEntity.ok().build();
     }
 
-    // ── Phase 8: Closure ─────────────────────────────────────────────────────
-
     @PostMapping("/close")
-    public ResponseEntity<Void> closeCase(@PathVariable UUID caseId, @RequestHeader("X-Actor-Id") String actorId) {
+    public ResponseEntity<Void> closeCase(@PathVariable UUID caseId, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         noticeAndObjectionUseCase.closeCase(caseId, actorId);
+        logAction(caseId, "CASE_CLOSED", "CLOSURE", actorId, "PROCESS_OWNER",
+                "Case closed via standard workflow", null, null, "CLOSED", null, null);
         return ResponseEntity.ok().build();
+    }
+
+    // ── Internal Helpers ─────────────────────────────────────────────────────
+
+    private void logAction(UUID caseId, String actionType, String actionPhase, String actorId, String actorRole,
+                           String summary, Object detail, String beforeStatus, String afterStatus, UUID refId, String refType) {
+        try {
+            ApAuditCaseEntity caseEntity = caseRepository.findById(caseId).orElse(null);
+            if (caseEntity == null) return;
+
+            JsonNode detailNode = null;
+            if (detail != null) {
+                if (detail instanceof JsonNode) {
+                    detailNode = (JsonNode) detail;
+                } else {
+                    detailNode = objectMapper.valueToTree(detail);
+                }
+            }
+
+            TpAuditActionHistoryEntity history = TpAuditActionHistoryEntity.builder()
+                    .auditCase(caseEntity)
+                    .actionType(actionType)
+                    .actionPhase(actionPhase)
+                    .actorId(actorId != null ? actorId : "SYSTEM")
+                    .actorRole(actorRole != null ? actorRole : "AUDITOR")
+                    .summary(summary)
+                    .detail(detailNode)
+                    .beforeStatus(beforeStatus)
+                    .afterStatus(afterStatus)
+                    .referenceId(refId)
+                    .referenceType(refType)
+                    .actionTimestamp(OffsetDateTime.now())
+                    .build();
+
+            actionHistoryRepository.save(history);
+        } catch (Exception e) {
+            log.warn("Failed to log audit action history for case {}: {}", caseId, e.getMessage());
+        }
     }
 }

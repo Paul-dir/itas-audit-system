@@ -53,7 +53,7 @@ public class TpAuditReportUseCase {
         TpAuditReportEntity r = getReport(reportId);
         checkStatus(r, "SUBMITTED_FOR_TEAM_LEADER_REVIEW");
         r.setTeamLeaderReview(buildReview(reviewerId, "TEAM_LEADER", decision, comments, r.getVersion()));
-        r.setStatus("APPROVE".equalsIgnoreCase(decision) ? "TEAM_LEADER_APPROVED" : "DRAFT");
+        r.setStatus(("APPROVE".equalsIgnoreCase(decision) || "APPROVED".equalsIgnoreCase(decision)) ? "TEAM_LEADER_APPROVED" : "DRAFT");
         reportRepository.save(r);
     }
 
@@ -70,7 +70,7 @@ public class TpAuditReportUseCase {
         TpAuditReportEntity r = getReport(reportId);
         checkStatus(r, "SUBMITTED_FOR_PROCESS_OWNER_REVIEW");
         r.setProcessOwnerReview(buildReview(reviewerId, "PROCESS_OWNER", decision, comments, r.getVersion()));
-        r.setStatus("APPROVE".equalsIgnoreCase(decision) ? "PROCESS_OWNER_APPROVED" : "TEAM_LEADER_APPROVED");
+        r.setStatus(("APPROVE".equalsIgnoreCase(decision) || "APPROVED".equalsIgnoreCase(decision)) ? "PROCESS_OWNER_APPROVED" : "TEAM_LEADER_APPROVED");
         reportRepository.save(r);
     }
 
@@ -87,11 +87,13 @@ public class TpAuditReportUseCase {
         TpAuditReportEntity r = getReport(reportId);
         checkStatus(r, "SUBMITTED_FOR_FINAL_APPROVAL");
         r.setAuthorizedOfficialReview(buildReview(reviewerId, "AUTHORIZED_OFFICIAL", decision, comments, r.getVersion()));
-        if ("APPROVE".equalsIgnoreCase(decision)) {
+        if ("APPROVE".equalsIgnoreCase(decision) || "APPROVED".equalsIgnoreCase(decision)) {
             r.setStatus("FULLY_APPROVED");
             ApAuditCaseEntity c = r.getAuditCase();
-            c.setTpCurrentPhase("NOTICE");
-            auditCaseRepository.save(c);
+            if (c != null) {
+                c.setTpCurrentPhase("NOTICE");
+                auditCaseRepository.save(c);
+            }
         } else {
             r.setStatus("PROCESS_OWNER_APPROVED");
         }
