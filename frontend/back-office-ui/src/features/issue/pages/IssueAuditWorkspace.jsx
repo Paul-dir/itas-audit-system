@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText, Shield, ArrowLeft, ArrowRight, CheckCircle2, Clock, Scale,
   UserCheck, AlertTriangle, AlertOctagon, Send, Eye, Building2, MapPin,
-  HelpCircle, Calendar, Plus, Trash2, UploadCloud, BookOpen
+  HelpCircle, Calendar, Plus, Trash2, UploadCloud, BookOpen, ExternalLink, RefreshCw
 } from 'lucide-react';
 import { Card, Button, Badge, Input, Textarea, Select } from '../../../components/ui/index.jsx';
 
@@ -10,7 +10,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
   const [activePhase, setActivePhase] = useState(initialPhase || 'NOTIFICATION');
   const [subPage, setSubPage] = useState(1);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialPhase) {
       setActivePhase(initialPhase);
       setSubPage(1);
@@ -39,15 +39,15 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
       { id: 4, title: 'Exit Conference Scheduling & Letters (FR-04.7-04..15)' }
     ],
     REVIEW_CHAIN: [
-      { id: 1, title: 'Team Leader Review & Approval (FR-04.7-03/22)' },
-      { id: 2, title: 'Process Owner Compliance Audit' },
-      { id: 3, title: 'Multi-Level Approval Log (FR-04.7-42)' }
+      { id: 1, title: 'Team Leader Supervisory Endorsement (FR-04.6-06)' },
+      { id: 2, title: 'Tax Center Directorate Review Status (FR-04.6-07)' },
+      { id: 3, title: 'Multi-Level Audit Trail & Approval Log (FR-04.7-42)' }
     ],
     DIRECTOR_DECISION: [
       { id: 1, title: 'Final Assessment Notice Generation (FR-04.7-21..28)' },
       { id: 2, title: 'Taxpayer Delivery & Objection Window (FR-04.7-34)' },
       { id: 3, title: 'Audit Case Closure & Yield Report (FR-04.7-39..41)' },
-      { id: 4, title: 'Fraud & Intelligence Sub-Process Referral (FR-04.7-35)' }
+      { id: 4, title: 'Directorate Follow-Up Disposition & Referral (FR-04.7-35)' }
     ]
   };
 
@@ -93,14 +93,50 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
   const [followUpDecision, setFollowUpDecision] = useState('REPORT_FINALIZED'); // REPORT_FINALIZED, FRAUD_REFERRAL, COMPREHENSIVE_AUDIT_REFERRAL
   const [referralRef, setReferralRef] = useState('');
 
+  const caseIdentifier = caseData?.id || caseData?.caseNumber;
+
+  // Load existing Issue Audit data from backend
+  useEffect(() => {
+    if (!caseIdentifier) return;
+    const fetchExistingCase = async () => {
+      try {
+        const res = await fetch(`/api/v1/backoffice/issue/cases/${caseIdentifier}`);
+        if (res.ok) {
+          const d = await res.json();
+          if (d.identifiedIssue) setIdentifiedIssue(d.identifiedIssue);
+          if (d.reportTitle) setReportTitle(d.reportTitle);
+          if (d.reportSummary) setReportSummary(d.reportSummary);
+          if (d.totalAdjustedAmount) setTotalAdjustedAmount(d.totalAdjustedAmount);
+          if (d.reportStatus) setReportStatus(d.reportStatus);
+          else if (caseData?.status) setReportStatus(caseData.status);
+          if (d.teamLeaderComments) setTeamLeaderComments(d.teamLeaderComments);
+          if (d.directorComments) setDirectorComments(d.directorComments);
+          if (d.followUpDecision) setFollowUpDecision(d.followUpDecision);
+          if (d.referralRef) setReferralRef(d.referralRef);
+          if (d.selectedTransactionsJson) {
+            try { setSelectedTransactions(JSON.parse(d.selectedTransactionsJson)); } catch (e) {}
+          }
+          if (d.evidenceRecordsJson) {
+            try { setEvidenceRecords(JSON.parse(d.evidenceRecordsJson)); } catch (e) {}
+          }
+          if (d.fieldVisitFindingsJson) {
+            try { setFieldVisitFindings(JSON.parse(d.fieldVisitFindingsJson)); } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load issue audit details on mount:', err);
+      }
+    };
+    fetchExistingCase();
+  }, [caseIdentifier]);
+
   const PHASES = [
     { id: 'NOTIFICATION', label: 'Auditee Notification & Selection', short: 'Notify & Select', icon: Calendar },
     { id: 'EVIDENCE_GATHERING', label: 'Evidence & Field Verification', short: 'Evidence & Verification', icon: FileText },
     { id: 'REPORT_DRAFT', label: 'Audit Findings & Draft Report', short: 'Draft Report', icon: BookOpen },
-    { id: 'REVIEW_CHAIN', label: 'Multi-Level Approval Chain', short: 'Review Chain', icon: UserCheck },
+    { id: 'REVIEW_CHAIN', label: 'Supervisory & Directorate Review', short: 'Review Chain', icon: UserCheck },
     { id: 'DIRECTOR_DECISION', label: 'Director Decision & Follow-Up', short: 'Director Decision', icon: Shield }
   ];
-
 
   const handlePost = async (action, extraData = {}) => {
     setLoading(true);
@@ -815,60 +851,207 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
         </div>
       )}
 
-      {/* Phase 4: Multi-Level Review Chain */}
+      {/* Phase 4: Supervisory & Directorate Review */}
       {activePhase === 'REVIEW_CHAIN' && (
         <div className="space-y-6">
           <Card className="p-6 space-y-5">
             {subPage === 1 && (
-              <>
-                <h3 className="text-base font-bold text-slate-800 dark:text-white border-b pb-3 flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-blue-600" />
-                  Level 1: Team Leader Review & Technical Assessment (FR-04.6-06)
-                </h3>
-                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Team Leader Status</span>
-                    <Badge color={reportStatus === 'TL_APPROVED' || reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'emerald' : reportStatus === 'RETURNED_TO_AUDITOR' ? 'rose' : 'amber'}>
-                      {reportStatus === 'TL_APPROVED' || reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'APPROVED' : reportStatus === 'RETURNED_TO_AUDITOR' ? 'RETURNED FOR REVISION' : 'PENDING REVIEW'}
-                    </Badge>
-                  </div>
-                  <Textarea label="Team Leader Technical Comments & Findings" rows={3} value={teamLeaderComments} onChange={(e) => setTeamLeaderComments(e.target.value)} />
-                  <div className="flex gap-2 justify-end">
-                    <Button size="xs" variant="secondary" className="text-rose-600 border-rose-300 hover:bg-rose-50" onClick={() => { handlePost('REVIEW_TL', { decision: 'RETURNED_FOR_REVISION' }); setReportStatus('RETURNED_TO_AUDITOR'); setActivePhase('REPORT_DRAFT'); setSubPage(1); }}>
-                      ↩ Return to Auditor for Revision
-                    </Button>
-                    <Button size="xs" variant="primary" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { handlePost('REVIEW_TL', { decision: 'APPROVED' }); setReportStatus('TL_APPROVED'); setSubPage(2); }}>
-                      ✓ Approve & Forward to Process Owner →
-                    </Button>
+              <div className="space-y-5">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-blue-600" />
+                    Level 1: Team Leader Supervisory Review & Technical Endorsement (FR-04.6-06)
+                  </h3>
+                  <Badge color="blue">SUB-PAGE 1 OF 3</Badge>
+                </div>
+
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                  <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Supervisory Review Boundary:</span> Under ITAS statutory governance (FR-04.6), the technical review and endorsement of this Issue Audit Report is conducted exclusively by your <strong>Issue Audit Team Leader</strong> via the Team Leader Review Console. Auditors cannot self-approve reports.
                   </div>
                 </div>
-              </>
+
+                {/* Status Indicator Banner */}
+                {(reportStatus === 'RETURNED_TO_AUDITOR' || reportStatus === 'REVISION_REQUESTED') ? (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-rose-600" />
+                        <span className="font-bold text-sm text-rose-900 dark:text-rose-200">Revisions Requested by Team Leader</span>
+                      </div>
+                      <Badge color="rose">REVISION REQUIRED</Badge>
+                    </div>
+                    <p className="text-xs text-rose-800 dark:text-rose-300">
+                      The Team Leader reviewed this draft report and requested technical revisions before endorsement. Please review their instructions below, update findings or adjustments in Phase 3, and resubmit.
+                    </p>
+                    <div className="flex justify-end">
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        icon={BookOpen}
+                        className="bg-rose-600 hover:bg-rose-700 text-white"
+                        onClick={() => { setActivePhase('REPORT_DRAFT'); setSubPage(2); }}
+                      >
+                        ↩ Return to Draft Report (Phase 3) to Revise
+                      </Button>
+                    </div>
+                  </div>
+                ) : ['TL_APPROVED', 'SUBMITTED_TO_TC_DIRECTOR', 'COMPLETED', 'REPORT_FINALIZED', 'REFERRED_TO_FRAUD', 'REFERRED_TO_COMPREHENSIVE'].includes(reportStatus) ? (
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-sm text-emerald-900 dark:text-emerald-200">Endorsed by Issue Audit Team Leader</span>
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300">Technical review completed. The case has been endorsed and routed to the Tax Center Director.</p>
+                      </div>
+                    </div>
+                    <Badge color="emerald">TL ENDORSED ✓</Badge>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <span className="font-bold text-sm text-amber-900 dark:text-amber-200">Pending Team Leader Review</span>
+                        <p className="text-xs text-amber-700 dark:text-amber-300">Draft submitted to Team Leader queue. Awaiting technical quality review and endorsement.</p>
+                      </div>
+                    </div>
+                    <Badge color="amber">AWAITING TL REVIEW</Badge>
+                  </div>
+                )}
+
+                {/* Team Leader Comments Section */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Team Leader Technical Comments & Directives</span>
+                    <Badge color="slate">READ-ONLY AUDITOR DOSSIER</Badge>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border text-xs text-slate-700 dark:text-slate-300 italic">
+                    "{teamLeaderComments || 'No comments recorded yet by Team Leader.'}"
+                  </div>
+                </div>
+
+                {/* Supervisory Quality Checklist Preview */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                  <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Supervisory Quality Assurance Checklist (FR-04.6-06)</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded bg-white dark:bg-slate-900 border flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Issue Scope & Materiality Verified</span>
+                    </div>
+                    <div className="p-2 rounded bg-white dark:bg-slate-900 border flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Evidence Sufficiency (Customs & Bank Wire)</span>
+                    </div>
+                    <div className="p-2 rounded bg-white dark:bg-slate-900 border flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Physical Plant Verification Documented</span>
+                    </div>
+                    <div className="p-2 rounded bg-white dark:bg-slate-900 border flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Statutory Penalty & Interest Computed</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="secondary" icon={ArrowLeft} onClick={() => { setActivePhase('REPORT_DRAFT'); setSubPage(4); }}>
+                    ← Back to Draft Report (Phase 3)
+                  </Button>
+                  <Button variant="primary" icon={ArrowRight} className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setSubPage(2)}>
+                    Next: Directorate Review Status (Sub-Page 2) →
+                  </Button>
+                </div>
+              </div>
             )}
 
             {subPage === 2 && (
-              <>
-                <h3 className="text-base font-bold text-slate-800 dark:text-white border-b pb-3 flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-blue-600" />
-                  Level 2: Process Owner Legal Compliance Review (FR-04.6-07)
-                </h3>
-                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Process Owner Status</span>
-                    <Badge color={reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'emerald' : reportStatus === 'RETURNED_TO_TL' ? 'amber' : 'gray'}>
-                      {reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'APPROVED' : reportStatus === 'RETURNED_TO_TL' ? 'RETURNED TO TL' : 'AWAITING TL APPROVAL'}
-                    </Badge>
-                  </div>
-                  <Textarea label="Process Owner Statutory Legal Comments" rows={3} value={processOwnerComments} onChange={(e) => setProcessOwnerComments(e.target.value)} />
-                  <div className="flex gap-2 justify-end">
-                    <Button size="xs" variant="secondary" className="text-amber-600 border-amber-300 hover:bg-amber-50" onClick={() => { handlePost('REVIEW_PO', { decision: 'RETURNED_TO_TL' }); setReportStatus('RETURNED_TO_TL'); setSubPage(1); }}>
-                      ↩ Reject Back to Team Leader
-                    </Button>
-                    <Button size="xs" variant="primary" className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={reportStatus !== 'TL_APPROVED'} onClick={() => { handlePost('REVIEW_PO', { decision: 'APPROVED' }); setReportStatus('PO_APPROVED'); setSubPage(3); }}>
-                      ✓ Approve & Forward to Approval Log →
-                    </Button>
+              <div className="space-y-5">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-blue-600" />
+                    Level 2: Tax Center Directorate Review & Statutory Disposition (FR-04.6-07)
+                  </h3>
+                  <Badge color="blue">SUB-PAGE 2 OF 3</Badge>
+                </div>
+
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                  <Building2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Directorate Governance Notice:</span> Unlike Joint or Transfer Pricing audits which route to an inter-agency or technical review committee, <strong>Issue Audit routes directly from the Issue Team Leader to the Tax Center Director (NO Committee)</strong>. Final assessment, fraud referral, or comprehensive escalation is determined in the Directorate Console.
                   </div>
                 </div>
-              </>
+
+                {/* Directorate Status Banner */}
+                {['COMPLETED', 'REPORT_FINALIZED'].includes(reportStatus) || followUpDecision === 'REPORT_FINALIZED' ? (
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-sm text-emerald-900 dark:text-emerald-200">Assessment Adopted & Report Finalized</span>
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300">Tax Center Director approved recommended assessment of ETB {totalAdjustedAmount.toLocaleString()} + statutory penalties.</p>
+                      </div>
+                    </div>
+                    <Badge color="emerald">FINALIZED</Badge>
+                  </div>
+                ) : (reportStatus === 'REFERRED_TO_FRAUD' || followUpDecision === 'FRAUD_REFERRAL') ? (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertOctagon className="w-5 h-5 text-rose-600" />
+                      <div>
+                        <span className="font-bold text-sm text-rose-900 dark:text-rose-200">Referred to Tax Fraud Investigation</span>
+                        <p className="text-xs text-rose-700 dark:text-rose-300">Ref: {referralRef || 'FRD-REF-2026-0988'} — Intelligence sub-process triggered.</p>
+                      </div>
+                    </div>
+                    <Badge color="rose">FRAUD REFERRAL</Badge>
+                  </div>
+                ) : (reportStatus === 'REFERRED_TO_COMPREHENSIVE' || followUpDecision === 'COMPREHENSIVE_AUDIT_REFERRAL') ? (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-300 dark:border-purple-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <span className="font-bold text-sm text-purple-900 dark:text-purple-200">Escalated to Comprehensive Audit</span>
+                        <p className="text-xs text-purple-700 dark:text-purple-300">Ref: {referralRef || 'CMP-REF-2026-0988'} — Escalated to full multi-tax audit scope.</p>
+                      </div>
+                    </div>
+                    <Badge color="purple">COMPREHENSIVE ESCALATION</Badge>
+                  </div>
+                ) : ['SUBMITTED_TO_TC_DIRECTOR', 'TL_APPROVED'].includes(reportStatus) ? (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <span className="font-bold text-sm text-amber-900 dark:text-amber-200">Awaiting Directorate Follow-Up Decision</span>
+                        <p className="text-xs text-amber-700 dark:text-amber-300">The case is currently before the Tax Center Director for final statutory disposition.</p>
+                      </div>
+                    </div>
+                    <Badge color="amber">DIRECTOR QUEUE</Badge>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400">
+                    Awaiting Team Leader endorsement before case is submitted to Tax Center Directorate.
+                  </div>
+                )}
+
+                {/* Director Remarks Box */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Directorate Comments & Determination</span>
+                    <Badge color="slate">READ-ONLY AUDITOR DOSSIER</Badge>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border text-xs text-slate-700 dark:text-slate-300 italic">
+                    "{directorComments || 'Pending director decision.'}"
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="secondary" icon={ArrowLeft} onClick={() => setSubPage(1)}>← Back to TL Review</Button>
+                  <Button variant="primary" icon={ArrowRight} className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setSubPage(3)}>
+                    Next: Audit Trail & Log (Sub-Page 3) →
+                  </Button>
+                </div>
+              </div>
             )}
 
             {subPage === 3 && (
@@ -876,25 +1059,40 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Clock className="w-5 h-5 text-blue-600" />
-                    3. Multi-Level Audit Trail & Approval Log (FR-04.7-40 & 42)
+                    3. Multi-Level Audit Trail & Case Chain of Custody (FR-04.7-40 & 42)
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 3</Badge>
                 </div>
                 
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 text-xs">
-                  <p className="font-bold text-slate-800 dark:text-white uppercase tracking-wider">Audit Case File History:</p>
-                  <div className="space-y-2 border-l-2 border-blue-200 dark:border-blue-800 pl-4 ml-2">
-                    <p className="text-slate-600 dark:text-slate-400"><span className="font-bold text-slate-800 dark:text-white">1. Draft Submitted:</span> Auditor (2026-09-03 10:14) - Recommended ETB {totalAdjustedAmount.toLocaleString()} adjustment.</p>
-                    <p className="text-slate-600 dark:text-slate-400"><span className="font-bold text-slate-800 dark:text-white">2. Team Leader (Level 1):</span> {reportStatus === 'TL_APPROVED' || reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'Approved' : 'Pending'} {teamLeaderComments && `- "${teamLeaderComments}"`}</p>
-                    <p className="text-slate-600 dark:text-slate-400"><span className="font-bold text-slate-800 dark:text-white">3. Process Owner (Level 2):</span> {reportStatus === 'PO_APPROVED' || reportStatus === 'FINALIZED' ? 'Approved' : 'Pending'} {processOwnerComments && `- "${processOwnerComments}"`}</p>
+                  <p className="font-bold text-slate-800 dark:text-white uppercase tracking-wider">Issue Audit Case File History:</p>
+                  <div className="space-y-3 border-l-2 border-blue-300 dark:border-blue-700 pl-4 ml-2">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">1. Draft Report Submitted by Auditor:</p>
+                      <p className="text-slate-600 dark:text-slate-400">Targeted adjustment: ETB {totalAdjustedAmount.toLocaleString()} across VAT and CIT overheads with supporting records EV-01 to EV-03.</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">2. Level 1 — Issue Team Leader Technical Review:</p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        Status: <span className="font-semibold">{reportStatus === 'TL_APPROVED' || reportStatus === 'SUBMITTED_TO_TC_DIRECTOR' || reportStatus === 'COMPLETED' ? 'Approved & Endorsed' : reportStatus === 'RETURNED_TO_AUDITOR' ? 'Returned for Revision' : 'Pending'}</span>
+                        {teamLeaderComments && ` — "${teamLeaderComments}"`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">3. Level 2 — Tax Center Director Final Disposition (NO Committee):</p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        Status: <span className="font-semibold">{reportStatus === 'COMPLETED' || reportStatus === 'REPORT_FINALIZED' ? 'Finalized' : reportStatus === 'REFERRED_TO_FRAUD' ? 'Referred to Fraud' : reportStatus === 'REFERRED_TO_COMPREHENSIVE' ? 'Escalated to Comp Audit' : 'Pending'}</span>
+                        {directorComments && ` — "${directorComments}"`}
+                      </p>
+                    </div>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2 italic">* Entire history preserved and accessible based on authorization (FR-04.7-42).</p>
                 </div>
 
                 <div className="flex justify-between pt-4 border-t">
-                  <Button variant="secondary" icon={ArrowLeft} onClick={() => setSubPage(2)}>← Back</Button>
+                  <Button variant="secondary" icon={ArrowLeft} onClick={() => setSubPage(2)}>← Back to Directorate Review</Button>
                   <Button variant="primary" icon={ArrowRight} className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setActivePhase('DIRECTOR_DECISION'); setSubPage(1); }}>
-                    Proceed to Director Assessment Generation (Phase 5) →
+                    Proceed to Assessment & Closure (Phase 5) →
                   </Button>
                 </div>
               </div>
@@ -1023,47 +1221,87 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    4. Intelligence Referral & Case Execution (FR-04.7-35)
+                    4. Directorate Resolution & Official Disposition Record (FR-04.7-35)
                   </h3>
                   <Badge color="blue">SUB-PAGE 4 OF 4</Badge>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setFollowUpDecision('REPORT_FINALIZED')}
-                    className={`p-4 rounded-xl border text-left space-y-2 transition-all ${
-                      followUpDecision === 'REPORT_FINALIZED' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    <p className="text-xs font-bold text-slate-800 dark:text-white">Close & Finalize Audit</p>
-                    <p className="text-[11px] text-slate-500">Case complete. Route adjustment to Taxpayer Ledger.</p>
-                  </button>
-
-                  <button
-                    onClick={() => setFollowUpDecision('FRAUD_REFERRAL')}
-                    className={`p-4 rounded-xl border text-left space-y-2 transition-all ${
-                      followUpDecision === 'FRAUD_REFERRAL' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-500 ring-2 ring-rose-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    <AlertOctagon className="w-6 h-6 text-rose-600" />
-                    <p className="text-xs font-bold text-slate-800 dark:text-white">Tax Fraud Referral (FR-04.7-35)</p>
-                    <p className="text-[11px] text-slate-500">Signs of potential fraud. Trigger Intelligence Sub-Process.</p>
-                  </button>
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                  <Building2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Directorate Disposition Record:</span> The follow-up determination is recorded here once rendered by the Tax Center Director in the Directorate Decision Console. The auditor records this outcome into the permanent case file.
+                  </div>
                 </div>
-                
-                <Textarea label="Director Decision Rationale & Comments" rows={3} value={directorComments} onChange={(e) => setDirectorComments(e.target.value)} />
-                
+
+                {followUpDecision === 'REPORT_FINALIZED' || reportStatus === 'COMPLETED' || reportStatus === 'REPORT_FINALIZED' ? (
+                  <div className="p-5 bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-500 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+                        <div>
+                          <p className="font-bold text-sm text-emerald-950 dark:text-emerald-200">Official Directorate Disposition: ASSESSMENT ADOPTED & CASE FINALIZED</p>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-300">Case completed. Notice NTC-ISSUE-{caseData.caseNumber || '2026-0988'} issued and adjustment routed to Taxpayer Ledger.</p>
+                        </div>
+                      </div>
+                      <Badge color="emerald" size="lg">COMPLETED</Badge>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border text-xs text-slate-700 dark:text-slate-300">
+                      <strong>Tax Center Director Directive:</strong> {directorComments || 'Statutory assessment approved and confirmed under Proclamation 979/2016.'}
+                    </div>
+                  </div>
+                ) : followUpDecision === 'FRAUD_REFERRAL' || reportStatus === 'REFERRED_TO_FRAUD' ? (
+                  <div className="p-5 bg-rose-50 dark:bg-rose-950/30 border-2 border-rose-500 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertOctagon className="w-7 h-7 text-rose-600" />
+                        <div>
+                          <p className="font-bold text-sm text-rose-950 dark:text-rose-200">Official Directorate Disposition: REFERRED TO TAX FRAUD INVESTIGATION</p>
+                          <p className="text-xs text-rose-700 dark:text-rose-300">Reference: {referralRef || 'FRD-REF-2026-0988'} — Intelligence & Criminal Tax Investigation Unit notified.</p>
+                        </div>
+                      </div>
+                      <Badge color="rose" size="lg">FRAUD REFERRAL</Badge>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border text-xs text-slate-700 dark:text-slate-300">
+                      <strong>Tax Center Director Directive:</strong> {directorComments || 'Evidence of intentional misrepresentation flagged for criminal investigation.'}
+                    </div>
+                  </div>
+                ) : followUpDecision === 'COMPREHENSIVE_AUDIT_REFERRAL' || reportStatus === 'REFERRED_TO_COMPREHENSIVE' ? (
+                  <div className="p-5 bg-purple-50 dark:bg-purple-950/30 border-2 border-purple-500 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Layers className="w-7 h-7 text-purple-600" />
+                        <div>
+                          <p className="font-bold text-sm text-purple-950 dark:text-purple-200">Official Directorate Disposition: ESCALATED TO COMPREHENSIVE AUDIT</p>
+                          <p className="text-xs text-purple-700 dark:text-purple-300">Reference: {referralRef || 'CMP-REF-2026-0988'} — Scope expanded to multi-year comprehensive audit.</p>
+                        </div>
+                      </div>
+                      <Badge color="purple" size="lg">COMPREHENSIVE</Badge>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border text-xs text-slate-700 dark:text-slate-300">
+                      <strong>Tax Center Director Directive:</strong> {directorComments || 'Audit scope expanded across all operating tax heads.'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-5 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                      <p className="font-bold text-sm text-amber-900 dark:text-amber-200">Awaiting Follow-Up Determination from Tax Center Director</p>
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-300">
+                      The case has been routed to the Tax Center Director following Team Leader endorsement. Once the Director completes the follow-up review in their console, the final disposition and referral references will appear here.
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex justify-between pt-4 border-t">
-                  <Button variant="secondary" icon={ArrowLeft} onClick={() => setSubPage(3)}>← Back</Button>
+                  <Button variant="secondary" icon={ArrowLeft} onClick={() => setSubPage(3)}>← Back to Yield Report</Button>
                   <Button
                     variant="primary"
                     icon={CheckCircle2}
-                    loading={loading}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 shadow-lg"
-                    onClick={() => handlePost('DECISION_DIRECTOR')}
+                    className="bg-slate-700 hover:bg-slate-800 text-white px-6 py-2"
+                    onClick={onClose}
                   >
-                    Execute Final Director Decision
+                    Close Workspace
                   </Button>
                 </div>
               </div>

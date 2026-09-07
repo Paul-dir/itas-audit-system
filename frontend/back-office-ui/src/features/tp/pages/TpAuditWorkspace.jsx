@@ -1740,16 +1740,19 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           value={committeeChair}
                           onChange={(e) => setCommitteeChair(e.target.value)}
                         />
-                        <Select
-                          label="Approval Status"
-                          value={hypothesisStatus}
-                          onChange={(e) => setHypothesisStatus(e.target.value)}
-                          options={[
-                            { value: 'APPROVED', label: 'APPROVED - Proceed to Phase 3 Planning' },
-                            { value: 'PENDING_REVISION', label: 'PENDING REVISION - Request Additional Substance' },
-                            { value: 'REJECTED', label: 'REJECTED - Scope Insufficient' }
-                          ]}
-                        />
+                        <div className="p-3.5 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 space-y-1">
+                          <label className="text-xs font-bold text-purple-950 dark:text-purple-200 uppercase tracking-wider">
+                            Supervisory Workflow Routing
+                          </label>
+                          <p className="text-[11px] text-purple-800 dark:text-purple-300">
+                            Working Hypothesis will be routed to <strong>Workneh Kassa (TP Audit Team Leader)</strong> for technical review before submission to the Review Committee.
+                          </p>
+                          <div className="pt-1">
+                            <Badge color={hypothesisStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'amber' : 'purple'} size="xs">
+                              {hypothesisStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'Pending Team Leader Review' : 'Ready for Submission'}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -1764,34 +1767,46 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         variant="primary"
                         icon={Send}
                         loading={loading}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5"
-                        onClick={() => handlePost(
-                          '/working-hypothesis',
-                          {
-                            hypothesisDescription: hypothesisDesc,
-                            identifiedIssue,
-                            economicRationale: econRationale,
-                            revenueAtRisk: parseFloat(revenueAtRisk),
-                            calculationDetails: {
-                              subPageCompleted: 5,
-                              auditScope: hypothesisAuditScope,
-                              materiality: hypothesisMateriality,
-                              benefitTestMatrix,
-                              dempeMatrix,
-                              primaryTpMethod,
-                              secondaryTpMethod,
-                              pliMetric,
-                              methodRationales,
-                              multiYearAdjustments,
-                              hypothesisStatus,
-                              leadHypothesisAuditor,
-                              committeeChair
-                            }
-                          },
-                          'Step 2 (Working Hypothesis) 5-Page Process Completed & Saved! Transitioning to Step 3 (Planning & Meeting)...'
-                        )}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5"
+                        onClick={async () => {
+                          await handlePost(
+                            '/working-hypothesis',
+                            {
+                              hypothesisDescription: hypothesisDesc,
+                              identifiedIssue,
+                              economicRationale: econRationale,
+                              revenueAtRisk: parseFloat(revenueAtRisk),
+                              calculationDetails: {
+                                subPageCompleted: 5,
+                                auditScope: hypothesisAuditScope,
+                                materiality: hypothesisMateriality,
+                                benefitTestMatrix,
+                                dempeMatrix,
+                                primaryTpMethod,
+                                secondaryTpMethod,
+                                pliMetric,
+                                methodRationales,
+                                multiYearAdjustments,
+                                hypothesisStatus: 'SUBMITTED_FOR_TL_REVIEW',
+                                leadHypothesisAuditor,
+                                committeeChair
+                              }
+                            },
+                            'Step 2 Working Hypothesis submitted to Team Leader for review! Case status updated.'
+                          );
+                          if (caseData?.id) {
+                            try {
+                              await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id || 'auditor' },
+                                body: JSON.stringify({ status: 'SUBMITTED_FOR_TL_REVIEW', notes: 'Working Hypothesis submitted for TL supervisory review' })
+                              });
+                            } catch (e) { console.warn('Status patch fallback:', e); }
+                          }
+                          setHypothesisStatus('SUBMITTED_FOR_TL_REVIEW');
+                        }}
                       >
-                        Save & Finalize Step 2 Process
+                        Submit Hypothesis to Team Leader for Review
                       </Button>
                     </div>
                   </Card>
@@ -3481,7 +3496,9 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <span className="px-2.5 py-0.5 bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-200 text-[10px] font-bold rounded-full">
                             GATEKEEPER 1
                           </span>
-                          <Badge color="green" size="sm">COMPLETED</Badge>
+                          <Badge color={reportStatus === 'DRAFT' ? 'purple' : 'green'} size="sm">
+                            {reportStatus === 'DRAFT' ? 'ACTION REQUIRED' : 'COMPLETED'}
+                          </Badge>
                         </div>
                         <div>
                           <h4 className="font-bold text-xs text-purple-950 dark:text-purple-200">1. Lead TP Auditor Sign-Off</h4>
@@ -3492,6 +3509,32 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         <div className="p-2 bg-white dark:bg-slate-900 rounded border border-purple-100 dark:border-purple-900 text-[11px] italic text-slate-600 dark:text-slate-400">
                           "{leadAuditorSignOff.comments}"
                         </div>
+                        {reportStatus === 'DRAFT' ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                            onClick={async () => {
+                              await handlePost('/report/1/submit-for-team-leader-review', {}, 'Draft Report submitted to Team Leader for review!');
+                              if (caseData?.id) {
+                                try {
+                                  await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id || 'auditor' },
+                                    body: JSON.stringify({ status: 'SUBMITTED_FOR_TL_REVIEW', notes: 'Draft TP Report submitted for supervisory review' })
+                                  });
+                                } catch (e) { console.warn('Status patch fallback:', e); }
+                              }
+                              setReportStatus('SUBMITTED_FOR_TL_REVIEW');
+                            }}
+                          >
+                            Submit Report to Team Leader
+                          </Button>
+                        ) : (
+                          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded border border-emerald-200 dark:border-emerald-800 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                            <Check size={14} className="text-emerald-600" /> Submitted to Team Leader
+                          </div>
+                        )}
                       </div>
 
                       {/* Gatekeeper 2: Team Leader */}
@@ -3500,8 +3543,8 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <span className="px-2.5 py-0.5 bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200 text-[10px] font-bold rounded-full">
                             GATEKEEPER 2
                           </span>
-                          <Badge color={teamLeaderSignOff.status === 'APPROVED' ? 'green' : 'blue'} size="sm">
-                            {teamLeaderSignOff.status}
+                          <Badge color={['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE', 'COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'green' : reportStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'amber' : 'gray'} size="sm">
+                            {['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE', 'COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'APPROVED' : reportStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'UNDER SUPERVISOR REVIEW' : 'AWAITING SUBMISSION'}
                           </Badge>
                         </div>
                         <div>
@@ -3511,86 +3554,35 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <p className="text-[10px] text-blue-700 dark:text-blue-400 font-mono mt-0.5">{teamLeaderSignOff.date}</p>
                         </div>
                         <div className="p-2 bg-white dark:bg-slate-900 rounded border border-blue-100 dark:border-blue-900 text-[11px] italic text-slate-600 dark:text-slate-400">
-                          "{teamLeaderSignOff.comments}"
+                          "{teamLeaderSignOff.comments || 'Awaiting supervisory review and quality gate check in Team Leader Review Console.'}"
                         </div>
-                        {teamLeaderSignOff.status !== 'APPROVED' ? (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="w-1/2 text-rose-600 border-rose-300 hover:bg-rose-50 text-xs"
-                              onClick={async () => {
-                                await handlePost(`/report/1/team-leader-review`, { decision: 'RETURNED_FOR_REVISION', comments: 'Returned to lead auditor for working paper adjustments.' }, 'Report returned to auditor.');
-                                setTeamLeaderSignOff(prev => ({ ...prev, status: 'RETURNED_FOR_REVISION' }));
-                                setReportStatus('DRAFT');
-                              }}
-                            >
-                              ↩ Return for Revision
-                            </Button>
-                            <Button 
-                              variant="primary" 
-                              size="sm" 
-                              className="w-1/2 bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                              onClick={async () => {
-                                await handlePost(`/report/1/team-leader-review`, { decision: 'APPROVE', comments: 'Supervisory review passed.' }, 'Team Leader Sign-off Recorded!');
-                                setTeamLeaderSignOff(prev => ({ ...prev, status: 'APPROVED' }));
-                                setReportStatus('TL_APPROVED');
-                              }}
-                            >
-                              Authorize Sign-Off
-                            </Button>
-                          </div>
-                        ) : null}
+                        <div className="p-2 bg-blue-100/60 dark:bg-blue-900/30 rounded text-[10px] text-blue-800 dark:text-blue-300">
+                          🛡️ <em>Authorization is executed strictly by the Team Leader in the Team Leader Console.</em>
+                        </div>
                       </div>
 
-                      {/* Gatekeeper 3: Process Owner */}
+                      {/* Gatekeeper 3: Process Owner / Committee */}
                       <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="px-2.5 py-0.5 bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 text-[10px] font-bold rounded-full">
                             GATEKEEPER 3
                           </span>
-                          <Badge color={processOwnerSignOff.status === 'APPROVED' ? 'green' : 'amber'} size="sm">
-                            {processOwnerSignOff.status}
+                          <Badge color={['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'green' : ['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE'].includes(reportStatus) ? 'amber' : 'gray'} size="sm">
+                            {['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'APPROVED' : ['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE'].includes(reportStatus) ? 'AWAITING COMMITTEE DELIBERATION' : 'PENDING PREVIOUS GATES'}
                           </Badge>
                         </div>
                         <div>
-                          <h4 className="font-bold text-xs text-emerald-950 dark:text-emerald-200">3. Process Owner Final Authorization</h4>
+                          <h4 className="font-bold text-xs text-emerald-950 dark:text-emerald-200">3. Joint & TP Committee Deliberation</h4>
                           <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{processOwnerSignOff.name}</p>
                           <p className="text-[10px] text-slate-500">{processOwnerSignOff.title}</p>
                           <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">{processOwnerSignOff.date}</p>
                         </div>
                         <div className="p-2 bg-white dark:bg-slate-900 rounded border border-emerald-100 dark:border-emerald-900 text-[11px] italic text-slate-600 dark:text-slate-400">
-                          "{processOwnerSignOff.comments}"
+                          "{processOwnerSignOff.comments || 'Awaiting formal committee quorum review and resolution adoption.'}"
                         </div>
-                        {processOwnerSignOff.status !== 'APPROVED' && (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="w-1/2 text-amber-600 border-amber-300 hover:bg-amber-50 text-xs"
-                              onClick={async () => {
-                                await handlePost(`/report/1/process-owner-review`, { decision: 'RETURNED_TO_TL', comments: 'Returned to Team Leader for technical clarification.' }, 'Report returned to Team Leader.');
-                                setProcessOwnerSignOff(prev => ({ ...prev, status: 'RETURNED_TO_TL' }));
-                                setReportStatus('TL_APPROVED');
-                              }}
-                            >
-                              ↩ Reject to Team Leader
-                            </Button>
-                            <Button 
-                              variant="primary" 
-                              size="sm" 
-                              className="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-                              disabled={teamLeaderSignOff.status !== 'APPROVED'}
-                              onClick={async () => {
-                                await handlePost(`/report/1/process-owner-review`, { decision: 'APPROVE', comments: 'Process owner final approval granted.' }, 'Process Owner Authorization Granted!');
-                                setProcessOwnerSignOff(prev => ({ ...prev, status: 'APPROVED' }));
-                                setReportStatus('PO_APPROVED');
-                              }}
-                            >
-                              Grant Final Authorization
-                            </Button>
-                          </div>
-                        )}
+                        <div className="p-2 bg-emerald-100/60 dark:bg-emerald-900/30 rounded text-[10px] text-emerald-800 dark:text-emerald-300">
+                          🏛️ <em>Final assessment authorization is executed strictly by the Committee in the Deliberation Console.</em>
+                        </div>
                       </div>
 
                     </div>

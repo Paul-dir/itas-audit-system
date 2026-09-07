@@ -104,8 +104,8 @@ public class TpAuditReportUseCase {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("action", action); node.put("detail", detail);
         r.setTaxpayerResponse(node);
-        if ("SIGN".equalsIgnoreCase(action)) r.setStatus("TAXPAYER_SIGNED");
-        else if ("OBJECT".equalsIgnoreCase(action)) r.setStatus("TAXPAYER_OBJECTED");
+        if ("SIGN".equalsIgnoreCase(action) || "ACCEPTED".equalsIgnoreCase(action)) r.setStatus("TAXPAYER_SIGNED");
+        else if ("OBJECT".equalsIgnoreCase(action) || "REJECTED".equalsIgnoreCase(action)) r.setStatus("TAXPAYER_OBJECTED");
         else r.setStatus("NO_RESPONSE_REFERRED");
         reportRepository.save(r);
     }

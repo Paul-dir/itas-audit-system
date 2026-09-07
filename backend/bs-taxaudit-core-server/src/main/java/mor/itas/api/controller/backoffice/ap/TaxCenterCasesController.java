@@ -1,8 +1,11 @@
 package mor.itas.api.controller.backoffice.ap;
 
 import mor.itas.api.dto.response.ap.GenericResponse;
+import mor.itas.application.usecase.ap.CascadePlanToCasesUseCase;
+import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
 import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
 import mor.itas.persistence.jpa.entity.ap.PlanAllocationEntity;
+import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;
 import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
 import mor.itas.persistence.jpa.repository.ap.PlanAllocationRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,11 +28,14 @@ public class TaxCenterCasesController {
     
     private final ApAuditCaseRepository auditCaseRepository;
     private final PlanAllocationRepository allocationRepository;
+    private final AnnualAuditPlanJpaRepository planRepository;
+    private final CascadePlanToCasesUseCase cascadePlanToCasesUseCase;
+    private final mor.itas.application.usecase.ap.UserManagementUseCase userManagementUseCase;
     
     /**
      * Get all audit cases for a tax center
      * 
-     * Endpoint: GET /api/v1/backoffice/ap/tax-center/cases?taxCenterCode=TC-AA-01
+     * Endpoint: GET /api/v1/backoffice/ap/tax-center/cases?taxCenterCode=federal-lto1
      */
     @GetMapping("/cases")
     public ResponseEntity<GenericResponse<Map<String, Object>>> getTaxCenterCases(
@@ -38,58 +44,48 @@ public class TaxCenterCasesController {
         @RequestParam(defaultValue = "0") int offset) {
         
         try {
-            // Find all allocations for this tax center to get plan IDs
-            List<PlanAllocationEntity> allocations = allocationRepository.findByTaxCenterCode(taxCenterCode);
-            
-            if (allocations.isEmpty()) {
-                Map<String, Object> emptyResult = new HashMap<>();
-                emptyResult.put("taxCenterCode", taxCenterCode);
-                emptyResult.put("totalCases", 0);
-                emptyResult.put("casesByAuditType", Map.of());
-                emptyResult.put("cases", List.of());
-                emptyResult.put("status", "NO_ALLOCATIONS");
-                return ResponseEntity.ok(GenericResponse.success(emptyResult));
+            List<String> tcVariants = getTaxCenterVariants(taxCenterCode);
+            List<ApAuditCaseEntity> tcCases = new ArrayList<>();
+
+            for (String variant : tcVariants) {
+                tcCases.addAll(auditCaseRepository.findByTaxCenterCode(variant));
+            }
+
+            // If zero cases found for this tax center and database has no cases at all, attempt initial cascade
+            if (tcCases.isEmpty() && auditCaseRepository.count() == 0) {
+                List<AnnualAuditPlanEntity> plans = planRepository.findAll();
+                if (!plans.isEmpty()) {
+                    AnnualAuditPlanEntity latestPlan = plans.stream()
+                        .max(Comparator.comparing(AnnualAuditPlanEntity::getCreatedAt))
+                        .orElse(plans.get(0));
+
+                    System.err.println("⚡ Auto-triggering plan cascade for " + taxCenterCode + " on plan " + latestPlan.getId());
+                    cascadePlanToCasesUseCase.cascade(latestPlan.getId(), "SYSTEM");
+
+                    // Query again after cascade
+                    for (String variant : tcVariants) {
+                        tcCases.addAll(auditCaseRepository.findByTaxCenterCode(variant));
+                    }
+                }
             }
             
-            // Collect all plan IDs for this tax center
-            Set<UUID> planIds = allocations.stream()
-                .map(a -> a.getAnnualPlan().getId())
-                .collect(Collectors.toSet());
-            
-            // Fetch all cases for these plans
-            List<ApAuditCaseEntity> allCases = new ArrayList<>();
-            for (UUID planId : planIds) {
-                allCases.addAll(auditCaseRepository.findByPlanId(planId));
-            }
-            
-            // Filter to this tax center's cases using allocation IDs
-            Set<UUID> allocationIds = allocations.stream()
-                .map(PlanAllocationEntity::getId)
-                .collect(Collectors.toSet());
-            
-            List<ApAuditCaseEntity> tcCases = allCases.stream()
-                .filter(c -> allocationIds.contains(c.getAllocationId()))
+            // Deduplicate by case ID
+            tcCases = tcCases.stream()
+                .collect(Collectors.toMap(ApAuditCaseEntity::getId, c -> c, (c1, c2) -> c1))
+                .values()
+                .stream()
                 .collect(Collectors.toList());
-            
+
+            // Collect all plan IDs
+            Set<UUID> planIds = tcCases.stream()
+                .map(ApAuditCaseEntity::getPlanId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
             // Group by audit type
-            Map<String, List<Map<String, Object>>> casesByAuditType = new LinkedHashMap<>();
             Map<String, Integer> countByAuditType = new LinkedHashMap<>();
-            
             for (ApAuditCaseEntity c : tcCases) {
                 String auditType = c.getAuditType() != null ? c.getAuditType() : "UNKNOWN";
-                
-                Map<String, Object> caseData = new LinkedHashMap<>();
-                caseData.put("id", c.getId().toString());
-                caseData.put("caseNumber", c.getCaseNumber());
-                caseData.put("taxpayerId", c.getTaxpayerId());
-                caseData.put("auditType", auditType);
-                caseData.put("riskScore", c.getRiskScore());
-                caseData.put("status", c.getStatus());
-                caseData.put("assignedAuditorId", c.getAssignedAuditorId());
-                caseData.put("assignedTeamLeaderId", c.getAssignedTeamLeaderId());
-                caseData.put("createdAt", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
-                
-                casesByAuditType.computeIfAbsent(auditType, k -> new ArrayList<>()).add(caseData);
                 countByAuditType.merge(auditType, 1, Integer::sum);
             }
             
@@ -101,27 +97,11 @@ public class TaxCenterCasesController {
                     Collectors.toList()
                 ));
             byType.values().forEach(list -> 
-                list.sort(Comparator.comparing(ApAuditCaseEntity::getRiskScore).reversed()));
+                list.sort(Comparator.comparing(c -> c.getRiskScore() != null ? c.getRiskScore() : 0, Comparator.reverseOrder())));
             
-            // Interleave: take proportional sample from each audit type for balanced display
             int paginatedTotal = tcCases.size();
             List<ApAuditCaseEntity> paginated = new ArrayList<>();
             if (limit > 0 && paginatedTotal > 0) {
-                // Calculate how many per type to fill 'limit' results proportionally
-                Map<String, Integer> perTypeLimit = new LinkedHashMap<>();
-                int remaining = limit;
-                for (Map.Entry<String, List<ApAuditCaseEntity>> e : byType.entrySet()) {
-                    int share = (int) Math.ceil((double) e.getValue().size() / paginatedTotal * limit);
-                    perTypeLimit.put(e.getKey(), Math.min(share, e.getValue().size()));
-                    remaining -= perTypeLimit.get(e.getKey());
-                }
-                // Distribute remainder to largest groups
-                for (String type : byType.keySet()) {
-                    if (remaining <= 0) break;
-                    int canAdd = Math.min(remaining, byType.get(type).size() - perTypeLimit.getOrDefault(type, 0));
-                    perTypeLimit.merge(type, canAdd, Integer::sum);
-                    remaining -= canAdd;
-                }
                 // True round-robin interleaving across audit types
                 List<List<ApAuditCaseEntity>> typeLists = new ArrayList<>(byType.values());
                 int[] idx = new int[typeLists.size()];
@@ -156,13 +136,19 @@ public class TaxCenterCasesController {
             result.put("cases", paginated.stream()
                 .map(c -> {
                     Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", c.getId().toString());
                     m.put("caseNumber", c.getCaseNumber());
                     m.put("taxpayerId", c.getTaxpayerId());
+                    m.put("taxpayerName", c.getTaxpayerName() != null ? c.getTaxpayerName() : c.getTaxpayerId());
+                    m.put("sector", c.getSector());
                     m.put("auditType", c.getAuditType());
                     m.put("riskScore", c.getRiskScore());
                     m.put("status", c.getStatus());
+                    m.put("assignedTeamLeaderId", c.getAssignedTeamLeaderId());
+                    m.put("assignedTeamLeaderName", resolveUserDisplayName(c.getAssignedTeamLeaderId()));
+                    m.put("assignedAuditorId", c.getAssignedAuditorId());
+                    m.put("assignedAuditorName", resolveUserDisplayName(c.getAssignedAuditorId()));
                     m.put("estimatedRevenue", c.getEstimatedRevenue());
-                    // Extract plan year from case number (format: YEAR-REGION-TC-SEQ)
                     String cn = c.getCaseNumber();
                     m.put("planYear", cn != null && cn.contains("-") ? cn.substring(0, cn.indexOf("-")) : null);
                     return m;
@@ -178,5 +164,53 @@ public class TaxCenterCasesController {
         } catch (Exception e) {
             return ResponseEntity.ok(GenericResponse.error("ERROR", "Failed to fetch cases: " + e.getMessage()));
         }
+    }
+
+    private List<String> getTaxCenterVariants(String code) {
+        return CaseManagementController.getTaxCenterVariants(code);
+    }
+
+    private String resolveUserDisplayName(String identifier) {
+        if (identifier == null || identifier.isBlank()) return null;
+        if (identifier.endsWith("-committee")) {
+            String type = identifier.replace("-committee", "").toUpperCase();
+            return switch (type) {
+                case "JOINT" -> "Joint Audit Committee";
+                case "TP", "TRANSFER" -> "Transfer Pricing Committee";
+                case "DESK" -> "Desk Audit Committee";
+                case "COMP" -> "Comprehensive Audit Committee";
+                case "ISSUE" -> "Issue Audit Committee";
+                default -> type + " Committee";
+            };
+        }
+        if (userManagementUseCase != null) {
+            try {
+                for (mor.itas.domain.model.ap.User u : userManagementUseCase.getAllUsers()) {
+                    boolean match = (u.getUsername() != null && u.getUsername().equalsIgnoreCase(identifier))
+                                 || (u.getUserId() != null && u.getUserId().toString().equalsIgnoreCase(identifier))
+                                 || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(identifier));
+                    if (match) {
+                        return u.getFullName();
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (identifier.startsWith("u-tl-") || identifier.startsWith("u-aud-")) {
+            String[] parts = identifier.split("-");
+            if (parts.length >= 4) {
+                boolean isTl = parts[1].equals("tl");
+                String role = isTl ? "TL" : "Auditor";
+                String type = parts[parts.length - 2].toUpperCase();
+                String num = parts[parts.length - 1];
+                StringBuilder tcB = new StringBuilder();
+                for (int i = 2; i < parts.length - 2; i++) {
+                    if (tcB.length() > 0) tcB.append(" ");
+                    tcB.append(parts[i].replace("_", " ").toUpperCase());
+                }
+                String tc = tcB.toString();
+                return type + " " + role + "-" + num + (tc.isEmpty() ? "" : " (" + tc + ")");
+            }
+        }
+        return identifier;
     }
 }

@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Badge, Alert, Tabs } from '../../../../components/ui/index.jsx';
+import { Card, StatCard, Button, Badge, Alert, Tabs, Modal, Input, Textarea, Select } from '../../../../components/ui/index.jsx';
 import {
   Users, CheckCircle2, Clock, AlertTriangle, BarChart2,
-  FileText, Scale, ShieldAlert, Layers3, RefreshCw
+  FileText, Scale, ShieldAlert, Layers3, RefreshCw, Landmark, Send, Search, Check, ChevronRight
 } from 'lucide-react';
-import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
+import TpCommitteeApprovalModal from '../../../tp/components/TpCommitteeApprovalModal.jsx';
 import TpWorkflowTaskPanel from '../../../tp/components/TpWorkflowTaskPanel.jsx';
+import CaseAssignmentToTeamLeaders from '../../components/CaseAssignmentToTeamLeaders.jsx';
 
 /**
  * CommitteeDashboard — TP Process Owner / Committee Dashboard
@@ -32,8 +33,7 @@ export default function CommitteeDashboard({ view }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('tasks');
-  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
-  const [tpWorkspacePhase, setTpWorkspacePhase] = useState(null);
+  const [committeeReviewCase, setCommitteeReviewCase] = useState(null);
 
   const isTP = (user?.auditType || '').toUpperCase().includes('TRANSFER');
 
@@ -54,19 +54,6 @@ export default function CommitteeDashboard({ view }) {
 
   useEffect(() => { fetchCases(); }, [fetchCases]);
 
-  // If workspace is open, render fullscreen
-  if (tpWorkspaceCase && tpWorkspacePhase) {
-    return (
-      <TpAuditWorkspace
-        caseData={tpWorkspaceCase}
-        user={{ ...user, role: 'process_owner' }}
-        initialPhase={tpWorkspacePhase}
-        onClose={() => { setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
-        onRefresh={() => { fetchCases(); setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
-      />
-    );
-  }
-
   const total        = cases.length;
   const pendingMyAction = cases.filter(c => [
     'SUBMITTED_FOR_COMMITTEE',
@@ -78,10 +65,91 @@ export default function CommitteeDashboard({ view }) {
   const inExecution  = cases.filter(c => c.status === 'IN_PROGRESS').length;
   const completed    = cases.filter(c => ['COMPLETED', 'CLOSED'].includes(c.status)).length;
 
+  const [deliberationModal, setDeliberationModal] = useState(false);
+  const [selectedDelibView, setSelectedDelibView] = useState(null);
+  const [delibSuccess, setDelibSuccess] = useState('');
+  const [deliberations, setDeliberations] = useState([
+    {
+      id: 'DELIB-2026-001',
+      sessionDate: '2026-09-02',
+      sessionTitle: 'Q3 Transfer Pricing Statutory Review — Cross-Border Management Fees',
+      caseNumber: '2027-d271bc17-AA-TC-AA-01-0374',
+      taxpayerName: 'Phoenix Transportation Ltd',
+      agenda: 'Evaluation of management fee deductions and vessel charter agreements',
+      quorum: ['Abebe Bikila (Chair)', 'Dr. Almaz Tekle (Senior Economist)', 'Yonas Haile (Legal Counsel)', 'Dawit Tadesse (LTO Rep)'],
+      decision: 'APPROVED',
+      proposedAdjustment: 24500000,
+      decisionNotes: 'Quorum established. The committee unanimously approved the proposed transfer pricing audit scope focusing on disallowance of management fee deductions under Art. 79 of Tax Proclamation 979/2016.',
+      resolutionNumber: 'TP-RES-2026/042'
+    },
+    {
+      id: 'DELIB-2026-002',
+      sessionDate: '2026-09-04',
+      sessionTitle: 'Offshore Intangible Brand Royalty Assessment Hearing',
+      caseNumber: '2027-d271bc17-AA-TC-AA-01-0375',
+      taxpayerName: 'Alpha Finance Ltd',
+      agenda: 'Interquartile range analysis on trademark royalties paid to Swiss affiliate',
+      quorum: ['Abebe Bikila (Chair)', 'Dr. Almaz Tekle (Senior Economist)', 'Yonas Haile (Legal Counsel)'],
+      decision: 'APPROVED_WITH_CONDITIONS',
+      proposedAdjustment: 18200000,
+      decisionNotes: 'Approved for full audit. Committee directs the field audit team to request local file DEMPE evidence and intercompany agreements via IDR-01 within 10 days of entry conference.',
+      resolutionNumber: 'TP-RES-2026/043'
+    }
+  ]);
+
+  const [newDelib, setNewDelib] = useState({
+    sessionTitle: '',
+    caseId: '',
+    agenda: '',
+    decision: 'APPROVED',
+    proposedAdjustment: '',
+    statutoryBasis: 'Directive No. 43/2015 & Art. 79 of Proclamation 979/2016',
+    decisionNotes: '',
+    attendees: ['Committee Chair (Presiding)', 'Senior TP Economist', 'Legal & Treaty Counsel']
+  });
+
+  const handleRecordDeliberation = () => {
+    if (!newDelib.sessionTitle || !newDelib.decisionNotes) {
+      alert('Please enter a session title and formal committee decision notes.');
+      return;
+    }
+
+    const selectedCaseObj = cases.find(c => c.id === newDelib.caseId) || cases[0];
+    const newRecord = {
+      id: `DELIB-2026-00${deliberations.length + 1}`,
+      sessionDate: new Date().toISOString().split('T')[0],
+      sessionTitle: newDelib.sessionTitle,
+      caseNumber: selectedCaseObj?.caseNumber || 'CASE-TP-2026',
+      taxpayerName: selectedCaseObj?.taxpayerName || 'Selected Taxpayer',
+      agenda: newDelib.agenda || 'Statutory Transfer Pricing Review',
+      quorum: newDelib.attendees,
+      decision: newDelib.decision,
+      proposedAdjustment: parseFloat(newDelib.proposedAdjustment) || 0,
+      decisionNotes: newDelib.decisionNotes,
+      resolutionNumber: `TP-RES-2026/0${44 + deliberations.length}`
+    };
+
+    setDeliberations([newRecord, ...deliberations]);
+    setDelibSuccess(`✅ Formal Resolution ${newRecord.resolutionNumber} successfully recorded in the statutory register!`);
+    setDeliberationModal(false);
+    setNewDelib({
+      sessionTitle: '',
+      caseId: '',
+      agenda: '',
+      decision: 'APPROVED',
+      proposedAdjustment: '',
+      statutoryBasis: 'Directive No. 43/2015 & Art. 79 of Proclamation 979/2016',
+      decisionNotes: '',
+      attendees: ['Committee Chair (Presiding)', 'Senior TP Economist', 'Legal & Treaty Counsel']
+    });
+  };
+
   const tabs = [
-    { id: 'tasks',    label: '⚡ Action Required',    count: pendingMyAction },
-    { id: 'cases',    label: 'All TP Cases',           count: total },
-    { id: 'reports',  label: 'Management Reports',     count: 0 },
+    { id: 'tasks',        label: '⚡ Action Required',                  count: pendingMyAction },
+    { id: 'assign',       label: '📋 Assign Cases to TLs',              count: cases.filter(c => !c.assignedTeamLeaderId || c.status === 'PENDING_ASSIGNMENT').length },
+    { id: 'deliberation', label: '🏛️ Committee Deliberations & Votes', count: deliberations.length },
+    { id: 'cases',        label: 'All TP Cases',                        count: total },
+    { id: 'reports',      label: 'Management Reports',                  count: 6 },
   ];
 
   const riskColors = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
@@ -104,39 +172,57 @@ export default function CommitteeDashboard({ view }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <span>TP Process Owner — Committee Dashboard</span>
-            <Badge color="purple">Process Owner</Badge>
+            <span>Transfer Pricing Audit Review Committee</span>
+            <Badge color="purple">Committee Chair / Member</Badge>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isTP ? 'Transfer Pricing Audit Review Committee' : 'Joint Audit Committee'}
-            {user?.taxCenter && ` • Tax Center: ${user.taxCenter}`}
+            {isTP ? 'Federal & Regional Transfer Pricing Audit Committee' : 'Joint Audit Review Committee'}
+            {user?.taxCenter && ` • Jurisdiction: ${user.taxCenter}`}
+            {user?.username && ` • Actor: ${user.username}`}
           </p>
         </div>
-        <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Landmark}
+            onClick={() => setDeliberationModal(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            Convene Committee Session
+          </Button>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Total TP Cases"     value={total}              icon={Layers3}      color="purple" sub="Under committee" />
-        <StatCard label="Pending My Action"  value={pendingMyAction}    icon={AlertTriangle} color="amber"  sub="Blocked on you" />
-        <StatCard label="In Execution"       value={inExecution}        icon={Clock}         color="blue"   sub="Auditors working" />
-        <StatCard label="Completed"          value={completed}          icon={CheckCircle2}  color="green"  sub="Cases closed" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Total Committee Cases" value={total} icon={Layers3} color="purple" sub="Under committee jurisdiction" />
+        <StatCard label="Pending Gate Approvals" value={pendingMyAction} icon={AlertTriangle} color="amber" sub="Action required to unblock" />
+        <StatCard label="Active Deliberations" value={deliberations.length} icon={Landmark} color="blue" sub="Formal resolutions recorded" />
+        <StatCard label="Completed / Closed" value={completed} icon={CheckCircle2} color="green" sub="Audit files finalized" />
       </div>
+
+      {delibSuccess && (
+        <Alert type="success" title="Committee Registry Notice">
+          {delibSuccess}
+        </Alert>
+      )}
 
       {/* Process Owner Responsibilities Banner */}
       <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800">
         <p className="text-xs font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider mb-2">
-          Process Owner Workflow Gates — Your Approvals Unblock These Steps:
+          Statutory Committee Workflow Gates — Your Decisions Govern These Milestones:
         </p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs text-purple-700 dark:text-purple-400">
           {[
-            { icon: <BarChart2 className="w-3 h-3" />, label: '① Hypothesis Review' },
-            { icon: <FileText  className="w-3 h-3" />, label: '② Plan Approval' },
-            { icon: <ShieldAlert className="w-3 h-3"/>, label: '③ TP Report Review' },
+            { icon: <BarChart2 className="w-3 h-3" />, label: '① Scope & Hypothesis Review' },
+            { icon: <FileText  className="w-3 h-3" />, label: '② Audit Plan & IDR Approval' },
+            { icon: <ShieldAlert className="w-3 h-3"/>, label: '③ Benchmark IQR Review' },
             { icon: <Users     className="w-3 h-3" />, label: '④ Exit Conference Auth' },
-            { icon: <Scale     className="w-3 h-3" />, label: '⑤ Notice Authorization' },
+            { icon: <Scale     className="w-3 h-3" />, label: '⑤ Statutory Assessment Sign-Off' },
           ].map((g, i) => (
             <div key={i} className="flex items-center gap-1 font-semibold">
               {g.icon} {g.label}
@@ -155,18 +241,110 @@ export default function CommitteeDashboard({ view }) {
         {tab === 'tasks' && (
           <div className="p-6 space-y-4">
             <Alert type="warning" title="Process Owner — Workflow Gate Actions Required">
-              The items below are routed to YOUR dashboard because they CANNOT proceed without your
-              decision as Process Owner / Authorized Official. Each item is a statutory control point.
-              Delays here directly delay the audit and may cause statutory deadline breaches.
+              The items below are routed to the Committee because they CANNOT proceed without formal
+              statutory authorization. Each milestone represents a mandatory quality and legal checkpoint.
             </Alert>
             <TpWorkflowTaskPanel
               role="process_owner"
               user={user}
-              onOpenWorkspace={(caseData, targetPhase) => {
-                setTpWorkspacePhase(targetPhase);
-                setTpWorkspaceCase(caseData);
+              onOpenWorkspace={(caseData) => {
+                setCommitteeReviewCase(caseData);
               }}
             />
+          </div>
+        )}
+
+        {/* ── ASSIGN CASES TO TEAM LEADERS TAB ─────────────────────────────────── */}
+        {tab === 'assign' && (
+          <div className="p-2">
+            <CaseAssignmentToTeamLeaders
+              committee={user?.username || 'tp-committee'}
+              auditType="TRANSFER_PRICING"
+              taxCenter={user?.taxCenter}
+            />
+          </div>
+        )}
+
+        {/* ── DELIBERATIONS & RESOLUTIONS TAB ─────────────────────────────────── */}
+        {tab === 'deliberation' && (
+          <div className="p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Landmark className="w-5 h-5 text-purple-600" />
+                  <span>Statutory Committee Deliberations & Resolution Registry</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Official registry of formal Transfer Pricing Review Committee sessions, quorum confirmations, and statutory decisions
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                icon={Landmark}
+                onClick={() => setDeliberationModal(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+              >
+                Convene Deliberation Session
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 dark:bg-slate-700/60 border-b border-gray-200 dark:border-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Resolution #</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Date & Title</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Case / Taxpayer</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Quorum Members</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Decision</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 dark:text-slate-300 uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                  {deliberations.map(d => (
+                    <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/40 transition">
+                      <td className="px-4 py-3 text-xs font-mono font-bold text-purple-700 dark:text-purple-400">
+                        {d.resolutionNumber}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-900 dark:text-white text-xs">{d.sessionTitle}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{d.sessionDate}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-800 dark:text-slate-200 text-xs">{d.taxpayerName}</p>
+                        <p className="text-[10px] text-gray-400 font-mono">{d.caseNumber}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {d.quorum.map((m, idx) => (
+                            <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              {m.split('(')[0].trim()}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          color={d.decision === 'APPROVED' ? 'green' : d.decision === 'APPROVED_WITH_CONDITIONS' ? 'blue' : 'amber'}
+                          size="xs"
+                        >
+                          {d.decision.replace(/_/g, ' ')}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          onClick={() => setSelectedDelibView(d)}
+                        >
+                          View Resolution
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -218,15 +396,13 @@ export default function CommitteeDashboard({ view }) {
                             <Button
                               size="sm"
                               variant="primary"
-                              icon={Layers3}
+                              icon={Landmark}
                               className="bg-purple-600 hover:bg-purple-700 text-white"
                               onClick={() => {
-                                const phase = c.tpCurrentPhase || 'DETAILED_RISK_ASSESSMENT';
-                                setTpWorkspacePhase(phase);
-                                setTpWorkspaceCase(c);
+                                setCommitteeReviewCase(c);
                               }}
                             >
-                              {needsAction ? 'Action Now' : 'Open'}
+                              {needsAction ? 'Deliberate & Authorize' : 'Review Dossier'}
                             </Button>
                           </div>
                         </td>
@@ -305,6 +481,218 @@ export default function CommitteeDashboard({ view }) {
           </div>
         )}
       </Card>
+      {/* ── CONVENE DELIBERATION SESSION MODAL ───────────────────────── */}
+      {deliberationModal && (
+        <Modal
+          open={deliberationModal}
+          onClose={() => setDeliberationModal(false)}
+          title="🏛️ Convene Statutory Committee Deliberation Session"
+          size="lg"
+          footer={
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => setDeliberationModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                icon={Landmark}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={handleRecordDeliberation}
+              >
+                Record Statutory Resolution
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <Alert type="info">
+              Formal committee sessions record statutory quorum, deliberations, and binding decisions under Directive No. 43/2015 and Proclamation 979/2016.
+            </Alert>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Session Title <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="e.g. Q3 Transfer Pricing Scope & Assessment Review"
+                  value={newDelib.sessionTitle}
+                  onChange={e => setNewDelib({ ...newDelib, sessionTitle: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Select Case Under Deliberation
+                </label>
+                <Select
+                  value={newDelib.caseId}
+                  onChange={e => setNewDelib({ ...newDelib, caseId: e.target.value })}
+                >
+                  <option value="">Select a case...</option>
+                  {cases.slice(0, 30).map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.caseNumber} — {c.taxpayerName || c.taxpayerId}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                Agenda / Statutory Matter Examined
+              </label>
+              <Input
+                placeholder="e.g. Cross-border management fee deductions & intercompany brand royalties"
+                value={newDelib.agenda}
+                onChange={e => setNewDelib({ ...newDelib, agenda: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Committee Decision / Vote
+                </label>
+                <Select
+                  value={newDelib.decision}
+                  onChange={e => setNewDelib({ ...newDelib, decision: e.target.value })}
+                >
+                  <option value="APPROVED">APPROVED (Authorise Full Audit / Notice)</option>
+                  <option value="APPROVED_WITH_CONDITIONS">APPROVED WITH CONDITIONS (Require Additional IDR)</option>
+                  <option value="DEFERRED">DEFERRED (Require Updated Comparable Study)</option>
+                  <option value="DISMISSED">DISMISSED (Close TP Inquiry)</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Proposed TP Adjustment (ETB)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 24500000"
+                  value={newDelib.proposedAdjustment}
+                  onChange={e => setNewDelib({ ...newDelib, proposedAdjustment: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
+              <p className="font-bold text-slate-800 dark:text-slate-200 mb-1.5">Confirmed Quorum Members Present:</p>
+              <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-600 dark:text-slate-300">
+                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-500" /> Committee Chair (Presiding)</span>
+                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-500" /> Senior TP Economist</span>
+                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-500" /> Tax Legal & Treaty Counsel</span>
+                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-500" /> Large Taxpayer Office (LTO) Delegate</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                Formal Committee Resolution Minutes & Rationale <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Enter detailed statutory findings, comparable benchmark evaluation, and directions to the field audit team..."
+                value={newDelib.decisionNotes}
+                onChange={e => setNewDelib({ ...newDelib, decisionNotes: e.target.value })}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── VIEW FORMAL RESOLUTION EXTRACT MODAL ───────────────────────── */}
+      {selectedDelibView && (
+        <Modal
+          open={!!selectedDelibView}
+          onClose={() => setSelectedDelibView(null)}
+          title={`📜 Official Committee Resolution: ${selectedDelibView.resolutionNumber}`}
+          size="lg"
+          footer={
+            <div className="flex justify-between items-center w-full">
+              <span className="text-xs text-slate-500 font-mono">Directive No. 43/2015 Compliance Stamp Verified</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => window.print()}>
+                  Print Extract
+                </Button>
+                <Button size="sm" variant="primary" onClick={() => setSelectedDelibView(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-xs">
+            <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400">Federal Democratic Republic of Ethiopia</p>
+                <h4 className="text-base font-extrabold text-slate-900 dark:text-white">Ministry of Revenues • Transfer Pricing Review Committee</h4>
+                <p className="text-slate-500 text-[11px] mt-0.5">Statutory Decision & Resolution Registry Extract</p>
+              </div>
+              <div className="text-right font-mono">
+                <Badge color="purple">{selectedDelibView.resolutionNumber}</Badge>
+                <p className="text-[10px] text-slate-400 mt-1">{selectedDelibView.sessionDate}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-slate-500 uppercase text-[10px] font-bold">Taxpayer / Enterprise</p>
+                <p className="font-bold text-slate-900 dark:text-white text-sm">{selectedDelibView.taxpayerName}</p>
+                <p className="font-mono text-slate-400 text-[11px]">Case Number: {selectedDelibView.caseNumber}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 uppercase text-[10px] font-bold">Official Decision</p>
+                <Badge
+                  color={selectedDelibView.decision === 'APPROVED' ? 'green' : 'blue'}
+                  size="md"
+                >
+                  {selectedDelibView.decision.replace(/_/g, ' ')}
+                </Badge>
+                {selectedDelibView.proposedAdjustment > 0 && (
+                  <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-1">
+                    Proposed Adjustment: {selectedDelibView.proposedAdjustment.toLocaleString()} ETB
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+              <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">Quorum Attestation:</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedDelibView.quorum.map((q, idx) => (
+                  <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded font-medium">
+                    ✓ {q}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">Resolution Deliberation Record & Directives:</p>
+              <p className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 leading-relaxed">
+                {selectedDelibView.decisionNotes}
+              </p>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Dedicated Committee Deliberation & Resolution Console Modal */}
+      {committeeReviewCase && (
+        <TpCommitteeApprovalModal
+          caseData={committeeReviewCase}
+          user={user}
+          onClose={() => setCommitteeReviewCase(null)}
+          onRefresh={fetchCases}
+          onResolutionAdopted={(newDelib) => {
+            setDeliberations(prev => [newDelib, ...prev]);
+          }}
+        />
+      )}
     </div>
   );
 }

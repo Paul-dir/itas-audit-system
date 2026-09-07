@@ -14,9 +14,11 @@ import CaseManagement from './features/ap/pages/taxcenter/CaseManagement.jsx';
 import TeamLeaderDashboard from './features/ap/pages/teamleader/TeamLeaderDashboard.jsx';
 import AuditorDashboard from './features/ap/pages/auditor/AuditorDashboard.jsx';
 import CommitteeDashboard from './features/ap/pages/committee/CommitteeDashboard.jsx';
+import CommitteeCaseAssignment from './features/ap/pages/committee/CommitteeCaseAssignment.jsx';
 import RiskAnalysisDashboard from './features/ap/pages/planning/RiskAnalysisDashboard.jsx';
 import RiskEngineDashboard from './features/ap/pages/riskengine/RiskEngineDashboard.jsx';
 import AuditRequesterDashboard from './features/ap/pages/requester/AuditRequesterDashboard.jsx';
+import TaxpayerPortalDashboard from './features/portal/pages/TaxpayerPortalDashboard.jsx';
 import { Spinner } from './components/ui/index.jsx';
 
 const PAGE_TITLES = {
@@ -62,6 +64,12 @@ const PAGE_TITLES = {
   committee: {
     dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
     reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
+    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
+  },
+  committee_member: {
+    dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
+    reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
+    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
   },
   senior_management: {
     dashboard: { title: 'Senior Management',  subtitle: 'Final approval of national audit plans' },
@@ -72,10 +80,18 @@ const PAGE_TITLES = {
     referrals: { title: 'My Referrals & Flags',            subtitle: 'Cases flagged for tax clearance, closure & fraud audit' },
     new_referral: { title: 'Submit Audit Referral',       subtitle: 'Flag taxpayer for desk, comprehensive or TP audit' },
   },
+  taxpayer: {
+    dashboard: { title: 'Taxpayer Compliance Portal', subtitle: 'View audit cases, statutory notices, and upload requested documents' }
+  }
 };
 
 function RoleRouter({ user, view }) {
   const role = user.role;
+
+  // Taxpayer Portal route or role
+  if (window.location.pathname.startsWith('/portal') || role === 'taxpayer' || role === 'TAXPAYER') {
+    return <TaxpayerPortalDashboard />;
+  }
 
   // Risk Engine page (accessible to tax center managers)
   if (view === 'risk_engine') {
@@ -99,7 +115,10 @@ function RoleRouter({ user, view }) {
   }
   if (role === 'team_leader')      return <TeamLeaderDashboard view={view} />;
   if (role === 'auditor')          return <AuditorDashboard view={view} />;
-  if (role === 'committee')        return <CommitteeDashboard view={view} />;
+  if (role === 'committee' || role === 'committee_member') {
+    if (view === 'assign-cases') return <CommitteeCaseAssignment />;
+    return <CommitteeDashboard view={view} />;
+  }
   if (role === 'audit_requester')  return <AuditRequesterDashboard view={view} />;
 
   return (
@@ -126,6 +145,11 @@ export default function App() {
   }
 
   if (!user) return <Login />;
+
+  // Direct URL prefix check for /portal
+  if (window.location.pathname.startsWith('/portal')) {
+    return <TaxpayerPortalDashboard />;
+  }
 
   const pageInfo =
     PAGE_TITLES[user.role]?.[view] ||

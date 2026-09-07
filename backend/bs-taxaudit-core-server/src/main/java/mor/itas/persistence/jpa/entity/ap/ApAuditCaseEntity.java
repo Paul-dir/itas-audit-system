@@ -91,6 +91,9 @@ public class ApAuditCaseEntity {
     @Column(length = 64, name = "assigned_team_leader_id")
     private String assignedTeamLeaderId;
 
+    @Column(name = "committee_id", columnDefinition = "UUID")
+    private UUID committeeId;
+
     @Column(length = 64, name = "assigned_auditor_id")
     private String assignedAuditorId;
 
@@ -109,30 +112,30 @@ public class ApAuditCaseEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
-    // ── TP-Specific Child Entities ────────────────────────────────────────────
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpRiskAssessmentEntity tpRiskAssessment;
+    // ── TP-Specific Child Entities (Changed to OneToMany to avoid N+1 issue) ──
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpRiskAssessmentEntity> tpRiskAssessments = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpWorkingHypothesisEntity tpWorkingHypothesis;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpWorkingHypothesisEntity> tpWorkingHypotheses = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpAuditPlanEntity tpAuditPlan;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpAuditPlanEntity> tpAuditPlans = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpPlanningMeetingEntity tpPlanningMeeting;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpPlanningMeetingEntity> tpPlanningMeetings = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpFieldWorkDataEntity tpFieldWorkData;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpFieldWorkDataEntity> tpFieldWorkDatas = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpAnalysisDataEntity tpAnalysisData;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpAnalysisDataEntity> tpAnalysisDatas = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditReportEntity> tpAuditReports = new java.util.ArrayList<>();
 
-    @OneToOne(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TpAuditNoticeEntity tpAuditNotice;
+    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private java.util.List<TpAuditNoticeEntity> tpAuditNotices = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpObjectionEntity> tpObjections = new java.util.ArrayList<>();
@@ -207,6 +210,9 @@ public class ApAuditCaseEntity {
     public String getAssignedTeamLeaderId() { return assignedTeamLeaderId; }
     public void setAssignedTeamLeaderId(String assignedTeamLeaderId) { this.assignedTeamLeaderId = assignedTeamLeaderId; }
 
+    public UUID getCommitteeId() { return committeeId; }
+    public void setCommitteeId(UUID committeeId) { this.committeeId = committeeId; }
+
     public String getAssignedAuditorId() { return assignedAuditorId; }
     public void setAssignedAuditorId(String assignedAuditorId) { this.assignedAuditorId = assignedAuditorId; }
 
@@ -225,29 +231,29 @@ public class ApAuditCaseEntity {
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessment; }
-    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessment = tpRiskAssessment; }
+    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessments.isEmpty() ? null : tpRiskAssessments.get(0); }
+    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessments.clear(); if (tpRiskAssessment != null) this.tpRiskAssessments.add(tpRiskAssessment); }
 
-    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypothesis; }
-    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypothesis = tpWorkingHypothesis; }
+    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypotheses.isEmpty() ? null : tpWorkingHypotheses.get(0); }
+    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypotheses.clear(); if (tpWorkingHypothesis != null) this.tpWorkingHypotheses.add(tpWorkingHypothesis); }
 
-    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlan; }
-    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlan = tpAuditPlan; }
+    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlans.isEmpty() ? null : tpAuditPlans.get(0); }
+    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlans.clear(); if (tpAuditPlan != null) this.tpAuditPlans.add(tpAuditPlan); }
 
-    public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeeting; }
-    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeeting = tpPlanningMeeting; }
+    public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeetings.isEmpty() ? null : tpPlanningMeetings.get(0); }
+    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeetings.clear(); if (tpPlanningMeeting != null) this.tpPlanningMeetings.add(tpPlanningMeeting); }
 
-    public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkData; }
-    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkData = tpFieldWorkData; }
+    public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkDatas.isEmpty() ? null : tpFieldWorkDatas.get(0); }
+    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkDatas.clear(); if (tpFieldWorkData != null) this.tpFieldWorkDatas.add(tpFieldWorkData); }
 
-    public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisData; }
-    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisData = tpAnalysisData; }
+    public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisDatas.isEmpty() ? null : tpAnalysisDatas.get(0); }
+    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisDatas.clear(); if (tpAnalysisData != null) this.tpAnalysisDatas.add(tpAnalysisData); }
 
     public java.util.List<TpAuditReportEntity> getTpAuditReports() { return tpAuditReports; }
     public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) { this.tpAuditReports = tpAuditReports; }
 
-    public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotice; }
-    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotice = tpAuditNotice; }
+    public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotices.isEmpty() ? null : tpAuditNotices.get(0); }
+    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotices.clear(); if (tpAuditNotice != null) this.tpAuditNotices.add(tpAuditNotice); }
 
     public java.util.List<TpObjectionEntity> getTpObjections() { return tpObjections; }
     public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) { this.tpObjections = tpObjections; }

@@ -152,7 +152,7 @@ export function QuickActionCard({ icon: Icon, title, description, color = 'blue'
 // ──── MODAL ─────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, size = 'md', footer }) {
   if (!open) return null;
-  const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl', full: 'max-w-6xl' };
+  const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', '2xl': 'max-w-3xl', '3xl': 'max-w-5xl', xl: 'max-w-4xl', full: 'max-w-6xl' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />

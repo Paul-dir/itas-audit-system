@@ -30,6 +30,8 @@ class PlanService {
       // Frontend uses: addis_ababa, amhara, oromia, dire_dawa, snnpr, somali
       // Backend expects: AA, BA, BB, AB, CA, SO
       const regionIdToCode = {
+        'federal_level': 'FED',
+        'fed': 'FED',
         'addis_ababa': 'AA',
         'amhara': 'BA',
         'oromia': 'BB',
@@ -234,8 +236,8 @@ class PlanService {
       let plans = Array.isArray(result) ? result : (result.data || []);
       
       // Map backend region codes to frontend region IDs
-      const codeToId = { 'AA': 'addis_ababa', 'BA': 'amhara', 'BB': 'oromia', 'AB': 'dire_dawa', 'CA': 'snnpr', 'SO': 'somali' };
-      const idToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+      const codeToId = { 'FED': 'federal_level', 'AA': 'addis_ababa', 'BA': 'amhara', 'BB': 'oromia', 'AB': 'dire_dawa', 'CA': 'snnpr', 'SO': 'somali' };
+      const idToCode = { 'federal_level': 'FED', 'fed': 'FED', 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
       
       plans = plans.map(plan => {
         const mapped = { ...plan };
@@ -329,6 +331,8 @@ class PlanService {
       // Convert frontend region ID to backend region code if needed
       // Frontend uses IDs like "addis_ababa", backend API expects codes like "AA"
       const regionCodeToBackend = {
+        'federal_level': 'FED',
+        'fed': 'FED',
         'addis_ababa': 'AA',
         'amhara': 'BA',
         'oromia': 'BB',
@@ -413,6 +417,7 @@ class PlanService {
           const frontendTcFeedback = {};
           
           const backendToFrontendTcCode = {
+            'federal-lto1': 'federal_level-tc1', 'federal-lto2': 'federal_level-tc2',
             'AA-TC1': 'addis_ababa-tc1', 'AA-TC2': 'addis_ababa-tc2', 'AA-TC3': 'addis_ababa-tc3',
             'BA-TC1': 'amhara-tc1', 'BA-TC2': 'amhara-tc2', 'BA-TC3': 'amhara-tc3',
             'BB-TC1': 'oromia-tc1', 'BB-TC2': 'oromia-tc2', 'BB-TC3': 'oromia-tc3',
@@ -821,6 +826,8 @@ class PlanService {
       // Frontend uses: addis_ababa, amhara, oromia, dire_dawa, snnpr, somali
       // Backend expects: AA, BA, BB, AB, CA, SO
       const regionIdToCode = {
+        'federal_level': 'FED',
+        'fed': 'FED',
         'addis_ababa': 'AA',
         'amhara': 'BA',
         'oromia': 'BB',
@@ -829,7 +836,7 @@ class PlanService {
         'somali': 'SO',
       };
 
-      const backendRegionCode = regionIdToCode[region];
+      const backendRegionCode = regionIdToCode[region] || (region && region.toUpperCase());
       if (!backendRegionCode) {
         throw new Error(`Unknown region ID: ${region}`);
       }
@@ -842,6 +849,8 @@ class PlanService {
       // ✅ Map frontend tax center IDs to backend codes
       // Frontend uses: addis_ababa-tc1, Backend expects: AA-TC1
       const tcIdToBackendCode = {
+        'federal-lto1': 'federal-lto1', 'federal-lto2': 'federal-lto2',
+        'federal_level-tc1': 'federal-lto1', 'federal_level-tc2': 'federal-lto2',
         'addis_ababa-tc1': 'AA-TC1', 'addis_ababa-tc2': 'AA-TC2', 'addis_ababa-tc3': 'AA-TC3',
         'amhara-tc1': 'BA-TC1', 'amhara-tc2': 'BA-TC2', 'amhara-tc3': 'BA-TC3',
         'oromia-tc1': 'BB-TC1', 'oromia-tc2': 'BB-TC2', 'oromia-tc3': 'BB-TC3',
@@ -906,10 +915,11 @@ class PlanService {
 
       // Map frontend region ID to backend code
       const regionIdToCode = {
+        'federal_level': 'FED', 'fed': 'FED',
         'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB',
         'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO',
       };
-      const backendRegionCode = regionIdToCode[regionCode] || regionCode;
+      const backendRegionCode = regionIdToCode[regionCode] || (regionCode && regionCode.toUpperCase());
 
       // Build aggregated feedback from plan allocations
       // Fetch current plan to get distribution data

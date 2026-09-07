@@ -68,12 +68,13 @@ public class PlanManagementUseCase {
             
             // Regional capacity weights
             Map<String, Double> regionWeights = Map.of(
-                "AA", 0.60, // Addis Ababa gets 60%
-                "BA", 0.10, // Amhara
-                "BB", 0.10, // Oromia
-                "AB", 0.08, // Dire Dawa
-                "CA", 0.07, // SNNPR
-                "SO", 0.05  // Somalia
+                "FED", 0.15, // Federal Level gets 15%
+                "AA", 0.45,  // Addis Ababa gets 45%
+                "BA", 0.10,  // Amhara
+                "BB", 0.10,  // Oromia
+                "AB", 0.08,  // Dire Dawa
+                "CA", 0.07,  // SNNPR
+                "SO", 0.05   // Somalia
             );
             
             // Audit Type weights (high value audits get more revenue share)
@@ -365,6 +366,7 @@ public class PlanManagementUseCase {
         // This must be done AFTER save so we have allocation IDs
         // Map region codes to distribution keys (e.g., AA -> addis_ababa)
         Map<String, String> regionCodeToDistKey = Map.ofEntries(
+            Map.entry("FED", "federal_level"),
             Map.entry("AA", "addis_ababa"), Map.entry("BA", "amhara"),
             Map.entry("BB", "oromia"), Map.entry("AB", "dire_dawa"),
             Map.entry("CA", "snnpr"), Map.entry("SO", "somali")

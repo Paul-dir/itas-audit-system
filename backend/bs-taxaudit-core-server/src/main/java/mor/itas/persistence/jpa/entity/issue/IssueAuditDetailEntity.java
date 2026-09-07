@@ -19,11 +19,21 @@ import java.util.UUID;
 public class IssueAuditDetailEntity {
 
     @Id
+    @Builder.Default
     private UUID id = UUID.randomUUID();
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "audit_case_id", nullable = false, unique = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ApAuditCaseEntity auditCase;
+
+    public UUID getAuditCaseId() {
+        return auditCase != null ? auditCase.getId() : null;
+    }
+
+    public String getCaseNumber() {
+        return auditCase != null ? auditCase.getCaseNumber() : null;
+    }
 
     @Column(name = "current_phase", length = 64)
     private String currentPhase;

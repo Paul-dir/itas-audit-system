@@ -39,99 +39,10 @@ export default function PlanningDashboard({ view }) {
     refreshPlans();
   }, []);
 
-  // Show full configuration page if view is 'plan-configuration'
-  if (view === 'plan-configuration') {
+  // Show full configuration page if view is 'plan-configuration' or 'config'
+  if (view === 'plan-configuration' || view === 'config') {
     return <PlanConfigurationPage />;
   }
-
-  // Config panel state
-  const [expandedSections, setExpandedSections] = useState({ auditTypes: true, skills: false });
-  const [editingId, setEditingId] = useState(null);
-  const [editingType, setEditingType] = useState(null);
-  const [formData, setFormData] = useState({});
-
-  const [planningConfig, setPlanningConfig] = useState({
-    auditTypes: [
-      { id: 'desk_audit', name: 'Desk Audit', effortPerCase: 40, complexity: 'Low', skillsRequired: ['Basic Analysis', 'Document Review'] },
-      { id: 'field_audit', name: 'Field Audit', effortPerCase: 120, complexity: 'Medium', skillsRequired: ['Fieldwork', 'Investigation', 'Taxpayer Engagement'] },
-      { id: 'joint_audit', name: 'Joint Audit', effortPerCase: 160, complexity: 'High', skillsRequired: ['Fieldwork', 'Investigation', 'Multi-team Coordination', 'Senior Auditor'] },
-      { id: 'transfer_pricing', name: 'Transfer Pricing', effortPerCase: 80, complexity: 'High', skillsRequired: ['Transfer Pricing Specialist', 'International Tax'] },
-      { id: 'comprehensive', name: 'Comprehensive', effortPerCase: 200, complexity: 'Very High', skillsRequired: ['Senior Auditor', 'Advanced Analysis', 'CAAT'] },
-      { id: 'issue_audit', name: 'Issue Audit', effortPerCase: 50, complexity: 'Medium', skillsRequired: ['Specialized Auditor', 'Issue Expert'] },
-    ],
-    skills: [
-      { id: 'basic_analysis', name: 'Basic Analysis', level: 1, category: 'Foundation' },
-      { id: 'document_review', name: 'Document Review', level: 1, category: 'Foundation' },
-      { id: 'fieldwork', name: 'Fieldwork', level: 2, category: 'Execution' },
-      { id: 'investigation', name: 'Investigation', level: 2, category: 'Execution' },
-      { id: 'taxpayer_engagement', name: 'Taxpayer Engagement', level: 2, category: 'Execution' },
-      { id: 'senior_auditor', name: 'Senior Auditor', level: 3, category: 'Leadership' },
-      { id: 'advanced_analysis', name: 'Advanced Analysis', level: 3, category: 'Specialized' },
-      { id: 'caat', name: 'CAAT', level: 3, category: 'Technology' },
-      { id: 'tp_specialist', name: 'Transfer Pricing Specialist', level: 3, category: 'Specialized' },
-      { id: 'international_tax', name: 'International Tax', level: 3, category: 'Specialized' },
-      { id: 'multi_team_coord', name: 'Multi-team Coordination', level: 2, category: 'Management' },
-      { id: 'issue_expert', name: 'Issue Expert', level: 3, category: 'Specialized' },
-    ],
-  });
-
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const startEdit = (item, type) => {
-    setEditingId(item.id);
-    setEditingType(type);
-    setFormData({ ...item });
-  };
-
-  const saveEdit = () => {
-    if (editingType === 'auditType') {
-      setPlanningConfig(prev => ({
-        ...prev,
-        auditTypes: prev.auditTypes.map(at => at.id === editingId ? { ...at, ...formData } : at)
-      }));
-    } else {
-      setPlanningConfig(prev => ({
-        ...prev,
-        skills: prev.skills.map(s => s.id === editingId ? { ...s, ...formData } : s)
-      }));
-    }
-    setEditingId(null);
-    setFormData({});
-  };
-
-  const deleteItem = (id, type) => {
-    if (type === 'auditType') {
-      setPlanningConfig(prev => ({ ...prev, auditTypes: prev.auditTypes.filter(at => at.id !== id) }));
-    } else {
-      setPlanningConfig(prev => ({ ...prev, skills: prev.skills.filter(s => s.id !== id) }));
-    }
-  };
-
-  const addNew = (type) => {
-    const newId = `custom_${type}_${Date.now()}`;
-    if (type === 'auditType') {
-      setPlanningConfig(prev => ({
-        ...prev,
-        auditTypes: [...prev.auditTypes, { id: newId, name: 'New Type', effortPerCase: 80, complexity: 'Medium', skillsRequired: [] }]
-      }));
-    } else {
-      setPlanningConfig(prev => ({
-        ...prev,
-        skills: [...prev.skills, { id: newId, name: 'New Skill', level: 2, category: 'Custom' }]
-      }));
-    }
-  };
-
-  const complexityColors = {
-    'Low': 'bg-green-50 text-green-700 border-green-200',
-    'Medium': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    'High': 'bg-orange-50 text-orange-700 border-orange-200',
-    'Very High': 'bg-red-50 text-red-700 border-red-200',
-  };
-
-  const levelLabels = { 1: 'Foundation', 2: 'Advanced', 3: 'Expert' };
 
   const stats = selectors.getPlanStats();
   const plans = state.plans;
@@ -185,15 +96,21 @@ export default function PlanningDashboard({ view }) {
   return (
     <div className="space-y-6">
       {/* Tab strip */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        <button onClick={() => setActiveTab('plans')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+      <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
+        <button onClick={() => setActiveTab('plans')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
           <ClipboardList size={14} /> Audit Plans
         </button>
-        <button onClick={() => setActiveTab('risk')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'risk' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+        <button onClick={() => setActiveTab('risk')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'risk' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
           <Activity size={14} /> Risk Analysis
           <span className="ml-0.5 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">Live</span>
         </button>
+        <button onClick={() => setActiveTab('config')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+          <Settings size={14} /> Planning & Resource Configuration
+        </button>
       </div>
+
+      {/* Configuration tab */}
+      {activeTab === 'config' && <PlanConfigurationPage />}
 
       {/* Risk Analysis tab */}
       {activeTab === 'risk' && <RiskAnalysisDashboard onUsePlanDefaults={() => { setActiveTab('plans'); setShowCreate(true); }} />}
@@ -201,6 +118,23 @@ export default function PlanningDashboard({ view }) {
       {/* Plans tab */}
       {activeTab === 'plans' && (
         <div className="space-y-6">
+          {/* Config advisory banner */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 rounded-xl border border-blue-200 dark:border-blue-900/60 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-lg">
+                <Settings size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900 dark:text-white">Planning Parameters Configurable</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Audit types, regional auditor headcount capacity, and effort estimation multipliers can be customized prior to generating plans.
+                </p>
+              </div>
+            </div>
+            <Button size="xs" variant="secondary" icon={Settings} onClick={() => setActiveTab('config')}>
+              Configure Parameters
+            </Button>
+          </div>
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Total Plans" value={stats.total} icon={ClipboardList} color="blue" />

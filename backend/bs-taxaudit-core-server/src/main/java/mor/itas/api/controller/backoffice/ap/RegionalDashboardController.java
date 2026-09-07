@@ -115,9 +115,18 @@ public class RegionalDashboardController {
                 .orElseThrow(() -> new IllegalArgumentException("Plan not found"));
             
             // Get regional allocation from plan's distribution map
-            Map<String, Integer> regionAllocation = plan.getDistribution() != null 
-                ? plan.getDistribution().get(regionCode) 
-                : null;
+            Map<String, Integer> regionAllocation = null;
+            if (plan.getDistribution() != null) {
+                regionAllocation = plan.getDistribution().get(regionCode);
+                if (regionAllocation == null || regionAllocation.isEmpty()) {
+                    Map<String, String> codeToKey = Map.of(
+                        "FED", "federal_level", "AA", "addis_ababa", "BA", "amhara",
+                        "BB", "oromia", "AB", "dire_dawa", "CA", "snnpr", "SO", "somali"
+                    );
+                    String mappedKey = codeToKey.getOrDefault(regionCode, regionCode.toLowerCase());
+                    regionAllocation = plan.getDistribution().get(mappedKey);
+                }
+            }
             
             if (regionAllocation == null || regionAllocation.isEmpty()) {
                 return ResponseEntity.ok(GenericResponse.error(
@@ -228,6 +237,8 @@ public class RegionalDashboardController {
         Map<String, List<String>> regionTaxCenters = new java.util.HashMap<>();
         
         // Frontend region IDs (from constants.js)
+        regionTaxCenters.put("federal_level", java.util.Arrays.asList("federal-lto1", "federal-lto2"));
+        regionTaxCenters.put("fed", java.util.Arrays.asList("federal-lto1", "federal-lto2"));
         regionTaxCenters.put("addis_ababa", java.util.Arrays.asList("AA-TC1", "AA-TC2", "AA-TC3"));
         regionTaxCenters.put("amhara", java.util.Arrays.asList("BA-TC1", "BA-TC2", "BA-TC3"));
         regionTaxCenters.put("oromia", java.util.Arrays.asList("BB-TC1", "BB-TC2", "BB-TC3"));
@@ -236,6 +247,7 @@ public class RegionalDashboardController {
         regionTaxCenters.put("somali", java.util.Arrays.asList("SO-TC1", "SO-TC2"));
         
         // Also support region codes (for API consistency)
+        regionTaxCenters.put("FED", java.util.Arrays.asList("federal-lto1", "federal-lto2"));
         regionTaxCenters.put("AA", java.util.Arrays.asList("AA-TC1", "AA-TC2", "AA-TC3"));
         regionTaxCenters.put("BA", java.util.Arrays.asList("BA-TC1", "BA-TC2", "BA-TC3"));
         regionTaxCenters.put("BB", java.util.Arrays.asList("BB-TC1", "BB-TC2", "BB-TC3"));

@@ -25,9 +25,9 @@ public class DistributeApprovedPlanUseCase implements DistributeApprovedPlanPort
     private final RegionalDeploymentRepository deploymentRepository;
     private final RegionalPlanAccessRepository accessRepository;
     
-    private static final String[] REGION_CODES = {"AA", "BA", "BB", "AB", "CA", "SO"};
+    private static final String[] REGION_CODES = {"FED", "AA", "BA", "BB", "AB", "CA", "SO"};
     private static final Map<String, String> REGION_CODE_TO_DIST_KEY = Map.ofEntries(
-        Map.entry("AA", "addis_ababa"), Map.entry("BA", "amhara"),
+        Map.entry("FED", "federal_level"), Map.entry("AA", "addis_ababa"), Map.entry("BA", "amhara"),
         Map.entry("BB", "oromia"), Map.entry("AB", "dire_dawa"),
         Map.entry("CA", "snnpr"), Map.entry("SO", "somali")
     );

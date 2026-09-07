@@ -5,8 +5,8 @@
  * Step 2: Plan Basic Info (name, year, description, strategy)
  * Step 3: Case Distribution (editable table, pre-filled from risk data)
  */
-import { useState, useCallback } from 'react';
-import { Activity, ArrowRight, BarChart2, CheckCircle } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { Activity, ArrowRight, BarChart2, CheckCircle, Shield, Clock } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Modal, Input, Textarea, Button, Alert, Select } from '../../../../components/ui/index.jsx';
@@ -15,10 +15,19 @@ import { REGIONS, AUDIT_TYPES } from '../../data/constants.js';
 import RiskAnalysisDashboard from './RiskAnalysisDashboard.jsx';
 import { useRiskEngine } from '../../hooks/useRiskEngine.js';
 import { auditConfig } from '../../config/auditConfig.js';
+import { 
+  getPlanningConfig, 
+  calculateCapacityMetrics, 
+  calculatePlanEffort, 
+  DEFAULT_PLANNING_CONFIG 
+} from '../../services/planningConfigService.js';
 
-const emptyDistribution = () => {
+const buildEmptyDistribution = (regions = REGIONS, types = AUDIT_TYPES) => {
   const dist = {};
-  REGIONS.forEach(r => { dist[r.id] = {}; AUDIT_TYPES.forEach(a => { dist[r.id][a.id] = 0; }); });
+  (regions || REGIONS).forEach(r => { 
+    dist[r.id] = {}; 
+    (types || AUDIT_TYPES).forEach(a => { dist[r.id][a.id] = 0; }); 
+  });
   return dist;
 };
 
@@ -26,6 +35,30 @@ export default function CreatePlanModal({ open, onClose }) {
   const { actions, state } = useApp();
   const { user } = useAuth();
   const { planDefaults, source } = useRiskEngine();
+
+  const [planningConfig, setPlanningConfig] = useState(DEFAULT_PLANNING_CONFIG);
+
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const cfg = await getPlanningConfig();
+        if (cfg) setPlanningConfig(cfg);
+      } catch (e) {
+        console.warn('Failed to load planning config in CreatePlanModal:', e);
+      }
+    }
+    if (open) {
+      loadConfig();
+    }
+  }, [open]);
+
+  const activeAuditTypes = useMemo(() => {
+    return (planningConfig?.auditTypes || AUDIT_TYPES).filter(t => t.active !== false);
+  }, [planningConfig]);
+
+  const activeRegions = useMemo(() => {
+    return planningConfig?.regions || REGIONS;
+  }, [planningConfig]);
 
   const [step, setStep] = useState(1);
   // Find next available year (skip years that already have plans)
@@ -48,22 +81,46 @@ export default function CreatePlanModal({ open, onClose }) {
     riskBased: false,
     estimatedRevenue: 10000000,
   });
-  const [distribution, setDistribution] = useState(emptyDistribution);
+  const [distribution, setDistribution] = useState(() => buildEmptyDistribution(activeRegions, activeAuditTypes));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [usedDefaults, setUsedDefaults] = useState(false);
 
+  // Sync distribution with active audit types and regions when config loads
+  useEffect(() => {
+    setDistribution(prev => {
+      const updated = { ...prev };
+      activeRegions.forEach(r => {
+        if (!updated[r.id]) updated[r.id] = {};
+        activeAuditTypes.forEach(a => {
+          if (updated[r.id][a.id] === undefined) {
+            updated[r.id][a.id] = 0;
+          }
+        });
+      });
+      return updated;
+    });
+  }, [activeAuditTypes, activeRegions]);
+
   const totalCases = Object.values(distribution).reduce(
     (sum, regionDist) => sum + Object.values(regionDist).reduce((s, v) => s + v, 0), 0
   );
+
+  const effortMetrics = useMemo(() => {
+    return calculatePlanEffort(distribution, planningConfig);
+  }, [distribution, planningConfig]);
+
+  const capacityMetrics = useMemo(() => {
+    return calculateCapacityMetrics(planningConfig);
+  }, [planningConfig]);
 
   const applyDefaults = useCallback((defaults, targetSize = 3500) => {
     if (!defaults) return;
     
     // Calculate sum of raw defaults
     let rawSum = 0;
-    REGIONS.forEach(r => {
-      AUDIT_TYPES.forEach(a => {
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
         rawSum += defaults[r.id]?.[a.id] ?? 0;
       });
     });
@@ -71,9 +128,9 @@ export default function CreatePlanModal({ open, onClose }) {
     const scaleFactor = rawSum > 0 ? (targetSize / rawSum) : 1;
 
     // Merge defaults into current distribution with scaling factor
-    const merged = emptyDistribution();
-    REGIONS.forEach(r => {
-      AUDIT_TYPES.forEach(a => {
+    const merged = buildEmptyDistribution(activeRegions, activeAuditTypes);
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
         const rawVal = defaults[r.id]?.[a.id] ?? 0;
         merged[r.id][a.id] = Math.round(rawVal * scaleFactor);
       });
@@ -81,7 +138,7 @@ export default function CreatePlanModal({ open, onClose }) {
     setDistribution(merged);
     setUsedDefaults(true);
     setStep(2);
-  }, []);
+  }, [activeRegions, activeAuditTypes]);
 
   const handleCreate = async () => {
     console.log('📝 Handling plan creation...');
@@ -145,7 +202,7 @@ export default function CreatePlanModal({ open, onClose }) {
     setError('');
     setUsedDefaults(false);
     setForm({ name: '', year: getNextAvailableYear(), description: '', strategy: '', riskBased: false, estimatedRevenue: 10000000 });
-    setDistribution(emptyDistribution());
+    setDistribution(buildEmptyDistribution(activeRegions, activeAuditTypes));
   };
 
   const stepTitles = {
@@ -308,13 +365,37 @@ export default function CreatePlanModal({ open, onClose }) {
               </div>
             </div>
           </div>
-          <EditableDistributionTable distribution={distribution} onChange={setDistribution} />
-          <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-slate-400">
-            <CheckCircle size={13} className="text-green-500 flex-shrink-0 mt-0.5" />
-            <span>
-              Effort estimate: ~{Math.round(totalCases * 40 / 2000)} auditor-years at 40 hrs/case.
-              You can refine effort guidelines in Configuration.
-            </span>
+          <EditableDistributionTable 
+            distribution={distribution} 
+            onChange={setDistribution} 
+            regions={activeRegions}
+            auditTypes={activeAuditTypes} 
+          />
+
+          {/* Live Capacity and Feasibility Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-900 text-white rounded-xl border border-slate-700 text-xs">
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Estimated Effort</p>
+              <p className="text-base font-bold text-blue-400 mt-0.5">{effortMetrics.totalRequiredHours.toLocaleString()} hrs</p>
+              <p className="text-[10px] text-slate-400">Includes complexity multipliers & buffer</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">National Productive Capacity</p>
+              <p className="text-base font-bold text-purple-400 mt-0.5">{capacityMetrics.totalProductiveHours.toLocaleString()} hrs</p>
+              <p className="text-[10px] text-slate-400">{capacityMetrics.totalAuditors.toLocaleString()} active auditors pool</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">Capacity Feasibility</p>
+              {effortMetrics.totalRequiredHours <= capacityMetrics.totalProductiveHours ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 mt-1">
+                  <CheckCircle size={13} /> Feasible ({((effortMetrics.totalRequiredHours / (capacityMetrics.totalProductiveHours || 1)) * 100).toFixed(1)}% capacity)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 mt-1">
+                  ⚠️ High Load ({((effortMetrics.totalRequiredHours / (capacityMetrics.totalProductiveHours || 1)) * 100).toFixed(1)}% capacity)
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

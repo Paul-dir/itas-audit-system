@@ -75,7 +75,10 @@ function AppProvider({ children }) {
     if (!ready) return;
     storage.set(STORE_KEYS.PLANS, state.plans);
     storage.set(STORE_KEYS.CASES, state.cases);
-    storage.set(STORE_KEYS.USERS, state.users);
+    const existing = storage.get(STORE_KEYS.USERS, []);
+    if (!Array.isArray(existing) || existing.length <= state.users.length) {
+      storage.set(STORE_KEYS.USERS, state.users);
+    }
   }, [state, ready]);
 
   const timeline = (plan, status, actor, comment = '') => ({
@@ -146,7 +149,7 @@ function AppProvider({ children }) {
         const plannedChanges = {};
         if (updates.distribution) {
           Object.entries(updates.distribution).forEach(([regionId, auditTypes]) => {
-            const regionCodeMap = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+            const regionCodeMap = { 'federal_level': 'FED', 'fed': 'FED', 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
             const code = regionCodeMap[regionId] || regionId;
             plannedChanges[code] = {};
             if (auditTypes && typeof auditTypes === 'object') {
@@ -352,7 +355,7 @@ function AppProvider({ children }) {
         console.log('📤 Distributing plan to tax centers...');
 
         // ✅ Map frontend IDs to backend codes
-        const regionIdToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+        const regionIdToCode = { 'federal_level': 'FED', 'fed': 'FED', 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
         const tcIdToBackendCode = {
           'addis_ababa-tc1': 'AA-TC1', 'addis_ababa-tc2': 'AA-TC2', 'addis_ababa-tc3': 'AA-TC3',
           'amhara-tc1': 'BA-TC1', 'amhara-tc2': 'BA-TC2', 'amhara-tc3': 'BA-TC3',
@@ -444,7 +447,7 @@ function AppProvider({ children }) {
         });
 
         // ✅ Map frontend region ID to backend code
-        const regionIdToCode = { 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
+        const regionIdToCode = { 'federal_level': 'FED', 'fed': 'FED', 'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB', 'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO' };
         const backendRegionCode = regionIdToCode[regionId] || regionId;
 
         const response = await fetch(`/api/v1/backoffice/ap/regions/${backendRegionCode}/submit-feedback`, {

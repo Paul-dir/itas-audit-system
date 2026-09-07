@@ -4,6 +4,7 @@ import { useAuth } from '../../../../context/AuthContext.jsx';
 import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs, Pagination } from '../../../../components/ui/index.jsx';
 import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
 import { formatRevenue } from '../../utils/revenueFormatter.js';
+import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 
 // Map frontend tax-center ID → backend code (AA-TC1 format)
 const TC_MAP = {
@@ -141,31 +142,51 @@ const normalizeTcKey = (tc) => {
         const res = await r.json();
         const list = res.data || res || [];
         if (list.length > 0) {
-          setTeamLeaders(list);
+          const mapped = list.map(u => ({
+            ...u,
+            id: u.username || u.userId,
+            username: u.username,
+            userId: u.userId,
+            fullName: u.fullName || u.username,
+            name: u.fullName || u.username,
+            auditType: u.auditType || 'GENERAL'
+          }));
+          setTeamLeaders(mapped);
           return;
         }
       }
     } catch (e) { console.error('fetchTeamLeaders', e); }
-
-    // Fallback team leaders matching SEED_USERS for this tax center
-    try {
-      const { SEED_USERS } = await import('../../data/seed.js');
-      const seedTLs = SEED_USERS.filter(u => u.role === 'team_leader' && u.taxCenter === (user?.taxCenter || 'addis_ababa-tc1'));
-      if (seedTLs.length > 0) {
-        setTeamLeaders(seedTLs);
-        return;
-      }
-    } catch (err) {}
-
-    setTeamLeaders([
-      { id: 'u-tl-aa1a', fullName: 'Henok Belay (Desk TL)', name: 'Henok Belay', auditType: 'DESK_AUDIT' },
-      { id: 'u-tl-aa1b', fullName: 'Tigist Alemu (Field TL)', name: 'Tigist Alemu', auditType: 'FIELD_AUDIT' },
-      { id: 'u-tl-aa1d', fullName: 'Seble Tesfaye (Comp TL)', name: 'Seble Tesfaye', auditType: 'COMPREHENSIVE_AUDIT' },
-      { id: 'u-tl-aa1f', fullName: 'Sara Negash (Issue TL)', name: 'Sara Negash', auditType: 'ISSUE_AUDIT' }
-    ]);
   }, [tcCode, user?.id]);
 
   useEffect(() => { fetchCases(); fetchTeamLeaders(); }, [fetchCases, fetchTeamLeaders]);
+
+  const resolveTlDisplay = (tlId, assignedName) => {
+    if (!tlId && !assignedName) return null;
+    if (assignedName && !assignedName.includes('-')) {
+      return { name: assignedName, role: 'Team Leader', isCommittee: false };
+    }
+    const matched = teamLeaders.find(t => 
+      t.id === tlId || t.userId === tlId || t.username === tlId || t.email === tlId
+    );
+    if (matched) {
+      return { name: matched.fullName || matched.name, role: matched.auditType || 'Team Leader', isCommittee: false };
+    }
+    const lower = (tlId || '').toLowerCase();
+    if (lower.includes('committee')) {
+      const type = lower.replace('-committee', '').toUpperCase();
+      return { name: `${type} Audit Committee`, role: 'Audit Committee', isCommittee: true };
+    }
+    if (lower.startsWith('u-tl-') || lower.startsWith('u-aud-')) {
+      const parts = lower.split('-');
+      const type = parts[parts.length - 2]?.toUpperCase() || 'AUDIT';
+      const num = parts[parts.length - 1] || '1';
+      return { name: `${type} TL-${num}`, role: `${type} Audit`, isCommittee: false };
+    }
+    if (assignedName) {
+      return { name: assignedName, role: 'Team Leader', isCommittee: false };
+    }
+    return { name: 'Assigned TL', role: 'Team Leader', isCommittee: false };
+  };
 
   const [yearFilter, setYearFilter]       = useState('ALL');
 
@@ -213,7 +234,7 @@ const normalizeTcKey = (tc) => {
   // Assign Referral Case Handler
   const handleAssignReferral = (ref) => {
     if (!ref) return;
-    const targetTL = targetTLForReferral || (teamLeaders[0]?.userId || teamLeaders[0]?.id || 'u-tl-aa1a');
+    const targetTL = targetTLForReferral || (teamLeaders[0]?.username || teamLeaders[0]?.userId || teamLeaders[0]?.id || `u-tl-${normalizeTcKey(user?.taxCenter || tcCode)}-desk-1`);
     const updatedReferrals = referrals.map(r => {
       if (r.id === ref.id) {
         const isComm = r.auditType === 'transfer_pricing' || r.auditType === 'joint_audit';
@@ -262,13 +283,14 @@ const normalizeTcKey = (tc) => {
   };
   const toggle = id => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
+  const [manualTlSelections, setManualTlSelections] = useState({});
+
   // ── Smart Assignment ─────────────────────────────────────────────────────────
   const handleAssign = async () => {
     if (!selected.length) return;
     setAssignLoading(true);
     setAssignResult(null);
     try {
-      // Build assignments: for each selected case find the right TL by audit type
       // Group team leaders by audit type
       const tlByType = {};
       teamLeaders.forEach(tl => {
@@ -287,17 +309,46 @@ const normalizeTcKey = (tc) => {
       const assignments = [];
       const warnings = [];
 
+      let committeeCount = 0;
+      let standardCount = 0;
+
       for (const c of selectedCaseObjects) {
         const backendType = c.auditType; // Already backend format (DESK_AUDIT etc.)
+        const frontendTypeId = c.auditTypeFrontendId;
         const isCommittee = c.isCommittee;
 
+        // Check if user manually selected a specific TL or Committee Chair for this audit type
+        const manualTarget = manualTlSelections[frontendTypeId] || manualTlSelections[backendType];
+        if (manualTarget && manualTarget !== 'auto') {
+          assignments.push({
+            caseId: c.id,
+            teamLeaderId: manualTarget,
+            status: isCommittee ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER'
+          });
+          if (isCommittee) committeeCount++; else standardCount++;
+          continue;
+        }
+
         if (isCommittee) {
-          // Route Joint Audit to Joint Committee Chair, TP to TP Committee Chair
-          const commChair = backendType === 'TRANSFER_PRICING' 
-            ? '5d3b32e2-be93-4889-bf01-de527a80cec6' // tp.committee1
-            : '99a64010-645c-4752-bf57-e046d220cfe4'; // aa.committee1
-          assignments.push({ caseId: c.id, teamLeaderId: commChair, status: 'ASSIGNED_TO_COMMITTEE' });
-          warnings.push(`Case ${c.caseNumber} (${c.auditTypeDef?.shortName || c.auditType}) assigned to Committee.`);
+          // Attempt to find a dynamic committee chair for this type
+          let commCandidates = tlByType[backendType] || [];
+          let commChairId;
+          
+          if (commCandidates.length > 0) {
+            const idx = (rrIdx[backendType] || 0) % commCandidates.length;
+            rrIdx[backendType] = idx + 1;
+            const tl = commCandidates[idx];
+            commChairId = tl.username || tl.userId || tl.id;
+          } else {
+            // Dynamic committee chair derived strictly from user's current Tax Center
+            const tcSlug = normalizeTcKey(user?.taxCenter || tcCode || 'federal-lto1');
+            commChairId = backendType === 'TRANSFER_PRICING' 
+              ? `u-com-${tcSlug}-tp` 
+              : `u-com-${tcSlug}-ja`;
+          }
+          
+          assignments.push({ caseId: c.id, teamLeaderId: commChairId, status: 'ASSIGNED_TO_COMMITTEE' });
+          committeeCount++;
           continue;
         }
 
@@ -305,12 +356,11 @@ const normalizeTcKey = (tc) => {
 
         if (!candidates.length) {
           // No matching standard TL — assign to available standard TL
-          const standardTLs = Object.values(tlByType).flat().filter(t => t.auditType !== 'joint_audit' && t.auditType !== 'transfer_pricing');
+          const standardTLs = Object.values(tlByType).flat().filter(t => t.auditType !== 'JOINT_AUDIT' && t.auditType !== 'TRANSFER_PRICING');
           if (standardTLs.length) {
             candidates = standardTLs;
-            warnings.push(`No specialized TL for ${backendType}, assigning to available TL`);
           } else {
-            warnings.push(`No team leader found for case ${c.caseNumber}`);
+            warnings.push(`No team leader found for ${c.auditType}`);
             continue;
           }
         }
@@ -319,7 +369,8 @@ const normalizeTcKey = (tc) => {
         rrIdx[backendType] = idx + 1;
         const tl = candidates[idx];
 
-        assignments.push({ caseId: c.id, teamLeaderId: tl.userId || tl.id });
+        assignments.push({ caseId: c.id, teamLeaderId: tl.username || tl.userId || tl.id });
+        standardCount++;
       }
 
       if (!assignments.length) {
@@ -335,23 +386,19 @@ const normalizeTcKey = (tc) => {
 
       const res = await r.json();
       const resultData = res.data || res;
-      const committeeCount = warnings.filter(w => w.includes('routed to Joint Audit Committee')).length;
-      const otherWarnings = warnings.filter(w => !w.includes('routed to Joint Audit Committee'));
       
-      let summaryMsg = null;
-      if (committeeCount > 0) {
-        summaryMsg = `${committeeCount} Joint/TP cases automatically routed to Joint Audit Committee.`;
-      }
-      if (otherWarnings.length > 0) {
-        summaryMsg = summaryMsg ? `${summaryMsg} (${otherWarnings.join('; ')})` : otherWarnings.join('; ');
-      }
+      let summaryParts = [];
+      if (standardCount > 0) summaryParts.push(`${standardCount} case${standardCount > 1 ? 's' : ''} assigned to Team Leaders`);
+      if (committeeCount > 0) summaryParts.push(`${committeeCount} Joint/TP case${committeeCount > 1 ? 's' : ''} routed to Audit Committee`);
+      
+      const summaryMsg = summaryParts.join(' • ');
 
       setAssignResult({
         status: resultData.status || (res.status === 'SUCCESS' ? 'SUCCESS' : 'DONE'),
         assigned: resultData.assigned || 0,
         failed: resultData.failed || 0,
-        warnings,
-        message: summaryMsg,
+        warnings: Array.from(new Set(warnings)),
+        message: summaryMsg || `${resultData.assigned || 0} cases successfully assigned.`,
       });
 
       // Refresh cases from backend
@@ -552,10 +599,34 @@ const normalizeTcKey = (tc) => {
                           {statusDef?.label || c.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">
-                        {c.assignedTeamLeaderId
-                          ? <span className="font-medium">{teamLeaders.find(t=>(t.userId||t.id)===c.assignedTeamLeaderId)?.name || c.assignedTeamLeaderId}</span>
-                          : <span className="text-gray-400">Not assigned</span>}
+                      <td className="px-4 py-3 text-sm">
+                        {(() => {
+                          const tlInfo = resolveTlDisplay(c.assignedTeamLeaderId, c.assignedTeamLeaderName);
+                          if (!tlInfo) {
+                            return <span className="text-gray-400 text-xs font-normal">Not assigned</span>;
+                          }
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${
+                                tlInfo.isCommittee ? 'bg-amber-600' : 'bg-blue-600'
+                              }`}>
+                                {tlInfo.isCommittee ? '🏛️' : tlInfo.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-gray-900 dark:text-gray-100 text-xs truncate leading-tight">
+                                  {tlInfo.name}
+                                </p>
+                                <span className={`inline-block text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                                  tlInfo.isCommittee
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                }`}>
+                                  {tlInfo.role}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
@@ -577,50 +648,21 @@ const normalizeTcKey = (tc) => {
         />
       </Card>
 
-      {/* View Case Modal */}
+      {/* View Case Details & Detailed Taxpayer Profile Modal */}
       {viewCase && (
-        <Modal open onClose={() => setViewCase(null)} title="Case Details" size="lg"
-          footer={<Button variant="secondary" onClick={() => setViewCase(null)}>Close</Button>}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4 bg-blue-50 dark:bg-slate-800 rounded-xl p-4 border border-blue-200 dark:border-slate-600">
-              <div><p className="text-xs text-blue-600 dark:text-blue-400">Case Number</p>
-                <p className="text-sm font-mono font-bold text-blue-900 dark:text-white">{viewCase.caseNumber}</p></div>
-              <div><p className="text-xs text-blue-600 dark:text-blue-400">Status</p>
-                <Badge color={CASE_STATUS[viewCase.status]?.color || 'gray'} dot>
-                  {CASE_STATUS[viewCase.status]?.label || viewCase.status}
-                </Badge></div>
-              <div><p className="text-xs text-blue-600 dark:text-blue-400">Audit Type</p>
-                <Badge color={viewCase.auditTypeDef?.color || 'gray'}>{viewCase.auditTypeDef?.name || viewCase.auditType}</Badge>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-2">
-                <p className="text-sm font-semibold">🏢 Taxpayer</p>
-                <p className="font-medium">{viewCase.taxpayerName}</p>
-                <p className="text-xs text-gray-500">TIN: {viewCase.tin}</p>
-                <p className="text-xs text-gray-500">Sector: {viewCase.sector}</p>
-                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Est. Revenue: {formatRevenue(viewCase.estimatedRevenue)} ETB</p>}
-              </div>
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-2">
-                <p className="text-sm font-semibold">⚠️ Risk</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-200 dark:bg-slate-600 rounded-full h-2">
-                    <div className={`h-2 rounded-full ${viewCase.riskLevel==='CRITICAL'?'bg-red-500':viewCase.riskLevel==='HIGH'?'bg-orange-500':viewCase.riskLevel==='MEDIUM'?'bg-yellow-500':'bg-blue-400'}`}
-                      style={{width:`${Math.min(viewCase.riskScore||0,100)}%`}} />
-                  </div>
-                  <span className="text-lg font-bold">{viewCase.riskScore}</span>
-                </div>
-                <Badge color={riskColors[viewCase.riskLevel]} dot>{viewCase.riskLevel}</Badge>
-                {viewCase.assignedTeamLeaderId && (
-                  <div className="pt-2 border-t border-gray-200 dark:border-slate-600">
-                    <p className="text-xs text-gray-500">Assigned TL:</p>
-                    <p className="text-sm font-medium">{teamLeaders.find(t=>(t.userId||t.id)===viewCase.assignedTeamLeaderId)?.name || viewCase.assignedTeamLeaderId}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Modal>
+        <CaseDetailModal
+          caseData={{
+            ...viewCase,
+            annualRevenue: viewCase.estimatedRevenue || 14200000,
+            employees: viewCase.employees || 35,
+            taxCenter: viewCase.taxCenterCode || viewCase.taxCenter || user?.taxCenter,
+            region: viewCase.regionCode || viewCase.region || user?.region,
+            assignedTeamLeader: viewCase.assignedTeamLeaderId || viewCase.assignedTeamLeader,
+            assignedAuditor: viewCase.assignedAuditorId || viewCase.assignedAuditor,
+          }}
+          onClose={() => setViewCase(null)}
+          users={teamLeaders}
+        />
       )}
 
       {/* Assignment Confirmation Modal */}
@@ -635,22 +677,48 @@ const normalizeTcKey = (tc) => {
             </div>
           }>
           <div className="space-y-4">
-            <Alert type="info" title="Automatic Assignment">
-              Cases will be assigned to team leaders based on their audit type specialization using round-robin load balancing.
-              Joint Audit and Transfer Pricing cases will be routed to the committee.
+            <Alert type="info" title="Role & Audit Type Segregated Assignment">
+              Cases are strictly isolated by audit type. Select a specific Team Leader or Committee for each audit type, or leave set to Auto Load-Balance for specialized round-robin routing.
             </Alert>
             <div>
-              <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Selected Cases by Audit Type</p>
+              <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Selected Cases by Audit Type & Assignee Selection</p>
               {AUDIT_TYPES.map(at => {
                 const typeCases = cases.filter(c => selected.includes(c.id) && c.auditTypeFrontendId === at.id);
                 if (!typeCases.length) return null;
+
+                // Filter team leaders for this audit type
+                const matchingTLs = teamLeaders.filter(tl => {
+                  const uAt = (tl.auditType || '').toUpperCase().replace(/\s+/g, '_');
+                  const tAt = at.id.toUpperCase().replace(/\s+/g, '_');
+                  if (tAt === 'DESK_AUDIT' || tAt === 'DESK') return uAt.includes('DESK');
+                  if (tAt === 'COMPREHENSIVE' || tAt === 'COMPREHENSIVE_AUDIT' || tAt === 'COMP') return uAt.includes('COMP');
+                  if (tAt === 'ISSUE' || tAt === 'ISSUE_AUDIT' || tAt === 'QA') return uAt.includes('ISSUE') || uAt.includes('QA');
+                  if (tAt === 'JOINT_AUDIT' || tAt === 'JOINT') return uAt.includes('JOINT') || tl.userType === 'COMMITTEE_MEMBER';
+                  if (tAt === 'TRANSFER_PRICING' || tAt === 'TP') return uAt.includes('TRANSFER') || uAt.includes('TP') || tl.userType === 'COMMITTEE_MEMBER';
+                  return uAt === tAt;
+                });
+
                 return (
-                  <div key={at.id} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-lg p-3 mb-2">
-                    <Badge color={at.color}>{at.shortName}</Badge>
-                    <span className="text-sm">{typeCases.length} case{typeCases.length > 1 ? 's' : ''}</span>
-                    <span className="text-xs text-gray-500">
-                      {at.id === 'joint_audit' || at.id === 'transfer_pricing' ? '→ Joint Committee / Specialized TL' : '→ Team Leader'}
-                    </span>
+                  <div key={at.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 mb-3 gap-3">
+                    <div className="flex items-center gap-3">
+                      <Badge color={at.color}>{at.shortName}</Badge>
+                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{typeCases.length} case{typeCases.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Assign To:</span>
+                      <select
+                        className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                        value={manualTlSelections[at.id] || 'auto'}
+                        onChange={e => setManualTlSelections(prev => ({ ...prev, [at.id]: e.target.value }))}
+                      >
+                        <option value="auto">⚡ Auto Load-Balance (Specialized TLs)</option>
+                        {matchingTLs.map(tl => (
+                          <option key={tl.id || tl.userId} value={tl.userId || tl.id}>
+                            👤 {tl.name || tl.fullName} ({tl.auditType?.replace(/_/g, ' ') || 'Team Leader'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 );
               })}

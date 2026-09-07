@@ -40,9 +40,42 @@ public class GetPlansForRegionUseCase {
      * @param regionCode Region code (e.g., "AA" for Addis Ababa)
      * @return List of plans with their regional allocation data
      */
+    private static final Map<String, String> REGION_CODE_TO_DIST_KEY = Map.of(
+        "FED", "federal_level",
+        "AA", "addis_ababa",
+        "BA", "amhara",
+        "BB", "oromia",
+        "AB", "dire_dawa",
+        "CA", "snnpr",
+        "SO", "somali"
+    );
+
     public List<Map<String, Object>> execute(String regionCode) {
         // 1. Get all deployments for this region (permission check)
-        List<RegionalDeploymentEntity> deployments = deploymentRepository.findByRegionCode(regionCode);
+        List<RegionalDeploymentEntity> deployments = new ArrayList<>(deploymentRepository.findByRegionCode(regionCode));
+
+        // 1b. Auto-synthesize deployment entities for any existing plans that have distribution for this region
+        String distKey = REGION_CODE_TO_DIST_KEY.getOrDefault(regionCode, regionCode.toLowerCase());
+        List<AnnualAuditPlanEntity> allPlans = planRepository.findAll();
+        for (AnnualAuditPlanEntity plan : allPlans) {
+            if (plan.getDistribution() != null) {
+                Map<String, Integer> regionAlloc = plan.getDistribution().get(distKey);
+                if (regionAlloc == null || regionAlloc.isEmpty()) {
+                    regionAlloc = plan.getDistribution().get(regionCode);
+                }
+                if (regionAlloc != null && !regionAlloc.isEmpty()) {
+                    boolean alreadyDeployed = deployments.stream()
+                        .anyMatch(d -> d.getPlanId().equals(plan.getId()));
+                    if (!alreadyDeployed) {
+                        RegionalDeploymentEntity autoDeployment = new RegionalDeploymentEntity(plan.getId(), regionCode, "system-auto");
+                        autoDeployment.setRegionAllocatedCases(regionAlloc);
+                        autoDeployment.setDeploymentNote("Auto-synthesized regional access");
+                        RegionalDeploymentEntity saved = deploymentRepository.save(autoDeployment);
+                        deployments.add(saved);
+                    }
+                }
+            }
+        }
 
         if (deployments.isEmpty()) {
             return new ArrayList<>();

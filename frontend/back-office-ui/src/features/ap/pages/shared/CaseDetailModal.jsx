@@ -7,8 +7,8 @@ export default function CaseDetailModal({ caseData, onClose, users = [] }) {
   if (!caseData) return null;
   const at = AUDIT_TYPES.find(a => a.id === caseData.auditType);
   const cs = CASE_STATUS[caseData.status];
-  const tl = users.find(u => u.id === caseData.assignedTeamLeader);
-  const aud = users.find(u => u.id === caseData.assignedAuditor);
+  const tl = users.find(u => u.id === caseData.assignedTeamLeader || u.userId === caseData.assignedTeamLeader || u.username === caseData.assignedTeamLeader);
+  const aud = users.find(u => u.id === caseData.assignedAuditor || u.userId === caseData.assignedAuditor || u.username === caseData.assignedAuditor);
 
   const Row = ({ label, value }) => (
     <div className="flex justify-between py-2 border-b border-gray-50 dark:border-slate-600 last:border-0">
@@ -23,9 +23,16 @@ export default function CaseDetailModal({ caseData, onClose, users = [] }) {
         {/* Header */}
         <div className="flex items-start justify-between bg-gray-50 dark:bg-slate-700 rounded-xl p-4 border border-gray-100 dark:border-slate-600">
           <div>
-            <p className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Case ID</p>
-            <p className="text-sm font-mono text-gray-600 dark:text-slate-300 mb-2">{caseData.id}</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{caseData.taxpayerName}</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Case Number</p>
+            <p className="text-sm font-mono text-gray-600 dark:text-slate-300 mb-2">{caseData.caseNumber || caseData.id}</p>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-bold text-gray-900 dark:text-white text-lg">{caseData.taxpayerName}</span>
+              {(caseData.planYear || (caseData.caseNumber && caseData.caseNumber.includes('-') && !isNaN(caseData.caseNumber.split('-')[0]))) && (
+                <Badge color="blue" size="xs">
+                  FY {caseData.planYear || caseData.caseNumber.split('-')[0]}
+                </Badge>
+              )}
+            </div>
             <p className="text-sm font-mono text-gray-400 dark:text-slate-400 mt-0.5">TIN: {caseData.tin}</p>
           </div>
           <div className="flex flex-col gap-2 items-end">
@@ -153,11 +160,15 @@ export default function CaseDetailModal({ caseData, onClose, users = [] }) {
               </div>
               <div>
                 <p className="text-xs text-gray-500 dark:text-slate-400">Team Leader</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">{tl?.name || 'Unassigned'}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
+                  {tl?.name || caseData.assignedTeamLeaderName || caseData.assignedTeamLeaderId || caseData.assignedTeamLeader || 'Unassigned'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 dark:text-slate-400">Auditor</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">{aud?.name || 'Unassigned'}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
+                  {aud?.name || caseData.assignedAuditorName || caseData.assignedAuditorId || caseData.assignedAuditor || 'Unassigned'}
+                </p>
               </div>
               {caseData.startDate && (
                 <div>

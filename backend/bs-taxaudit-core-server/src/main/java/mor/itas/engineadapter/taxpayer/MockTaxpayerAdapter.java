@@ -47,22 +47,39 @@ public class MockTaxpayerAdapter {
 
     private static void initializeTaxpayers() {
         Map<String, Integer> taxCenterQuotas = new LinkedHashMap<>();
+        // Federal LTO
+        taxCenterQuotas.put("federal-lto1", 45000);
+        taxCenterQuotas.put("federal-lto2", 35000);
+
+        // Addis Ababa Tax Centers (AA)
         taxCenterQuotas.put("TC-AA-01", 30000);
-        taxCenterQuotas.put("TC-AA-02", 25000);
-        taxCenterQuotas.put("TC-AA-03", 22000);
-        taxCenterQuotas.put("TC-AA-04", 18000);
-        taxCenterQuotas.put("TC-AB-01", 10000);
-        taxCenterQuotas.put("TC-AB-02", 8000);
-        taxCenterQuotas.put("TC-AB-03", 6000);
+        taxCenterQuotas.put("TC-AA-02", 28000);
+        taxCenterQuotas.put("TC-AA-03", 25000);
+        
+        // Amhara (BA)
         taxCenterQuotas.put("TC-BA-01", 15000);
         taxCenterQuotas.put("TC-BA-02", 12000);
         taxCenterQuotas.put("TC-BA-03", 10000);
+
+        // Oromia (BB)
         taxCenterQuotas.put("TC-BB-01", 15000);
         taxCenterQuotas.put("TC-BB-02", 12000);
         taxCenterQuotas.put("TC-BB-03", 10000);
+
+        // Dire Dawa (DD)
+        taxCenterQuotas.put("TC-DD-01", 8000);
+        taxCenterQuotas.put("TC-DD-02", 7000);
+        taxCenterQuotas.put("TC-DD-03", 6000);
+
+        // SNNPR (CA)
         taxCenterQuotas.put("TC-CA-01", 8000);
-        taxCenterQuotas.put("TC-CA-02", 6000);
-        taxCenterQuotas.put("TC-SO-01", 5000);
+        taxCenterQuotas.put("TC-CA-02", 7000);
+        taxCenterQuotas.put("TC-CA-03", 6000);
+
+        // Somali (SM)
+        taxCenterQuotas.put("TC-SM-01", 6000);
+        taxCenterQuotas.put("TC-SM-02", 5000);
+        taxCenterQuotas.put("TC-SM-03", 4000);
 
         String[] sectors = {"Manufacturing", "Trade", "Services", "Agriculture", "Technology",
             "Transportation", "Construction", "Wholesale", "Retail", "Finance",
@@ -101,9 +118,26 @@ public class MockTaxpayerAdapter {
      */
     private static Map<String, Object> createDetailedTaxpayer(int id, String tin, String taxCenter, String[] sectors) {
         Map<String, Object> tp = new HashMap<>();
-        tp.put("tin", tin);
+        String fullName = generateName(id, sectors);
+        tp.put("tin", String.format("1%09d", id)); // 10-digit TINs like 1000000001
         tp.put("taxpayerId", "TP-" + id);
-        tp.put("name", generateName(id, sectors));
+        tp.put("name", fullName);
+        tp.put("legalName", fullName);
+        tp.put("tradeName", fullName);
+        
+        // Match legal form and sectors from the user's data structure
+        String[] legalForms = {"Sole Propr. MTD", "Private Lim S/IV", "Share Com LTO", "Sole Propr. R/T"};
+        tp.put("legalForm", legalForms[id % legalForms.length]);
+        
+        String[] sectorCodes = {"IMP", "FIN", "AGR", "R/T", "SRV", "MFG", "CON"};
+        tp.put("sectorCode", sectorCodes[id % sectorCodes.length]);
+        
+        String[] subSectors = {"Consumer Goods Import", "Microfinance Financial S", "Coffee Proc Agriculture", "Fuel Station Retail Trade", "Supermarket Retail Trade", "Hardware Retail"};
+        tp.put("subSector", subSectors[id % subSectors.length]);
+
+        String[] tinStatuses = {"valid", "valid", "valid", "suspended", "inactive"};
+        tp.put("tinStatus", tinStatuses[id % tinStatuses.length]);
+
         tp.put("businessType", BUSINESS_TYPES[id % BUSINESS_TYPES.length]);
         tp.put("sector", sectors[id % sectors.length]);
         tp.put("businessSize", getBusinessSize(id));
@@ -111,8 +145,11 @@ public class MockTaxpayerAdapter {
         tp.put("operatingStatus", OPERATING[(id * 11) % OPERATING.length]);
         tp.put("complianceStatus", COMPLIANCE[(id * 13) % COMPLIANCE.length]);
         tp.put("taxCenter", taxCenter);
-        tp.put("region", taxCenter.substring(3, 5));
-        tp.put("city", taxCenter.substring(3, 5));
+        
+        String regionCode = taxCenter.equals("federal-lto1") ? "FED" : taxCenter.substring(3, 5);
+        tp.put("region", regionCode);
+        tp.put("regionCode", regionCode);
+        tp.put("city", regionCode);
 
         long annualRevenue = genRevenue(id);
         Map<String, Object> financials = new HashMap<>();
@@ -144,12 +181,32 @@ public class MockTaxpayerAdapter {
      */
     private static Map<String, Object> createLightweightTaxpayer(int id, String tin, String taxCenter, String[] sectors) {
         Map<String, Object> tp = new HashMap<>();
-        tp.put("tin", tin);
+        String fullName = generateName(id, sectors);
+        tp.put("tin", String.format("1%09d", id)); // 10-digit TINs like 1000000001
         tp.put("taxpayerId", "TP-" + id);
-        tp.put("name", generateName(id, sectors));
+        tp.put("name", fullName);
+        tp.put("legalName", fullName);
+        tp.put("tradeName", fullName);
+        
+        String[] legalForms = {"Sole Propr. MTD", "Private Lim S/IV", "Share Com LTO", "Sole Propr. R/T"};
+        tp.put("legalForm", legalForms[id % legalForms.length]);
+        
+        String[] sectorCodes = {"IMP", "FIN", "AGR", "R/T", "SRV", "MFG", "CON"};
+        tp.put("sectorCode", sectorCodes[id % sectorCodes.length]);
+        
+        String[] subSectors = {"Consumer Goods Import", "Microfinance Financial S", "Coffee Proc Agriculture", "Fuel Station Retail Trade", "Supermarket Retail Trade", "Hardware Retail"};
+        tp.put("subSector", subSectors[id % subSectors.length]);
+
+        String[] tinStatuses = {"valid", "valid", "valid", "suspended", "inactive"};
+        tp.put("tinStatus", tinStatuses[id % tinStatuses.length]);
+        
         tp.put("sector", sectors[id % sectors.length]);
         tp.put("taxCenter", taxCenter);
-        tp.put("region", taxCenter.substring(3, 5));
+        
+        String regionCode = taxCenter.equals("federal-lto1") ? "FED" : taxCenter.substring(3, 5);
+        tp.put("region", regionCode);
+        tp.put("regionCode", regionCode);
+        
         tp.put("annualRevenue", genRevenue(id));
         tp.put("estimatedRevenue", genEstRevenue(genRevenue(id), id));
         tp.put("employeeCount", genEmployees(id));
@@ -238,9 +295,32 @@ public class MockTaxpayerAdapter {
 
     public List<Map<String, Object>> getTaxpayersForTaxCenter(String taxCenter) {
         ensureInitialized();
-        return TAXPAYERS.values().stream()
-            .filter(tp -> taxCenter.equals(tp.get("taxCenter")))
+        if (taxCenter == null || taxCenter.isEmpty()) return new ArrayList<>(TAXPAYERS.values());
+        
+        List<Map<String, Object>> list = TAXPAYERS.values().stream()
+            .filter(tp -> taxCenter.equalsIgnoreCase((String) tp.get("taxCenter")))
             .collect(Collectors.toList());
+            
+        if (!list.isEmpty()) return list;
+
+        // Fallback: match by tax center prefix or region
+        String normalizedTc = taxCenter.toUpperCase();
+        if (taxCenter.toLowerCase().startsWith("federal-lto") || taxCenter.toLowerCase().startsWith("fed")) {
+            normalizedTc = "federal-lto1";
+        }
+        final String searchTc = normalizedTc;
+        
+        list = TAXPAYERS.values().stream()
+            .filter(tp -> {
+                String tc = (String) tp.get("taxCenter");
+                return tc != null && (tc.equalsIgnoreCase(searchTc) || tc.contains(searchTc));
+            })
+            .collect(Collectors.toList());
+            
+        if (!list.isEmpty()) return list;
+
+        // Final fallback: return all detailed taxpayers
+        return new ArrayList<>(TAXPAYERS.values()).subList(0, Math.min(TAXPAYERS.size(), 500));
     }
 
     /** Get only the 500 detailed taxpayers for a tax center (for actual case creation) */

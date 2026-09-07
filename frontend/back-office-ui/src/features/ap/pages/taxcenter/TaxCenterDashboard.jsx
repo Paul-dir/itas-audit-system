@@ -1,23 +1,23 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Building2, Clock, CheckCircle, Send, Eye, AlertTriangle, Check, ArrowLeft, FileText, Shield, Play, RefreshCw } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { Building2, Clock, CheckCircle, Send, Eye, AlertTriangle, Check, ArrowLeft, FileText, Shield, Play, RefreshCw, UserCheck, Search, Filter } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Textarea, Empty, ConfirmModal, Pagination } from '../../../../components/ui/index.jsx';
-import { AUDIT_TYPES } from '../../data/constants.js';
+import { Card, StatCard, Button, Modal, Badge, Alert, Textarea, Empty, ConfirmModal, Pagination, Input, Select } from '../../../../components/ui/index.jsx';
+import { AUDIT_TYPES, isAuditTypeMatch } from '../../data/constants.js';
 import { formatRevenue } from '../../utils/revenueFormatter.js';
 import PlanStatusBadge from '../shared/PlanStatusBadge.jsx';
+import CaseDetailModal from '../shared/CaseDetailModal.jsx';
+import TaxCenterCapacityFeedbackModal from './TaxCenterCapacityFeedbackModal.jsx';
+import IssueDirectorReviewModal from '../../../issue/components/IssueDirectorReviewModal.jsx';
+import TaxCenterTeamLeaderAssignModal from './TaxCenterTeamLeaderAssignModal.jsx';
 
 export default function TaxCenterDashboard({ view }) {
   const { user } = useAuth();
+  const [selectedCase, setSelectedCase] = useState(null);
   const [feedbackModal, setFeedbackModal] = useState(null);
-  const [feedbackStep, setFeedbackStep] = useState('review');
-  const [feedbackText, setFeedbackText] = useState('');
-  const [adjustedAllocation, setAdjustedAllocation] = useState({});
-  const [loading, setLoading] = useState(false);
   const [viewDetailModal, setViewDetailModal] = useState(null);
+  const [issueDirectorCase, setIssueDirectorCase] = useState(null);
   const [tcAllocations, setTcAllocations] = useState([]);
   const [allocationsLoading, setAllocationsLoading] = useState(false);
-  const [submissionResult, setSubmissionResult] = useState(null);
-  const [submissionError, setSubmissionError] = useState(null);
   const [auditCases, setAuditCases] = useState(null);
   const [casesLoading, setCasesLoading] = useState(false);
   const [cascading, setCascading] = useState(null); // planId being cascaded
@@ -27,14 +27,129 @@ export default function TaxCenterDashboard({ view }) {
   const [casePage, setCasePage] = useState(1);
   const [caseItemsPerPage, setCaseItemsPerPage] = useState(10);
 
+  // Assignment and Filter states
+  const [selectedCaseIds, setSelectedCaseIds] = useState([]);
+  const [filterAuditType, setFilterAuditType] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [casesToAssign, setCasesToAssign] = useState([]);
+
   const allCasesList = auditCases?.cases || [];
-  const totalCaseCount = auditCases?.totalCases || allCasesList.length;
-  const totalCasePages = Math.ceil(totalCaseCount / caseItemsPerPage) || 1;
-  const paginatedCases = allCasesList.slice((casePage - 1) * caseItemsPerPage, casePage * caseItemsPerPage);
+
+  // Distinct plan years from cases
+  const availablePlanYears = useMemo(() => {
+    const years = new Set(allCasesList.map(c => {
+      if (c.planYear) return String(c.planYear);
+      if (c.caseNumber && c.caseNumber.includes('-')) {
+        const p = c.caseNumber.split('-')[0];
+        if (!isNaN(p) && p.length === 4) return p;
+      }
+      return '2026';
+    }));
+    return ['ALL', ...Array.from(years).sort()];
+  }, [allCasesList]);
+
+  // Filtered cases based on user controls
+  const filteredCases = useMemo(() => {
+    return allCasesList.filter(c => {
+      // Audit Type filter
+      if (filterAuditType !== 'ALL') {
+        if (!isAuditTypeMatch(filterAuditType, c.auditType)) return false;
+      }
+      // Status filter
+      if (filterStatus !== 'ALL') {
+        if (c.status !== filterStatus) return false;
+      }
+      // Year filter
+      if (filterYear !== 'ALL') {
+        let yr = c.planYear;
+        if (!yr && c.caseNumber && c.caseNumber.includes('-')) {
+          const p = c.caseNumber.split('-')[0];
+          if (!isNaN(p) && p.length === 4) yr = p;
+        }
+        if (String(yr || '2026') !== String(filterYear)) return false;
+      }
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const tp = (c.taxpayerName || '').toLowerCase();
+        const tin = (c.taxpayerId || c.tin || '').toLowerCase();
+        const num = (c.caseNumber || '').toLowerCase();
+        if (!tp.includes(q) && !tin.includes(q) && !num.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allCasesList, filterAuditType, filterStatus, filterYear, searchQuery]);
+
+  const totalFilteredCount = filteredCases.length;
+  const totalFilteredPages = Math.ceil(totalFilteredCount / caseItemsPerPage) || 1;
+  const paginatedCases = filteredCases.slice((casePage - 1) * caseItemsPerPage, casePage * caseItemsPerPage);
+
+  const toggleSelectAll = () => {
+    if (selectedCaseIds.length === paginatedCases.length && paginatedCases.length > 0) {
+      setSelectedCaseIds([]);
+    } else {
+      setSelectedCaseIds(paginatedCases.map(c => c.id || c.caseNumber));
+    }
+  };
+
+  const toggleSelectCase = (id) => {
+    setSelectedCaseIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleOpenAssignModal = (cases = null) => {
+    if (cases && cases.length > 0) {
+      setCasesToAssign(cases);
+    } else {
+      const selected = allCasesList.filter(c => selectedCaseIds.includes(c.id || c.caseNumber));
+      setCasesToAssign(selected);
+    }
+    setAssignModalOpen(true);
+  };
+
+  const issueCases = allCasesList.filter(c => ['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase()));
+  const pendingDirectorDecisionCases = issueCases.filter(c => ['SUBMITTED_TO_TC_DIRECTOR', 'TL_APPROVED'].includes(c.status));
+
+  const mapCaseForModal = (c) => {
+    if (!c) return null;
+    let year = c.planYear;
+    if (!year && c.caseNumber && c.caseNumber.includes('-')) {
+      const prefix = c.caseNumber.split('-')[0];
+      if (!isNaN(prefix)) year = parseInt(prefix, 10);
+    }
+    return {
+      ...c,
+      id: c.id || c.caseNumber,
+      caseNumber: c.caseNumber,
+      taxpayerName: c.taxpayerName || (c.taxpayerId ? `Taxpayer ${c.taxpayerId}` : 'Taxpayer Corp'),
+      tin: c.taxpayerId || c.tin,
+      sector: c.sector || 'Import/Export & General Trading',
+      annualRevenue: c.estimatedRevenue || 14200000,
+      employees: c.employees || 35,
+      taxCenter: c.taxCenterCode || c.taxCenter || user?.taxCenter,
+      region: c.regionCode || c.region || user?.region,
+      riskScore: c.riskScore || 65,
+      riskLevel: c.riskScore >= 60 ? 'CRITICAL' : c.riskScore >= 40 ? 'HIGH' : c.riskScore >= 20 ? 'MEDIUM' : 'LOW',
+      riskFactors: c.riskFactors || ['Turnover Mismatch', 'Large Discrepancy with Customs Declarations', 'High VAT Refund Claims'],
+      auditType: c.auditType,
+      status: c.status || 'PENDING_ASSIGNMENT',
+      planId: c.planId,
+      planYear: year || 2026,
+      assignedTeamLeader: c.assignedTeamLeaderId || c.assignedTeamLeader,
+      assignedAuditor: c.assignedAuditorId || c.assignedAuditor,
+      createdAt: c.createdAt || new Date().toISOString(),
+      notes: c.notes || 'Automated risk engine case selection. High variance flagged between domestic sales declaration and third-party bank transaction logs.'
+    };
+  };
 
   const mapTaxCenterToBackendFormat = (tcFromUser) => {
     if (!tcFromUser) return null;
     const mapping = {
+      'federal-lto1': 'federal-lto1', 'federal-lto2': 'federal-lto2',
       'addis_ababa-tc1': 'AA-TC1', 'addis_ababa-tc2': 'AA-TC2', 'addis_ababa-tc3': 'AA-TC3',
       'amhara-tc1': 'BA-TC1', 'amhara-tc2': 'BA-TC2', 'amhara-tc3': 'BA-TC3',
       'oromia-tc1': 'BB-TC1', 'oromia-tc2': 'BB-TC2', 'oromia-tc3': 'BB-TC3',
@@ -48,6 +163,7 @@ export default function TaxCenterDashboard({ view }) {
   const mapRegionToBackendFormat = (regionFromUser) => {
     if (!regionFromUser) return null;
     const mapping = {
+      'federal_level': 'FED', 'fed': 'FED',
       'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB',
       'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO',
     };
@@ -73,7 +189,7 @@ export default function TaxCenterDashboard({ view }) {
       }
     };
     loadRevenue();
-  }, [user, taxCenter]);
+  }, [user?.id, user?.taxCenterCode, taxCenter]);
 
   // Fetch allocations from backend
   const loadTcAllocations = useCallback(async () => {
@@ -123,13 +239,11 @@ export default function TaxCenterDashboard({ view }) {
   useEffect(() => { loadCases(); }, [loadCases]);
 
   // ── Separate allocations ──
-  // pendingFeedback: pre-approval plan review stage (AWAITING_REGIONAL_FEEDBACK) -> Submit capacity feedback ONLY (NO case creation)
-  // pendingCascade: post-approval deployed plan stage (APPROVED_TO_REGIONS / SENT_TO_TAX_CENTERS / FINALIZED) -> Create Cases via Risk Engine
-  const pendingFeedback = tcAllocations.filter(a => 
-    !a.acknowledged && (a.planStatus === 'AWAITING_REGIONAL_FEEDBACK' || !['APPROVED_TO_REGIONS', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus))
-  );
+  // pendingFeedback: pre-approval plan review stage
+  const pendingFeedback = tcAllocations.filter(a => !a.acknowledged);
+  // pendingCascade: deployed plans or plans ready for immediate case cascade
   const pendingCascade = tcAllocations.filter(a => 
-    !a.acknowledged && ['APPROVED_TO_REGIONS', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus)
+    !a.acknowledged || ['APPROVED_TO_REGIONS', 'AWAITING_REGIONAL_FEEDBACK', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus)
   );
   const acknowledged = tcAllocations.filter(a => a.acknowledged);
 
@@ -183,95 +297,10 @@ export default function TaxCenterDashboard({ view }) {
   // ── FEEDBACK (acknowledge allocation) ──
   const openFeedback = (allocation) => {
     setFeedbackModal(allocation);
-    setFeedbackStep('review');
-    setFeedbackText('');
-    setSubmissionResult(null);
-    setSubmissionError(null);
-    const adjustments = {};
-    const backendAlloc = allocation.allocationsByAuditType || {};
-    const normalizedBackend = {};
-    Object.keys(backendAlloc).forEach(key => {
-      let normKey = key.toLowerCase();
-      if (normKey === 'comprehensive_audit') normKey = 'comprehensive';
-      normalizedBackend[normKey] = backendAlloc[key];
-    });
-    AUDIT_TYPES.forEach(at => { adjustments[at.id] = normalizedBackend[at.id] || 0; });
-    setAdjustedAllocation(adjustments);
-  };
-
-  const handleAllocationChange = (auditTypeId, value) => {
-    setAdjustedAllocation(prev => ({ ...prev, [auditTypeId]: Math.max(0, parseInt(value) || 0) }));
-  };
-
-  const totalAdjusted = Object.values(adjustedAllocation).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
-  const originalTotal = feedbackModal?.proposedCount || 0;
-  const reduction = originalTotal - totalAdjusted;
-  const reductionPercent = originalTotal > 0 ? Math.round((reduction / originalTotal) * 100) : 0;
-
-  const goToConfirm = () => {
-    if (!feedbackText.trim()) {
-      setSubmissionError('Please provide comments explaining your adjustments before submitting.');
-      return;
-    }
-    setSubmissionError(null);
-    setFeedbackStep('confirm');
-  };
-
-  const handleSubmit = useCallback(async () => {
-    if (!feedbackModal) return;
-    setLoading(true);
-    setSubmissionError(null);
-    try {
-      const response = await fetch(
-        `/api/v1/backoffice/ap/tax-center/allocations/${feedbackModal.allocationId}/acknowledge`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user.id || 'tax-center-staff' },
-          body: JSON.stringify({
-            taxCenterId: taxCenter, feedback: feedbackText,
-            adjustedAllocations: adjustedAllocation, totalAdjusted, originalTotal
-          })
-        }
-      );
-      const result = await response.json();
-      if (result.status === 'ERROR' || result.error) {
-        setSubmissionError(result.error?.message || result.message || 'Failed');
-        setFeedbackStep('error');
-        return;
-      }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setSubmissionResult({
-        planName: feedbackModal.planName, proposedCount: originalTotal,
-        adjustedCount: totalAdjusted, reduction, reductionPercent,
-        timestamp: new Date().toLocaleString(),
-      });
-      setFeedbackStep('success');
-      await loadTcAllocations();
-    } catch (error) {
-      setSubmissionError(error.message);
-      setFeedbackStep('error');
-    } finally {
-      setLoading(false);
-    }
-  }, [feedbackModal, feedbackText, adjustedAllocation, totalAdjusted, originalTotal, taxCenter, user.id, reduction, reductionPercent, loadTcAllocations]);
-
-  const closeModal = () => {
-    setFeedbackModal(null); setFeedbackStep('review'); setFeedbackText('');
-    setAdjustedAllocation({}); setSubmissionResult(null); setSubmissionError(null);
   };
 
   const totalAllocations = tcAllocations.reduce((sum, a) => sum + (a.proposedCount || 0), 0);
   const totalCasesCount = auditCases?.totalCases || 0;
-
-  const getModalTitle = () => {
-    switch (feedbackStep) {
-      case 'review': return '📋 Step 1: Review & Adjust Your Allocation';
-      case 'confirm': return '⚠️ Step 2: Confirm Submission';
-      case 'success': return '✅ Submission Successful';
-      case 'error': return '❌ Submission Failed';
-      default: return 'Feedback';
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -530,48 +559,247 @@ export default function TaxCenterDashboard({ view }) {
                 </div>
               ))}
             </div>
+
+            {/* ── Issue Audit Cases Awaiting Directorate Decision Banner (FR-04.6-07 / NO Committee) ── */}
+            {pendingDirectorDecisionCases.length > 0 && (
+              <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    {pendingDirectorDecisionCases.length}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider">
+                      Issue Audit Directorate Follow-Up Decisions Pending
+                    </p>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                      {pendingDirectorDecisionCases.length} case(s) have completed Issue Team Leader technical review. Under ITAS statutory governance (FR-04.6/07 - NO Committee), your final follow-up determination is required.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 font-semibold"
+                  onClick={() => setIssueDirectorCase(mapCaseForModal(pendingDirectorDecisionCases[0]))}
+                >
+                  Decide Next Case →
+                </Button>
+              </div>
+            )}
+
+            {/* ── Filter & Team Leader Assignment Toolbar ── */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mb-3 bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative min-w-[180px]">
+                  <Search size={13} className="absolute left-2.5 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search TIN, taxpayer, case..."
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCasePage(1); }}
+                    className="w-full text-xs pl-8 pr-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Audit Type Filter */}
+                <select
+                  value={filterAuditType}
+                  onChange={(e) => { setFilterAuditType(e.target.value); setCasePage(1); }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="ALL">All Audit Types</option>
+                  {AUDIT_TYPES.map(at => (
+                    <option key={at.id} value={at.id}>{at.name}</option>
+                  ))}
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  value={filterStatus}
+                  onChange={(e) => { setFilterStatus(e.target.value); setCasePage(1); }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="PENDING_ASSIGNMENT">Pending Assignment</option>
+                  <option value="ASSIGNED_TO_TEAM_LEADER">Assigned to TL</option>
+                  <option value="ASSIGNED_TO_COMMITTEE">Assigned to Committee</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="SUBMITTED_TO_TC_DIRECTOR">Pending Director Decision</option>
+                  <option value="COMPLETED">Completed</option>
+                </select>
+
+                {/* Plan Year Filter */}
+                <select
+                  value={filterYear}
+                  onChange={(e) => { setFilterYear(e.target.value); setCasePage(1); }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {availablePlanYears.map(yr => (
+                    <option key={yr} value={yr}>{yr === 'ALL' ? 'All Plan Years' : `FY ${yr}`}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assignment Action */}
+              <div className="flex items-center gap-2">
+                {selectedCaseIds.length > 0 && (
+                  <Button
+                    size="xs"
+                    variant="primary"
+                    icon={UserCheck}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                    onClick={() => handleOpenAssignModal()}
+                  >
+                    👤 Assign to Team Leader ({selectedCaseIds.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                   <tr>
+                    <th className="w-10 px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={paginatedCases.length > 0 && paginatedCases.every(c => selectedCaseIds.includes(c.id || c.caseNumber))}
+                        onChange={toggleSelectAll}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Case #</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Taxpayer</th>
                     <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">Audit Type</th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">Year</th>
                     <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">Risk Score</th>
                     <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Assigned TL</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Assigned Auditor</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {paginatedCases.map((c, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{c.caseNumber}</td>
-                      <td className="px-4 py-2 text-gray-900 dark:text-white">{c.taxpayerId}</td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          {c.auditType?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`font-bold ${
-                          c.riskScore >= 50 ? 'text-red-600' :
-                          c.riskScore >= 35 ? 'text-orange-500' :
-                          c.riskScore >= 20 ? 'text-yellow-600' : 'text-green-600'
-                        }`}>{c.riskScore}</span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <Badge color={c.status === 'PENDING_ASSIGNMENT' ? 'yellow' : c.status === 'IN_PROGRESS' ? 'blue' : 'green'}>
-                          {c.status?.replace(/_/g, ' ')}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedCases.map((c, idx) => {
+                    const isSelected = selectedCaseIds.includes(c.id || c.caseNumber);
+                    const caseYr = c.planYear || (c.caseNumber && c.caseNumber.includes('-') && !isNaN(c.caseNumber.split('-')[0]) ? c.caseNumber.split('-')[0] : 2026);
+                    return (
+                      <tr 
+                        key={c.id || idx} 
+                        className={`hover:bg-blue-50/50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}
+                        onClick={() => setSelectedCase(mapCaseForModal(c))}
+                      >
+                        <td className="w-10 px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectCase(c.id || c.caseNumber)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-blue-600 dark:text-blue-400 font-semibold">{c.caseNumber}</td>
+                        <td className="px-4 py-2.5">
+                          <p className="font-semibold text-gray-900 dark:text-white text-xs">{c.taxpayerName || c.taxpayerId}</p>
+                          <p className="text-[11px] font-mono text-gray-400">TIN: {c.taxpayerId || c.tin}</p>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {c.auditType?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Badge color="blue" size="xs">FY {caseYr}</Badge>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`font-bold ${
+                            c.riskScore >= 50 ? 'text-red-600' :
+                            c.riskScore >= 35 ? 'text-orange-500' :
+                            c.riskScore >= 20 ? 'text-yellow-600' : 'text-green-600'
+                          }`}>{c.riskScore}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Badge color={['COMPLETED', 'REPORT_FINALIZED'].includes(c.status) ? 'green' : ['SUBMITTED_TO_TC_DIRECTOR', 'TL_APPROVED'].includes(c.status) ? 'indigo' : c.status === 'PENDING_ASSIGNMENT' ? 'yellow' : c.status === 'IN_PROGRESS' ? 'blue' : 'purple'}>
+                            {c.status?.replace(/_/g, ' ')}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {c.assignedTeamLeaderId ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {(c.assignedTeamLeaderName || c.assignedTeamLeaderId).charAt(0)}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]" title={c.assignedTeamLeaderName || c.assignedTeamLeaderId}>
+                                {c.assignedTeamLeaderName || c.assignedTeamLeaderId}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {c.assignedAuditorId ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {(c.assignedAuditorName || c.assignedAuditorId).charAt(0)}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]" title={c.assignedAuditorName || c.assignedAuditorId}>
+                                {c.assignedAuditorName || c.assignedAuditorId}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 dark:text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {!c.assignedTeamLeaderId && (
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                icon={UserCheck}
+                                onClick={() => handleOpenAssignModal([c])}
+                              >
+                                Assign TL
+                              </Button>
+                            )}
+                            {['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase()) && (
+                              <Button 
+                                size="xs" 
+                                variant="primary" 
+                                icon={Shield} 
+                                className={`${
+                                  ['SUBMITTED_TO_TC_DIRECTOR', 'TL_APPROVED'].includes(c.status)
+                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs font-semibold'
+                                    : 'bg-slate-700 hover:bg-slate-800 text-white'
+                                }`}
+                                onClick={() => setIssueDirectorCase(mapCaseForModal(c))}
+                              >
+                                {['SUBMITTED_TO_TC_DIRECTOR', 'TL_APPROVED'].includes(c.status)
+                                  ? '⚡ Directorate Decision'
+                                  : 'Director Review'}
+                              </Button>
+                            )}
+                            <Button 
+                              size="xs" 
+                              variant="secondary" 
+                              icon={Eye} 
+                              onClick={() => setSelectedCase(mapCaseForModal(c))}
+                            >
+                              View Details
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <Pagination
               currentPage={casePage}
-              totalPages={totalCasePages}
-              totalItems={totalCaseCount}
+              totalPages={totalFilteredPages}
+              totalItems={totalFilteredCount}
               itemsPerPage={caseItemsPerPage}
               onPageChange={setCasePage}
               onItemsPerPageChange={(newVal) => { setCaseItemsPerPage(newVal); setCasePage(1); }}
@@ -643,130 +871,131 @@ export default function TaxCenterDashboard({ view }) {
         )}
       </Modal>
 
-      {/* ═══ FEEDBACK MODAL ═══ */}
-      <Modal open={!!feedbackModal} onClose={closeModal} title={getModalTitle()} size="2xl"
-        footer={
-          feedbackStep === 'review' ? (
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={closeModal}>Cancel</Button>
-              <Button variant="primary" icon={Send} onClick={goToConfirm} disabled={!feedbackText.trim()}>Review & Submit →</Button>
-            </div>
-          ) : feedbackStep === 'confirm' ? (
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" icon={ArrowLeft} onClick={() => setFeedbackStep('review')}>← Back</Button>
-              <Button variant="success" icon={Send} loading={loading} onClick={handleSubmit}>{loading ? 'Submitting...' : 'Confirm & Submit'}</Button>
-            </div>
-          ) : (
-            <div className="flex justify-end gap-2"><Button variant="primary" onClick={closeModal}>Done</Button></div>
-          )
-        }>
-        {feedbackModal && feedbackStep === 'review' && (
-          <div className="space-y-5">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200">
-              <p className="text-sm text-blue-800">
-                You have been allocated <strong>{feedbackModal.proposedCount?.toLocaleString()} cases</strong> from plan <strong>"{feedbackModal.planName}"</strong>.
-              </p>
-            </div>
-            <div className="overflow-x-auto border border-gray-300 rounded-lg">
-              <table className="w-full text-sm">
-                <thead><tr className="bg-gray-100 dark:bg-slate-800">
-                  <th className="px-4 py-3 text-left font-semibold">Audit Type</th>
-                  <th className="px-4 py-3 text-right font-semibold">Allocated</th>
-                  <th className="px-4 py-3 text-right font-semibold">Your Capacity</th>
-                </tr></thead>
-                <tbody>
-                  {AUDIT_TYPES.map(at => {
-                    const orig = feedbackModal.allocationsByAuditType?.[at.id] || feedbackModal.allocationsByAuditType?.[at.id.toUpperCase()] || 0;
-                    const curr = adjustedAllocation[at.id] || 0;
-                    return (
-                      <tr key={at.id} className="border-b border-gray-200">
-                        <td className="px-4 py-3"><Badge color={at.color} className="text-xs">{at.shortName}</Badge> <span className="font-medium">{at.name}</span></td>
-                        <td className="px-4 py-3 text-right">{orig.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">
-                          <input type="number" min="0" value={curr}
-                            onChange={(e) => handleAllocationChange(at.id, e.target.value)}
-                            className="w-24 px-2 py-1 text-right font-semibold border rounded bg-white dark:bg-slate-700" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <Textarea label="Comments *" placeholder="Explain your capacity constraints..." value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)} rows={3} />
-            {submissionError && <Alert type="error">{submissionError}</Alert>}
-          </div>
-        )}
-        {feedbackModal && feedbackStep === 'confirm' && (
-          <div className="space-y-4">
-            <Alert type="warning">Review before submitting — this cannot be undone.</Alert>
-            <div className="bg-gray-50 rounded-lg p-4 text-sm">
-              <p><strong>Plan:</strong> {feedbackModal.planName}</p>
-              <p><strong>Original:</strong> {originalTotal.toLocaleString()} | <strong>Your Acceptance:</strong> {totalAdjusted.toLocaleString()}</p>
-              <p><strong>Comments:</strong> "{feedbackText}"</p>
-            </div>
-          </div>
-        )}
-        {feedbackModal && feedbackStep === 'success' && (
-          <div className="text-center py-4">
-            <Check className="h-12 w-12 text-green-600 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-green-700">Feedback Submitted!</h3>
-            <p className="text-sm text-gray-600 mt-2">Your acknowledgment has been recorded.</p>
-          </div>
-        )}
-        {feedbackModal && feedbackStep === 'error' && (
-          <div className="text-center py-4">
-            <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-red-700">Failed</h3>
-            <p className="text-sm text-gray-600 mt-2">{submissionError}</p>
-          </div>
-        )}
-      </Modal>
+      {/* ═══ ENTERPRISE CAPACITY FEEDBACK & ALLOCATION MODAL ═══ */}
+      <TaxCenterCapacityFeedbackModal
+        open={!!feedbackModal}
+        allocation={feedbackModal}
+        taxCenter={taxCenter}
+        user={user}
+        onClose={() => setFeedbackModal(null)}
+        onSuccess={loadTcAllocations}
+      />
 
       {/* ═══ VIEW DETAIL MODAL ═══ */}
-      <Modal open={!!viewDetailModal} onClose={() => setViewDetailModal(null)} title="Allocation Details" size="2xl"
+      <Modal
+        open={!!viewDetailModal}
+        onClose={() => setViewDetailModal(null)}
+        title="Plan Allocation & Cascade Dossier"
+        size="lg"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setViewDetailModal(null)}>Close</Button>
             {!viewDetailModal?.acknowledged && (
-              <Button variant="success" icon={Play} loading={cascading === viewDetailModal?.planId}
-                onClick={() => { handleCascade(viewDetailModal); setViewDetailModal(null); }}>
-                Create Cases
+              <Button
+                variant="success"
+                icon={Play}
+                loading={cascading === viewDetailModal?.planId}
+                onClick={() => { handleCascade(viewDetailModal); setViewDetailModal(null); }}
+              >
+                Execute Case Cascade
               </Button>
             )}
           </div>
-        }>
+        }
+      >
         {viewDetailModal && (
           <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-xs text-gray-500">Plan Name</p><p className="font-semibold">{viewDetailModal.planName}</p></div>
-                <div><p className="text-xs text-gray-500">Status</p>
-                  <Badge color={viewDetailModal.acknowledged ? 'green' : 'yellow'} dot>
-                    {viewDetailModal.acknowledged ? 'Acknowledged' : 'Pending Cascade'}
-                  </Badge>
+            <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/50 dark:from-slate-800 dark:to-slate-800/60 rounded-xl p-4 border border-blue-100 dark:border-slate-700">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-900 dark:text-white text-base">
+                      {viewDetailModal.planName}
+                    </h3>
+                    <Badge color="blue" size="xs">FY {viewDetailModal.planYear}</Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Region: <strong className="text-gray-700 dark:text-gray-300">{viewDetailModal.regionCode || 'N/A'}</strong> • Branch: <strong className="text-gray-700 dark:text-gray-300 uppercase">{(taxCenter || '').replace(/-/g, ' ')}</strong>
+                  </p>
                 </div>
-                <div><p className="text-xs text-gray-500">Region</p><p className="font-semibold">{viewDetailModal.regionCode}</p></div>
-                <div><p className="text-xs text-gray-500">Plan Year</p><p className="font-semibold">{viewDetailModal.planYear}</p></div>
+                <Badge color={viewDetailModal.acknowledged ? 'green' : 'yellow'} dot>
+                  {viewDetailModal.acknowledged ? 'Approved & Ready' : 'Pending Cascade'}
+                </Badge>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-gray-200 dark:border-slate-700">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Allocated Cases</span>
+                <p className="text-xl font-black text-gray-900 dark:text-white mt-1">
+                  {viewDetailModal.proposedCount?.toLocaleString() || 0}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-gray-200 dark:border-slate-700">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Execution Readiness</span>
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                  <CheckCircle size={14} /> Ready for Risk Engine Cascade
+                </p>
+              </div>
+            </div>
+
             {viewDetailModal.allocationsByAuditType && (
-              <div>
-                <p className="text-sm font-semibold mb-2">Allocation by Audit Type</p>
-                <div className="grid grid-cols-5 gap-2">
-                  {Object.entries(viewDetailModal.allocationsByAuditType).map(([type, count]) => (
-                    <div key={type} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 text-center text-sm border">
-                      <p className="text-xs text-gray-500">{type.replace(/_/g, ' ')}</p>
-                      <p className="font-bold">{count.toLocaleString()}</p>
-                    </div>
-                  ))}
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                  Allocation Breakdown by Stream
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {AUDIT_TYPES.map(at => {
+                    const count = viewDetailModal.allocationsByAuditType?.[at.id] ||
+                                  viewDetailModal.allocationsByAuditType?.[at.id.toUpperCase()] || 0;
+                    return (
+                      <div key={at.id} className="bg-gray-50 dark:bg-slate-800 rounded-lg p-2.5 text-center border border-gray-200 dark:border-slate-700">
+                        <Badge color={at.color} size="xs" className="mb-1">{at.shortName}</Badge>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{at.name}</p>
+                        <p className="text-base font-bold text-gray-900 dark:text-white mt-0.5">{count.toLocaleString()}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
         )}
       </Modal>
+
+      {/* ═══ DETAILED TAXPAYER & AUDIT PROFILE MODAL ═══ */}
+      {selectedCase && (
+        <CaseDetailModal
+          caseData={selectedCase}
+          onClose={() => setSelectedCase(null)}
+        />
+      )}
+
+      {/* ═══ ISSUE AUDIT DIRECTORATE FOLLOW-UP DECISION MODAL (NO COMMITTEE) ═══ */}
+      {issueDirectorCase && (
+        <IssueDirectorReviewModal
+          caseData={issueDirectorCase}
+          user={user}
+          onClose={() => setIssueDirectorCase(null)}
+          onRefresh={loadCases}
+        />
+      )}
+
+      {/* ═══ TAX CENTER TEAM LEADER ASSIGNMENT MODAL ═══ */}
+      <TaxCenterTeamLeaderAssignModal
+        open={assignModalOpen}
+        onClose={() => {
+          setAssignModalOpen(false);
+          setCasesToAssign([]);
+        }}
+        selectedCases={casesToAssign}
+        taxCenter={taxCenter}
+        user={user}
+        onSuccess={() => {
+          setSelectedCaseIds([]);
+          loadCases();
+        }}
+      />
     </div>
   );
 }

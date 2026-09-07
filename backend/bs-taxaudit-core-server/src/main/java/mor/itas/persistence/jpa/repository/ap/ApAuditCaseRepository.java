@@ -74,4 +74,7 @@ public interface ApAuditCaseRepository extends JpaRepository<ApAuditCaseEntity, 
 
     @Query("SELECT ac.status, COUNT(ac) FROM ApAuditCaseEntity ac WHERE ac.taxCenterCode = :taxCenterCode GROUP BY ac.status")
     List<Object[]> countByTaxCenterCodeGroupedByStatus(@Param("taxCenterCode") String taxCenterCode);
+
+    // ── By case number ───────────────────────────────────────────────────────
+    java.util.Optional<ApAuditCaseEntity> findByCaseNumber(String caseNumber);
 }

@@ -69,10 +69,11 @@ public class PlanQueryController {
         if (response == null || response.getId() == null) return;
         
         Map<String, Object> regionalFeedback = new HashMap<>();
-        List<String> allRegionCodes = Arrays.asList("AA", "BA", "BB", "AB", "CA", "SO");
+        List<String> allRegionCodes = Arrays.asList("FED", "AA", "BA", "BB", "AB", "CA", "SO");
         
         // Map backend codes ↔ frontend IDs
         Map<String, String> codeToId = Map.of(
+            "FED", "federal_level",
             "AA", "addis_ababa", "BA", "amhara", "BB", "oromia",
             "AB", "dire_dawa", "CA", "snnpr", "SO", "somali"
         );

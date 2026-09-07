@@ -114,8 +114,9 @@ public class DirectorDashboardDtoMapper {
         Map<String, Object> result = new HashMap<>();
         
         // All possible region codes
-        List<String> allRegions = Arrays.asList("AA", "BA", "BB", "AB", "CA", "SO");
+        List<String> allRegions = Arrays.asList("FED", "AA", "BA", "BB", "AB", "CA", "SO");
         Map<String, String> codeToId = Map.of(
+            "FED", "federal_level",
             "AA", "addis_ababa", "BA", "amhara", "BB", "oromia",
             "AB", "dire_dawa", "CA", "snnpr", "SO", "somali"
         );

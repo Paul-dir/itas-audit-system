@@ -94,6 +94,23 @@ export const CASE_STATUS = {
   PENDING_ASSIGNMENT:         { id: 'PENDING_ASSIGNMENT',         label: 'Pending Assignment',      color: 'gray'   },
   ASSIGNED_TO_TEAM_LEADER:    { id: 'ASSIGNED_TO_TEAM_LEADER',    label: 'Assigned to Team Leader', color: 'blue'   },
   ASSIGNED_TO_COMMITTEE:      { id: 'ASSIGNED_TO_COMMITTEE',      label: 'Assigned to Committee',   color: 'purple' },
+
+  // Workflow Approval States
+  SUBMITTED_FOR_TL_REVIEW:    { id: 'SUBMITTED_FOR_TL_REVIEW',    label: 'Pending TL Review',       color: 'purple' },
+  SUBMITTED_TO_TL:            { id: 'SUBMITTED_TO_TL',            label: 'Pending TL Review',       color: 'purple' },
+  REPORT_SUBMITTED_FOR_TL_REVIEW: { id: 'REPORT_SUBMITTED_FOR_TL_REVIEW', label: 'Report Pending TL Review', color: 'purple' },
+  REVISION_REQUESTED:         { id: 'REVISION_REQUESTED',         label: 'Revisions Requested',     color: 'orange' },
+  RETURNED_TO_AUDITOR:        { id: 'RETURNED_TO_AUDITOR',        label: 'Returned for Revision',   color: 'rose' },
+  TL_APPROVED:                { id: 'TL_APPROVED',                label: 'TL Endorsed',             color: 'blue'   },
+  SUBMITTED_TO_TC_DIRECTOR:   { id: 'SUBMITTED_TO_TC_DIRECTOR',   label: 'Pending TC Director Decision', color: 'indigo' },
+  SUBMITTED_FOR_COMMITTEE:    { id: 'SUBMITTED_FOR_COMMITTEE',    label: 'Pending Committee Deliberation', color: 'indigo' },
+  AWAITING_COMMITTEE_DECISION:{ id: 'AWAITING_COMMITTEE_DECISION',label: 'Awaiting Committee Vote', color: 'indigo' },
+  COMMITTEE_APPROVED:         { id: 'COMMITTEE_APPROVED',         label: 'Committee Approved ✓',    color: 'green'  },
+  RETURNED_BY_COMMITTEE:      { id: 'RETURNED_BY_COMMITTEE',      label: 'Returned by Committee',   color: 'orange' },
+  PENDING_NOTICE_ISSUANCE:    { id: 'PENDING_NOTICE_ISSUANCE',    label: 'Pending Notice Issuance', color: 'teal'   },
+  REPORT_FINALIZED:           { id: 'REPORT_FINALIZED',           label: 'Report Finalized',        color: 'green'  },
+  REFERRED_TO_FRAUD:          { id: 'REFERRED_TO_FRAUD',          label: 'Referred to Tax Fraud',   color: 'rose'   },
+  REFERRED_TO_COMPREHENSIVE:  { id: 'REFERRED_TO_COMPREHENSIVE',  label: 'Escalated to Comp Audit', color: 'purple' },
 };
 
 export const SECTORS = [
@@ -196,3 +213,31 @@ export const convertDistributionFromBackend = (backendDistribution) => {
   });
   return frontendDistribution;
 };
+
+/**
+ * Flexible comparison of two audit type strings.
+ * Accurately matches:
+ * - 'desk_audit' <-> 'DESK_AUDIT' <-> 'desk' <-> 'DESK'
+ * - 'joint_audit' <-> 'JOINT_AUDIT' <-> 'joint' <-> 'JOINT' <-> 'ja'
+ * - 'transfer_pricing' <-> 'TRANSFER_PRICING' <-> 'tp' <-> 'TP'
+ * - 'comprehensive' <-> 'COMPREHENSIVE' <-> 'COMPREHENSIVE_AUDIT' <-> 'comp'
+ * - 'issue_audit' <-> 'ISSUE_AUDIT' <-> 'issue' <-> 'ISSUE'
+ */
+export const isAuditTypeMatch = (type1, type2) => {
+  if (!type1 || !type2) return false;
+  const t1 = String(type1).trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const t2 = String(type2).trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (t1 === t2) return true;
+
+  const normalize = (t) => {
+    if (t === 'DESK' || t === 'DESK_AUDIT') return 'DESK';
+    if (t === 'JOINT' || t === 'JOINT_AUDIT' || t === 'JA') return 'JOINT';
+    if (t === 'TP' || t === 'TRANSFER_PRICING' || t === 'TRANSFER') return 'TP';
+    if (t === 'COMP' || t === 'COMPREHENSIVE' || t === 'COMPREHENSIVE_AUDIT') return 'COMP';
+    if (t === 'ISSUE' || t === 'ISSUE_AUDIT') return 'ISSUE';
+    return t;
+  };
+
+  return normalize(t1) === normalize(t2);
+};
+

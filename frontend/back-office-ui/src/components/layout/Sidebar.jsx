@@ -109,7 +109,21 @@ const NAV_SECTIONS = {
     {
       title: 'AUDIT OPERATIONS',
       items: [
-        { id: 'cases', label: 'Committee Cases', icon: Users }
+        { id: 'cases', label: 'Committee Cases', icon: Users },
+        { id: 'assign-cases', label: 'Assign Cases to TLs', icon: Users }
+      ]
+    }
+  ],
+  committee_member: [
+    {
+      title: 'OVERVIEW',
+      items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+    },
+    {
+      title: 'AUDIT OPERATIONS',
+      items: [
+        { id: 'cases', label: 'Committee Cases', icon: Users },
+        { id: 'assign-cases', label: 'Assign Cases to TLs', icon: Users }
       ]
     }
   ],
@@ -186,6 +200,7 @@ const ROLE_LABELS = {
   tax_center_manager:'Tax Center Manager',
   team_leader:      'Team Leader',
   committee:        'Joint Audit Committee',
+  committee_member: 'Joint Audit Committee',
   auditor:          'Auditor',
   senior_management:'Senior Management',
   audit_requester:  'Directorate Audit Requester',

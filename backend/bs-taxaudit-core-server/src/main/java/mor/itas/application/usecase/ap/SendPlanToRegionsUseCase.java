@@ -34,10 +34,11 @@ public class SendPlanToRegionsUseCase {
     private final RegionalDeploymentRepository deploymentRepository;
     private final RegionalPlanAccessRepository accessRepository;
 
-    private static final String[] REGION_CODES = {"AA", "BA", "BB", "AB", "CA", "SO"};
+    private static final String[] REGION_CODES = {"FED", "AA", "BA", "BB", "AB", "CA", "SO"};
     
     // Map region codes to distribution keys (case-insensitive matching)
     private static final java.util.Map<String, String> REGION_CODE_TO_DIST_KEY = java.util.Map.ofEntries(
+        java.util.Map.entry("FED", "federal_level"),
         java.util.Map.entry("AA", "addis_ababa"),
         java.util.Map.entry("BA", "amhara"),
         java.util.Map.entry("BB", "oromia"),

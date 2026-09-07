@@ -87,12 +87,40 @@ public class MockUserRepository implements UserRepository {
             .collect(Collectors.toList());
     }
 
+    private String normalizeLoc(String loc) {
+        if (loc == null || loc.isBlank()) return "";
+        String s = loc.trim().toLowerCase();
+        if (s.startsWith("tc-aa-") || s.startsWith("aa-tc")) {
+            return "addis_ababa-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ba-") || s.startsWith("ba-tc") || s.startsWith("amhara-tc")) {
+            return "amhara-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-bb-") || s.startsWith("bb-tc") || s.startsWith("oromia-tc")) {
+            return "oromia-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ab-") || s.startsWith("ab-tc") || s.startsWith("tc-dd-") || s.startsWith("dire_dawa-tc")) {
+            return "dire_dawa-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ca-") || s.startsWith("ca-tc") || s.startsWith("snnpr-tc")) {
+            return "snnpr-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-so-") || s.startsWith("so-tc") || s.startsWith("tc-sm-") || s.startsWith("somali-tc")) {
+            return "somali-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("fed-lto") || s.startsWith("federal-lto")) {
+            return "federal-lto" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        return s;
+    }
+
     @Override
     public List<User> findByUserTypeAuditTypeAndLocation(String userType, String auditType, String assignedLocation) {
+        final String normTarget = normalizeLoc(assignedLocation);
         return userStore.values().stream()
-            .filter(u -> u.getUserType().equals(userType) &&
-                   u.getAuditType() != null && u.getAuditType().equals(auditType) &&
-                   u.getAssignedLocation().equals(assignedLocation))
+            .filter(u -> (userType == null || userType.isBlank() || u.getUserType().equalsIgnoreCase(userType)))
+            .filter(u -> (auditType == null || auditType.isBlank() || (u.getAuditType() != null && (u.getAuditType().equalsIgnoreCase(auditType) || u.getAuditType().replace("_", "").equalsIgnoreCase(auditType.replace("_", ""))))))
+            .filter(u -> (normTarget.isEmpty() || normalizeLoc(u.getAssignedLocation()).equalsIgnoreCase(normTarget)))
             .collect(Collectors.toList());
     }
 

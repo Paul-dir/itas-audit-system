@@ -67,12 +67,37 @@ public class UserController {
             }
         } else if ("auditor".equalsIgnoreCase(role) || "AUDITOR".equals(role)) {
             if (teamLeader != null && !teamLeader.isBlank()) {
-                // Auditors under a specific team leader — filter on assignedLocation matching TL's location
-                users = userManagementUseCase.getAllUsers().stream()
-                    .filter(u -> "AUDITOR".equalsIgnoreCase(u.getUserType()))
-                    .collect(java.util.stream.Collectors.toList());
-                // Further filter by teamLeader if stored on user
-                // (Fallback: return all auditors for same tax center as TL)
+                // Filter auditors to match the Team Leader's location and audit type scope
+                Optional<User> tlOpt = userManagementUseCase.getAllUsers().stream()
+                    .filter(u -> u.getUserId().toString().equalsIgnoreCase(teamLeader)
+                              || u.getUsername().equalsIgnoreCase(teamLeader)
+                              || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(teamLeader)))
+                    .findFirst();
+                if (tlOpt.isPresent()) {
+                    User tl = tlOpt.get();
+                    users = userManagementUseCase.getAuditors(
+                        tl.getAuditType() != null ? tl.getAuditType() : (auditType != null ? auditType : ""),
+                        tl.getAssignedLocation() != null ? tl.getAssignedLocation() : (taxCenter != null ? taxCenter : "")
+                    );
+
+                    // STRICT TEAM LEADER AUDITOR SCOPING:
+                    // Return ONLY auditors who report directly to this Team Leader!
+                    // In canonical MoR naming: u-tl-{tc}-{auditType}-{tlNum} -> u-aud-{tc}-{auditType}-{tlNum}-
+                    String tlUsername = tl.getUsername();
+                    if (tlUsername != null && tlUsername.startsWith("u-tl-")) {
+                        String expectedAuditorPrefix = tlUsername.replaceFirst("^u-tl-", "u-aud-") + "-";
+                        List<User> scoped = users.stream()
+                            .filter(u -> u.getUsername() != null && u.getUsername().startsWith(expectedAuditorPrefix))
+                            .collect(Collectors.toList());
+                        if (!scoped.isEmpty()) {
+                            users = scoped;
+                        }
+                    }
+                } else {
+                    users = userManagementUseCase.getAuditors(
+                        auditType != null ? auditType : "",
+                        taxCenter != null ? taxCenter : "");
+                }
             } else {
                 users = userManagementUseCase.getAuditors(
                     auditType != null ? auditType : "",

@@ -127,6 +127,39 @@ export const SEED_USERS = [
   { id: 'u-com-aa-mem2',  name: 'Committee Member AA (3)',    email: 'aa-ara.joint_committee.3@mor.gov.et',   role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit', password: 'password123' },
   { id: 'u-com-aa-mem3',  name: 'Committee Member AA (4)',    email: 'aa-ara.joint_committee.4@mor.gov.et',   role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit', password: 'password123' },
   { id: 'u-com-aa-mem4',  name: 'Committee Member AA (5)',    email: 'aa-ara.joint_committee.5@mor.gov.et',   role: 'committee', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit', password: 'password123' },
+
+  // Canonical Database Users & Aliases
+  { id: 'admin', name: 'System Administrator', email: 'admin@mor.gov.et', role: 'planning_team', region: 'federal_level', password: 'password123' },
+  { id: 'taxpayer1', name: 'Crest Textiles CFO', email: 'cfo@cresttextiles.et', role: 'taxpayer', region: 'federal_level', password: 'password123' },
+
+  // Canonical Tax Center Managers (matching DB u-tcm-{tc})
+  { id: 'u-tcm-federal-lto1', name: 'Kassahun Bekele (Manager FED-LTO1)', email: 'u-tcm-federal-lto1@mor.gov.et', role: 'tax_center_manager', region: 'federal_level', taxCenter: 'federal-lto1', password: 'password123' },
+  { id: 'u-tcm-federal-lto2', name: 'Tirhas Gebre (Manager FED-LTO2)', email: 'u-tcm-federal-lto2@mor.gov.et', role: 'tax_center_manager', region: 'federal_level', taxCenter: 'federal-lto2', password: 'password123' },
+  { id: 'u-tcm-addis_ababa-tc1', name: 'Mekdes Solomon (Manager AA-TC1)', email: 'u-tcm-addis_ababa-tc1@mor.gov.et', role: 'tax_center_manager', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', password: 'password123' },
+  { id: 'u-tcm-addis_ababa-tc2', name: 'Dereje Worku (Manager AA-TC2)', email: 'u-tcm-addis_ababa-tc2@mor.gov.et', role: 'tax_center_manager', region: 'addis_ababa', taxCenter: 'addis_ababa-tc2', password: 'password123' },
+  { id: 'u-tcm-addis_ababa-tc3', name: 'Selam Tekle (Manager AA-TC3)', email: 'u-tcm-addis_ababa-tc3@mor.gov.et', role: 'tax_center_manager', region: 'addis_ababa', taxCenter: 'addis_ababa-tc3', password: 'password123' },
+  { id: 'u-tcm-oromia-tc1', name: 'Chaltu Girma (Manager OR-TC1)', email: 'u-tcm-oromia-tc1@mor.gov.et', role: 'tax_center_manager', region: 'oromia', taxCenter: 'oromia-tc1', password: 'password123' },
+
+  // Canonical Team Leaders (matching DB u-tl-{tc}-{type}-{num})
+  { id: 'u-tl-addis_ababa-tc1-desk-1', name: 'Henok Belay (Desk TL-1)', email: 'u-tl-addis_ababa-tc1-desk-1@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'desk_audit', password: 'password123' },
+  { id: 'u-tl-addis_ababa-tc1-desk-2', name: 'Abebe Bikila (Desk TL-2)', email: 'u-tl-addis_ababa-tc1-desk-2@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'desk_audit', password: 'password123' },
+  { id: 'u-tl-addis_ababa-tc1-comp-1', name: 'Seble Tesfaye (Comp TL-1)', email: 'u-tl-addis_ababa-tc1-comp-1@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'comprehensive', password: 'password123' },
+  { id: 'u-tl-addis_ababa-tc1-tp-1', name: 'Robel Girma (TP TL-1)', email: 'u-tl-addis_ababa-tc1-tp-1@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'transfer_pricing', password: 'password123' },
+  { id: 'u-tl-addis_ababa-tc1-joint-1', name: 'Melaku Bekele (Joint TL-1)', email: 'u-tl-addis_ababa-tc1-joint-1@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit', password: 'password123' },
+  { id: 'u-tl-addis_ababa-tc1-issue-1', name: 'Sara Negash (Issue TL-1)', email: 'u-tl-addis_ababa-tc1-issue-1@mor.gov.et', role: 'team_leader', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'issue_audit', password: 'password123' },
+
+  // Canonical Auditors (matching DB u-aud-{tc}-{type}-{tl}-{a})
+  { id: 'u-aud-addis_ababa-tc1-desk-1-1', name: 'Kidist Mehari (Desk Aud-1)', email: 'u-aud-addis_ababa-tc1-desk-1-1@mor.gov.et', role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'desk_audit', teamLeader: 'u-tl-addis_ababa-tc1-desk-1', password: 'password123' },
+  { id: 'u-aud-addis_ababa-tc1-desk-1-2', name: 'Robel Tadesse (Desk Aud-2)', email: 'u-aud-addis_ababa-tc1-desk-1-2@mor.gov.et', role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'desk_audit', teamLeader: 'u-tl-addis_ababa-tc1-desk-1', password: 'password123' },
+  { id: 'u-aud-addis_ababa-tc1-tp-1-1', name: 'Michael Abera (TP Aud-1)', email: 'michael.abera@mor.gov.et', role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'transfer_pricing', teamLeader: 'u-tl-addis_ababa-tc1-tp-1', password: 'password123' },
+  { id: 'u-aud-addis_ababa-tc1-tp-1-2', name: 'Mahlet Mideksa (TP Aud-2)', email: 'u-aud-addis_ababa-tc1-tp-1-2@mor.gov.et', role: 'auditor', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'transfer_pricing', teamLeader: 'u-tl-addis_ababa-tc1-tp-1', password: 'password123' },
+
+  // Canonical Committees (matching DB u-com-{tc}-{type})
+  { id: 'u-com-addis_ababa-tc1-ja', name: 'Joint Committee Chair (AA-TC1)', email: 'u-com-addis_ababa-tc1-ja@mor.gov.et', role: 'committee_member', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'joint_audit', password: 'password123' },
+  { id: 'u-com-addis_ababa-tc1-tp', name: 'TP Committee Chair (AA-TC1)', email: 'u-com-addis_ababa-tc1-tp@mor.gov.et', role: 'committee_member', region: 'addis_ababa', taxCenter: 'addis_ababa-tc1', auditType: 'transfer_pricing', password: 'password123' },
+  { id: 'u-com-fed-deskchair', name: 'Federal Desk Audit Committee Chair', email: 'fed.deskcommittee@mor.gov.et', role: 'committee_member', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'desk_audit', password: 'password123' },
+  { id: 'u-com-fed-compchair', name: 'Federal Comp Audit Committee Chair', email: 'fed.compcommittee@mor.gov.et', role: 'committee_member', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'comprehensive', password: 'password123' },
+  { id: 'u-com-fed-issuechair', name: 'Federal Issue Audit Committee Chair', email: 'fed.issuecommittee@mor.gov.et', role: 'committee_member', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'issue_audit', password: 'password123' },
 ];
 
 // ============================================================

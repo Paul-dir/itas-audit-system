@@ -99,11 +99,13 @@ public class CascadePlanToCasesUseCase {
         System.err.println("🗑️ Deleted " + deletedCount + " existing cases for plan " + planId);
 
         // Get all tax center allocations for this plan
-        List<PlanAllocationEntity> allocations = allocationRepository.findByAnnualPlanId(planId);
+        List<PlanAllocationEntity> existingAllocations = allocationRepository.findByAnnualPlanId(planId)
+            .stream()
+            .filter(a -> a.getTaxCenterCode() != null && !a.getTaxCenterCode().isEmpty())
+            .collect(Collectors.toList());
 
-        if (allocations.isEmpty()) {
-            throw new IllegalStateException("No tax center allocations found. Deploy to regions and distribute to tax centers first.");
-        }
+        // Always check for missing tax center allocations across all regions
+        List<PlanAllocationEntity> allocations = autoGenerateMissingTaxCenterAllocations(plan, existingAllocations);
 
         int totalCasesCreated = 0;
         Map<String, Integer> casesByTaxCenter = new LinkedHashMap<>();
@@ -162,9 +164,11 @@ public class CascadePlanToCasesUseCase {
 
             if (taxCenterCode == null || taxCenterCode.isEmpty()) continue;
 
-            // Map frontend code to backend code: addis_ababa-tc1 -> TC-AA-01, AA-TC1 -> TC-AA-01
+            // Map frontend code to backend code
             String backendTaxCenterCode = taxCenterCode;
-            if (taxCenterCode.toLowerCase().startsWith("addis_ababa-tc")) {
+            if (taxCenterCode.toLowerCase().startsWith("federal-lto") || taxCenterCode.toLowerCase().startsWith("fed-lto")) {
+                backendTaxCenterCode = taxCenterCode;
+            } else if (taxCenterCode.toLowerCase().startsWith("addis_ababa-tc")) {
                 int num = Integer.parseInt(taxCenterCode.substring("addis_ababa-tc".length()));
                 backendTaxCenterCode = String.format("TC-AA-%02d", num);
             } else if (taxCenterCode.toLowerCase().startsWith("amhara-tc") || taxCenterCode.toLowerCase().startsWith("ba-tc")) {
@@ -173,6 +177,15 @@ public class CascadePlanToCasesUseCase {
             } else if (taxCenterCode.toLowerCase().startsWith("oromia-tc") || taxCenterCode.toLowerCase().startsWith("bb-tc")) {
                 int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
                 backendTaxCenterCode = String.format("TC-BB-%02d", num);
+            } else if (taxCenterCode.toLowerCase().startsWith("dire_dawa-tc") || taxCenterCode.toLowerCase().startsWith("ab-tc")) {
+                int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
+                backendTaxCenterCode = String.format("TC-DD-%02d", num);
+            } else if (taxCenterCode.toLowerCase().startsWith("snnpr-tc") || taxCenterCode.toLowerCase().startsWith("ca-tc")) {
+                int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
+                backendTaxCenterCode = String.format("TC-CA-%02d", num);
+            } else if (taxCenterCode.toLowerCase().startsWith("somali-tc") || taxCenterCode.toLowerCase().startsWith("so-tc")) {
+                int num = Integer.parseInt(taxCenterCode.replaceAll("[^0-9]", ""));
+                backendTaxCenterCode = String.format("TC-SM-%02d", num);
             } else if (!taxCenterCode.startsWith("TC-")) {
                 String[] parts = taxCenterCode.split("-TC");
                 if (parts.length == 2) {
@@ -184,15 +197,15 @@ public class CascadePlanToCasesUseCase {
             // Parse the audit type breakdown from the allocation
             Map<String, Integer> auditTypeBreakdown = parseAuditTypeBreakdown(allocation);
 
-            if (auditTypeBreakdown.isEmpty()) {
-                System.err.println("⚠️ No audit type breakdown for " + taxCenterCode + ", using total");
-                int total = allocation.getProposedCount();
+            if (auditTypeBreakdown.isEmpty() || auditTypeBreakdown.values().stream().mapToInt(Integer::intValue).sum() == 0) {
+                System.err.println("⚠️ No valid audit type breakdown for " + taxCenterCode + ", using default 45 total");
+                int total = allocation.getProposedCount() > 0 ? allocation.getProposedCount() : 45;
                 auditTypeBreakdown = new LinkedHashMap<>();
-                auditTypeBreakdown.put("desk_audit", (int)(total * 0.35));
-                auditTypeBreakdown.put("joint_audit", (int)(total * 0.15));
-                auditTypeBreakdown.put("transfer_pricing", (int)(total * 0.10));
-                auditTypeBreakdown.put("comprehensive", (int)(total * 0.20));
-                auditTypeBreakdown.put("issue_audit", (int)(total * 0.20));
+                auditTypeBreakdown.put("desk_audit", Math.max(5, (int)(total * 0.35)));
+                auditTypeBreakdown.put("joint_audit", Math.max(2, (int)(total * 0.15)));
+                auditTypeBreakdown.put("transfer_pricing", Math.max(2, (int)(total * 0.10)));
+                auditTypeBreakdown.put("comprehensive", Math.max(3, (int)(total * 0.20)));
+                auditTypeBreakdown.put("issue_audit", Math.max(3, (int)(total * 0.20)));
             }
 
             // Fetch taxpayers for this tax center
@@ -478,5 +491,87 @@ public class CascadePlanToCasesUseCase {
         String planShort = plan.getId().toString().substring(0, 8);
         String seq = String.format("%04d", counter.getAndIncrement());
         return year + "-" + planShort + "-" + region + "-" + taxCenter + "-" + seq;
+    }
+
+    private List<PlanAllocationEntity> autoGenerateMissingTaxCenterAllocations(AnnualAuditPlanEntity plan, List<PlanAllocationEntity> existingAllocations) {
+        List<PlanAllocationEntity> allAllocations = new ArrayList<>(existingAllocations);
+        Set<String> existingTcCodes = existingAllocations.stream()
+            .map(PlanAllocationEntity::getTaxCenterCode)
+            .filter(Objects::nonNull)
+            .map(String::toLowerCase)
+            .collect(Collectors.toSet());
+        
+        Map<String, List<String>> regionToTaxCenters = Map.of(
+            "FED", List.of("federal-lto1", "federal-lto2"),
+            "AA", List.of("addis_ababa-tc1", "addis_ababa-tc2", "addis_ababa-tc3"),
+            "BA", List.of("amhara-tc1", "amhara-tc2", "amhara-tc3"),
+            "BB", List.of("oromia-tc1", "oromia-tc2", "oromia-tc3"),
+            "AB", List.of("dire_dawa-tc1", "dire_dawa-tc2", "dire_dawa-tc3"),
+            "CA", List.of("snnpr-tc1", "snnpr-tc2", "snnpr-tc3"),
+            "SO", List.of("somali-tc1", "somali-tc2", "somali-tc3")
+        );
+
+        Map<String, String> regionCodeToDistKey = Map.of(
+            "FED", "federal_level", "AA", "addis_ababa", "BA", "amhara",
+            "BB", "oromia", "AB", "dire_dawa", "CA", "snnpr", "SO", "somali"
+        );
+
+        Map<String, Map<String, Integer>> distribution = plan.getDistribution();
+        boolean createdNew = false;
+
+        for (Map.Entry<String, List<String>> entry : regionToTaxCenters.entrySet()) {
+            String regionCode = entry.getKey();
+            List<String> tcCodes = entry.getValue();
+            String distKey = regionCodeToDistKey.get(regionCode);
+
+            Map<String, Integer> regionAuditTypes = null;
+            if (distribution != null) {
+                regionAuditTypes = distribution.get(distKey);
+                if (regionAuditTypes == null) regionAuditTypes = distribution.get(regionCode);
+            }
+
+            if (regionAuditTypes == null || regionAuditTypes.isEmpty() || regionAuditTypes.values().stream().mapToInt(Integer::intValue).sum() == 0) {
+                regionAuditTypes = Map.of(
+                    "desk_audit", 15, "joint_audit", 5, "transfer_pricing", 5,
+                    "comprehensive", 10, "issue_audit", 10
+                );
+            }
+
+            int numTc = tcCodes.size();
+            for (String tcCode : tcCodes) {
+                if (existingTcCodes.contains(tcCode.toLowerCase())) {
+                    continue; // Already has allocation
+                }
+
+                Map<String, Integer> tcBreakdown = new LinkedHashMap<>();
+                int totalTcCount = 0;
+
+                for (Map.Entry<String, Integer> atEntry : regionAuditTypes.entrySet()) {
+                    int tcShare = Math.max(1, atEntry.getValue() / numTc);
+                    tcBreakdown.put(atEntry.getKey(), tcShare);
+                    totalTcCount += tcShare;
+                }
+
+                PlanAllocationEntity alloc = new PlanAllocationEntity();
+                alloc.setId(UUID.randomUUID());
+                alloc.setAnnualPlan(plan);
+                alloc.setRegionCode(regionCode);
+                alloc.setTaxCenterCode(tcCode);
+                alloc.setProposedCount(totalTcCount);
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    alloc.setAllocationByAuditType(mapper.valueToTree(tcBreakdown));
+                } catch (Exception e) {
+                    // Ignore
+                }
+                allocationRepository.save(alloc);
+                allAllocations.add(alloc);
+                createdNew = true;
+            }
+        }
+        if (createdNew) {
+            allocationRepository.flush();
+        }
+        return allAllocations;
     }
 }

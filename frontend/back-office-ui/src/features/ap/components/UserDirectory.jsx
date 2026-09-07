@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Users, Mail, Shield, Building2, X } from 'lucide-react';
-import { SEED_USERS } from '../data/seed.js';
+import { mapBackendUserToProfile } from '../data/userResolver.js';
+import { storage, STORE_KEYS } from '../services/storage.js';
 
 const ROLE_INFO = {
   planning_team: { label: 'Planning Team', color: 'bg-blue-50 border-blue-200 text-blue-700', icon: '📋' },
@@ -10,22 +11,61 @@ const ROLE_INFO = {
   tax_center_manager: { label: 'Tax Center Manager', color: 'bg-teal-50 border-teal-200 text-teal-700', icon: '🏢' },
   team_leader: { label: 'Team Leader', color: 'bg-indigo-50 border-indigo-200 text-indigo-700', icon: '👥' },
   auditor: { label: 'Auditor', color: 'bg-rose-50 border-rose-200 text-rose-700', icon: '🔍' },
+  committee_member: { label: 'Committee', color: 'bg-yellow-50 border-yellow-200 text-yellow-700', icon: '⚖️' },
+  audit_requester: { label: 'Audit Requester', color: 'bg-orange-50 border-orange-200 text-orange-700', icon: '📨' },
+  national_admin: { label: 'National Admin', color: 'bg-blue-50 border-blue-200 text-blue-700', icon: '🛡️' }
 };
 
 export default function UserDirectory({ onSelectUser, onClose }) {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [federalOnly, setFederalOnly] = useState(false);
+  const [backendUsers, setBackendUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || '/api/v1/backoffice';
+        const res = await fetch(`${API_URL}/ap/users`);
+        if (res.ok) {
+          const data = await res.json();
+          const userList = Array.isArray(data) ? data : (data.data || []);
+          const mapped = userList.map(mapBackendUserToProfile).filter(Boolean);
+          setBackendUsers(mapped);
+          storage.set(STORE_KEYS.USERS, mapped);
+        }
+      } catch (err) {
+        console.error('Failed to fetch backend users:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUsers();
+  }, []);
+
+  const isFederalUser = (u) => {
+    if (!u) return false;
+    const r = (u.region || '').toLowerCase();
+    const tc = (u.taxCenter || '').toLowerCase();
+    const id = (u.id || u.username || '').toLowerCase();
+    const loc = (u.assignedLocation || '').toLowerCase();
+    return r === 'federal_level' || tc.includes('fed') || tc.includes('lto') || id.includes('fed') || loc.includes('fed') || id.startsWith('u-pt-') || id.startsWith('u-ad-') || id.startsWith('u-sm-');
+  };
 
   // Get unique roles
-  const roles = [...new Set(SEED_USERS.map(u => u.role))];
+  const roles = [...new Set(backendUsers.map(u => u.role))].filter(Boolean);
 
   // Filter users
-  const filteredUsers = SEED_USERS.filter(user => {
+  const filteredUsers = backendUsers.filter(user => {
+    if (federalOnly && !isFederalUser(user)) return false;
     const matchesSearch = 
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase()) ||
+      user.name?.toLowerCase().includes(search.toLowerCase()) ||
+      user.email?.toLowerCase().includes(search.toLowerCase()) ||
+      user.id?.toLowerCase().includes(search.toLowerCase()) ||
       (user.region && user.region.toLowerCase().includes(search.toLowerCase())) ||
-      (user.taxCenter && user.taxCenter.toLowerCase().includes(search.toLowerCase()));
+      (user.taxCenter && user.taxCenter.toLowerCase().includes(search.toLowerCase())) ||
+      (user.auditType && user.auditType.toLowerCase().replace(/_/g, ' ').includes(search.toLowerCase()));
     
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     
@@ -34,6 +74,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
 
   // Group by role
   const usersByRole = filteredUsers.reduce((acc, user) => {
+    if (!user.role) return acc;
     if (!acc[user.role]) acc[user.role] = [];
     acc[user.role].push(user);
     return acc;
@@ -41,7 +82,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
 
   const handleUserClick = (user) => {
     if (onSelectUser) {
-      onSelectUser(user.email);
+      onSelectUser(user);
     }
   };
 
@@ -57,7 +98,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">User Directory</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{SEED_USERS.length} demo accounts available</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{backendUsers.length} active directory accounts</p>
               </div>
             </div>
             {onClose && (
@@ -82,7 +123,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
           {/* Search and filter */}
           <div className="flex gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 placeholder="Search by name, email, region, or tax center..."
@@ -105,26 +146,41 @@ export default function UserDirectory({ onSelectUser, onClose }) {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setFederalOnly(v => !v)}
+              className={`px-3 py-2 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                federalOnly
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              🏛️ Federal Only
+            </button>
           </div>
         </div>
 
         {/* User list */}
         <div className="flex-1 overflow-y-auto p-6">
-          {filteredUsers.length === 0 ? (
+          {loading ? (
+             <div className="text-center py-12">
+               <p className="text-gray-500">Loading directory from backend...</p>
+             </div>
+          ) : filteredUsers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="mx-auto text-gray-300 mb-3" size={48} />
-              <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">No users found matching your search</p>
+              <p className="text-gray-500">No users found matching your search</p>
             </div>
           ) : (
             <div className="space-y-6">
               {Object.entries(usersByRole).map(([role, users]) => (
                 <div key={role}>
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">{ROLE_INFO[role]?.icon}</span>
+                    <span className="text-2xl">{ROLE_INFO[role]?.icon || '👤'}</span>
                     <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                      {ROLE_INFO[role]?.label || role}
+                      {ROLE_INFO[role]?.label || role.replace(/_/g, ' ')}
                     </h3>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">({users.length})</span>
+                    <span className="text-xs text-gray-400">({users.length})</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {users.map(user => (
@@ -135,27 +191,37 @@ export default function UserDirectory({ onSelectUser, onClose }) {
                                    hover:border-gray-300 transition-all group"
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate pr-2">
                             {user.name}
                           </p>
-                          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${ROLE_INFO[user.role]?.color}`}>
-                            {ROLE_INFO[user.role]?.label}
+                          <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full border ${ROLE_INFO[user.role]?.color || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+                            {ROLE_INFO[user.role]?.label || user.role}
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                            <Mail size={12} />
-                            <span className="font-mono">{user.email}</span>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Mail size={12} className="flex-shrink-0" />
+                            <span className="font-mono truncate">{user.email}</span>
                           </div>
                           {user.region && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                              <Building2 size={12} />
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Building2 size={12} className="flex-shrink-0" />
                               <span className="capitalize">{user.region.replace(/_/g, ' ')}</span>
                               {user.taxCenter && (
-                                <span className="text-gray-400 dark:text-gray-500">• {user.taxCenter.toUpperCase()}</span>
+                                <span>• {user.taxCenter}</span>
                               )}
                             </div>
                           )}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {user.auditType && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                {user.auditType.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                            <span className="text-[9px] font-mono text-gray-400 px-1 py-0.5 rounded bg-gray-100">
+                              {user.id}
+                            </span>
+                          </div>
                         </div>
                       </button>
                     ))}
