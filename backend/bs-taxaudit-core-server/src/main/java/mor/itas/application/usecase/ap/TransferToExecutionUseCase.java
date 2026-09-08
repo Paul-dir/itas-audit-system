@@ -82,11 +82,11 @@ public class TransferToExecutionUseCase {
         CommitteeCaseEntity caseEntity = caseRepository.findById(request.getCaseId())
             .orElseThrow(() -> new IllegalArgumentException("Case not found: " + request.getCaseId()));
         
-        // Validate case is in TEAM_ASSIGNED state (ready for execution)
+        // Validate case is in TEAM_ASSIGNED or APPROVED state (ready for execution)
         String status = caseEntity.getStatus();
-        if (!"TEAM_ASSIGNED".equals(status)) {
+        if (!"TEAM_ASSIGNED".equals(status) && !"APPROVED".equals(status)) {
             throw new IllegalStateException(
-                "Only TEAM_ASSIGNED cases can be transferred to execution. Current: " + status);
+                "Only TEAM_ASSIGNED or APPROVED cases can be transferred to execution. Current: " + status);
         }
         
         // Generate case code if not already set
@@ -115,6 +115,7 @@ public class TransferToExecutionUseCase {
         caseEntity.setCaseCode(caseCode);
         caseEntity.setHandoffRecordId(handoffRecord.getHandoffId());
         caseEntity.setHandoffDate(OffsetDateTime.now());
+        caseEntity.setStatus("TRANSFERRED_TO_EXECUTION");
         caseRepository.save(caseEntity);
 
         // Create AP audit case from committee case data
@@ -126,8 +127,6 @@ public class TransferToExecutionUseCase {
      * This makes the case visible to the Team Leader and Auditor dashboards.
      */
     private void createApAuditCase(CommitteeCaseEntity committeeCase, String caseCode, UUID teamLeadId) {
-        String auditType = mapAuditType(committeeCase.getSegment());
-        
         // Convert teamLeadId to string for assignedTeamLeaderId
         String teamLeaderIdStr = teamLeadId != null ? teamLeadId.toString() : null;
         // Also check if committee case has a team lead ID string format
@@ -135,25 +134,45 @@ public class TransferToExecutionUseCase {
             teamLeaderIdStr = committeeCase.getTeamLeadId().toString();
         }
         
-        ApAuditCaseEntity apCase = ApAuditCaseEntity.builder()
-            .planId(committeeCase.getCaseId()) // reference back to committee case
-            .caseNumber(caseCode)
-            .taxpayerId(committeeCase.getTaxIdNumber())
-            .taxpayerName(committeeCase.getTaxpayerName())
-            .auditType(auditType)
-            .riskPriority(committeeCase.getRiskPriority())
-            .riskScore(committeeCase.getRiskScore())
-            .segment(committeeCase.getSegment())
-            .assignedTeamLeaderId(teamLeaderIdStr)
-            .status("PENDING_ASSIGNMENT")
-            .createdBy("committee-transfer")
-            .createdAt(OffsetDateTime.now())
-            .updatedAt(OffsetDateTime.now())
-            .build();
+        // Check if an AP case already exists (either by originalCaseId or by caseNumber)
+        java.util.Optional<ApAuditCaseEntity> existing = java.util.Optional.empty();
+        if (committeeCase.getOriginalCaseId() != null) {
+            existing = apCaseRepository.findById(committeeCase.getOriginalCaseId());
+        }
+        if (existing.isEmpty() && caseCode != null) {
+            existing = apCaseRepository.findByCaseNumber(caseCode);
+        }
 
-        apCaseRepository.save(apCase);
-        log.info("Created AP audit case {} from committee case {} (status=PENDING_ASSIGNMENT, teamLeader={})",
-                 caseCode, committeeCase.getCaseId(), teamLeaderIdStr);
+        if (existing.isPresent()) {
+            ApAuditCaseEntity apCase = existing.get();
+            apCase.setAssignedTeamLeaderId(teamLeaderIdStr);
+            apCase.setStatus("ASSIGNED");
+            apCase.setAuditType("JOINT");
+            apCase.setUpdatedAt(OffsetDateTime.now());
+            apCaseRepository.save(apCase);
+            log.info("Updated existing AP audit case {} from committee case {} (status=ASSIGNED, teamLeader={})",
+                     caseCode, committeeCase.getCaseId(), teamLeaderIdStr);
+        } else {
+            ApAuditCaseEntity apCase = ApAuditCaseEntity.builder()
+                .planId(committeeCase.getCaseId()) // reference back to committee case
+                .caseNumber(caseCode)
+                .taxpayerId(committeeCase.getTaxIdNumber())
+                .taxpayerName(committeeCase.getTaxpayerName())
+                .auditType("JOINT")
+                .riskPriority(committeeCase.getRiskPriority())
+                .riskScore(committeeCase.getRiskScore())
+                .segment(committeeCase.getSegment())
+                .assignedTeamLeaderId(teamLeaderIdStr)
+                .status("ASSIGNED")
+                .createdBy("committee-transfer")
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build();
+
+            apCaseRepository.save(apCase);
+            log.info("Created AP audit case {} from committee case {} (status=ASSIGNED, teamLeader={})",
+                     caseCode, committeeCase.getCaseId(), teamLeaderIdStr);
+        }
     }
 
     /**

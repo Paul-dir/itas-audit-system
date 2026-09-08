@@ -82,8 +82,18 @@ const PAGE_TITLES = {
   },
 };
 
-// Only these 4 roles are active in the demo
-const ALLOWED_DEMO_ROLES = ['committee', 'committee_chair', 'team_leader', 'auditor'];
+// Active demo roles across full audit lifecycle
+const ALLOWED_DEMO_ROLES = [
+  'planning_team',
+  'audit_director',
+  'regional_director',
+  'senior_management',
+  'tax_center_manager',
+  'committee',
+  'committee_chair',
+  'team_leader',
+  'auditor'
+];
 
 function EmptyDemoState() {
   return (

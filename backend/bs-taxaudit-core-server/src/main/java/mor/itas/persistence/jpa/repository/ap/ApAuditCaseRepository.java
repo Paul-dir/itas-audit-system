@@ -21,6 +21,8 @@ public interface ApAuditCaseRepository extends JpaRepository<ApAuditCaseEntity, 
     
     int countByPlanIdAndStatus(UUID planId, String status);
 
+    java.util.Optional<ApAuditCaseEntity> findByCaseNumber(String caseNumber);
+
     /**
      * Get all cases visible to a team leader:
      * 1. Cases already assigned to this team leader (any status)

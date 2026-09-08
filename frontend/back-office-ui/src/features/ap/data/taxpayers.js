@@ -2805,21 +2805,44 @@ export function generateCasesFromPlan(planId, taxCenterId, allocation, planAlloc
       const taxpayer = sortedTaxpayers[taxpayerIndex];
       taxpayerIndex++;
       
-      // Create case
+      // Create case with deep audit profile fields
       cases.push({
         id: `CASE-${planId}-${taxpayer.tin}`,
+        caseNumber: `JAC-${planId.slice(0, 8)}-${taxpayer.tin}`,
         planId,
         tin: taxpayer.tin,
+        taxIdNumber: taxpayer.tin,
         taxpayerName: taxpayer.name,
         sector: taxpayer.sector,
-        riskScore: taxpayer.riskScore,
-        riskLevel: taxpayer.riskLevel,
-        auditType: auditType, // Use plan allocation, not suggestion
-        suggestedAuditType: taxpayer.suggestedAuditType, // Keep original suggestion
+        industry: taxpayer.sector,
+        businessType: taxpayer.businessType || 'Commercial Enterprise',
+        segment: taxpayer.segment || 'LARGE',
+        totalAmount: taxpayer.totalAmount || (taxpayer.annualRevenue ? taxpayer.annualRevenue * 0.05 : 50000000),
+        assessmentScore: taxpayer.assessmentScore || '90',
+        annualRevenue: taxpayer.annualRevenue,
+        employees: taxpayer.employees,
+        address: taxpayer.address,
+        city: taxpayer.city,
         region: taxpayer.region,
         taxCenter: taxpayer.taxCenter,
+        riskScore: taxpayer.riskScore,
+        riskLevel: taxpayer.riskLevel,
+        riskPriority: taxpayer.riskLevel,
+        auditType: auditType,
+        suggestedAuditType: taxpayer.suggestedAuditType,
+        complianceHistory: taxpayer.complianceHistory,
+        complianceIssues: taxpayer.complianceIssues || [
+          'Discrepancy between Customs import declarations and domestic VAT filings.',
+          'Cross-border payments subject to non-resident withholding tax verification.'
+        ],
+        riskIndicators: taxpayer.riskIndicators || [
+          { id: 'customs_sigtas_gap', name: 'Customs vs Domestic Turnover Gap', weight: 3.5, severity: 'HIGH', source: 'ASYCUDA / SIGTAS', description: 'Imported volume exceeds declared sales turnover.' }
+        ],
+        representatives: taxpayer.representatives || [
+          { name: 'Authorized General Manager', title: 'Managing Director', phone: '+251-911-000000', email: 'management@taxpayer.gov.et' }
+        ],
         status: 'PENDING',
-        priority: null,
+        priority: taxpayer.riskLevel === 'CRITICAL' ? 'HIGH' : 'NORMAL',
         assignedTeamLeader: null,
         assignedAuditor: null,
         assignedAt: null,
@@ -2827,7 +2850,7 @@ export function generateCasesFromPlan(planId, taxCenterId, allocation, planAlloc
         completedDate: null,
         notes: '',
         createdAt: new Date().toISOString(),
-        taxpayerData: taxpayer // Full taxpayer info for reference
+        taxpayerData: taxpayer
       });
     }
   });
@@ -2864,3 +2887,979 @@ export function searchTaxpayers(query, taxCenterId = null) {
     tp.sector.toLowerCase().includes(lowerQuery)
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEEP JOINT AUDIT TAXPAYER PROFILES (FOR ALL 18 TAX CENTERS)
+// ═══════════════════════════════════════════════════════════════════════════
+export const JOINT_AUDIT_TAXPAYERS = [
+  {
+    "id": "tp-joint-aa1-01",
+    "tin": "0081234001",
+    "name": "Abyssinia Steel Rolling Mills & Heavy Machinery Importers PLC",
+    "sector": "Heavy Manufacturing",
+    "businessType": "Industrial Rolling Mill & Machinery Import",
+    "segment": "LARGE",
+    "taxCenter": "addis_ababa-tc1",
+    "region": "addis_ababa",
+    "city": "Addis Ababa",
+    "address": "Bole Sub-City, Woreda 04, House 210",
+    "riskScore": 94,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 3850000000,
+    "totalAmount": 112000000,
+    "assessmentScore": "95",
+    "employees": 780,
+    "registeredDate": "2013-05-12",
+    "lastAudit": "2021-10-18",
+    "complianceHistory": "Multiple customs CIF discrepancies, non-resident technical fees without withholding tax",
+    "customsImportCIF": 2650000000,
+    "domesticVatTurnover": 1780000000,
+    "customsDomesticGap": 870000000,
+    "unreconciledVatCredit": 24500000,
+    "nonResidentWithholdingExposure": 31200000,
+    "nbeForexDiscrepancy": 48000000,
+    "complianceIssues": [
+      "ASYCUDA Customs import declarations exceed declared SIGTAS Domestic Sales by ETB 87.0M with zero corresponding inventory build-up.",
+      "Input VAT deduction of ETB 24.5M claimed on imported machinery spare parts lacking certified Customs Single Administrative Document (SAD) release stamps.",
+      "Failure to withhold statutory 30% Non-Resident Withholding Tax on foreign plant engineering and automation fees of ETB 104.0M paid to UAE technical partner.",
+      "Declared customs CIF valuations on imported steel billets are 32% below World Customs Organization (WCO) transaction value benchmark indices.",
+      "National Bank of Ethiopia foreign currency approval of USD 9.6M exceeds physical port arrival entries at Mojo Dry Port by USD 2.1M."
+    ],
+    "riskIndicators": [
+      {
+        "id": "customs_sigtas_gap",
+        "name": "Customs vs Domestic Turnover Gap",
+        "weight": 3.5,
+        "severity": "HIGH",
+        "source": "ASYCUDA / SIGTAS Integration",
+        "description": "Imported CIF volume significantly exceeds reported domestic turnover and audited warehouse balances."
+      },
+      {
+        "id": "unverified_vat_credit",
+        "name": "Unsubstantiated Import VAT Claims",
+        "weight": 3.0,
+        "severity": "HIGH",
+        "source": "Domestic Tax System (SIGTAS)",
+        "description": "Substantial input VAT credits claimed without corresponding customs import declaration vouchers."
+      },
+      {
+        "id": "non_resident_wht_omission",
+        "name": "Non-Resident Technical Fees Omission",
+        "weight": 2.8,
+        "severity": "HIGH",
+        "source": "Commercial Bank Transfer Records",
+        "description": "Significant cross-border remittances executed without statutory 30% withholding tax retention."
+      },
+      {
+        "id": "forex_import_variance",
+        "name": "NBE Forex Allocation Anomaly",
+        "weight": 3.2,
+        "severity": "HIGH",
+        "source": "National Bank of Ethiopia (NBE)",
+        "description": "Hard currency acquired from commercial banks exceeds declared customs entry valuations by over 25%."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Solomon Mengistu",
+        "title": "Managing Director & CEO",
+        "phone": "+251-911-234567",
+        "email": "s.mengistu@abyssiniasteel.com.et"
+      },
+      {
+        "name": "W/ro Bethlehem Tadesse",
+        "title": "Chief Financial Officer",
+        "phone": "+251-911-345678",
+        "email": "b.tadesse@abyssiniasteel.com.et"
+      },
+      {
+        "name": "Ato Daniel Kassa (CPA)",
+        "title": "Authorized Tax Agent & Legal Counsel",
+        "phone": "+251-911-456789",
+        "email": "daniel@kassatax.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-aa2-01",
+    "tin": "0081234002",
+    "name": "Ethio-Nile Multimodal Logistics & Freight Forwarding S.C.",
+    "sector": "Transportation & Logistics",
+    "businessType": "Cross-Border Logistics & Bonded Warehousing",
+    "segment": "LARGE",
+    "taxCenter": "addis_ababa-tc2",
+    "region": "addis_ababa",
+    "city": "Addis Ababa",
+    "address": "Kirkos Sub-City, Woreda 02, House 105",
+    "riskScore": 91,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 2950000000,
+    "totalAmount": 78000000,
+    "assessmentScore": "92",
+    "employees": 540,
+    "registeredDate": "2015-02-18",
+    "lastAudit": "2022-01-14",
+    "complianceHistory": "Unreported transit container revenues, withholding omissions on foreign shipping line commissions",
+    "customsImportCIF": 1820000000,
+    "domesticVatTurnover": 1240000000,
+    "customsDomesticGap": 580000000,
+    "unreconciledVatCredit": 16200000,
+    "nonResidentWithholdingExposure": 22800000,
+    "nbeForexDiscrepancy": 32000000,
+    "complianceIssues": [
+      "Discrepancy of ETB 58.0M between declared customs freight charges and audited international transit accounts.",
+      "Failure to collect and remit 30% withholding tax on foreign maritime feeder line disbursements of ETB 76.0M.",
+      "Reverse VAT omissions on imported container demurrage and technical handling services.",
+      "Significant mismatch between NBE dry-port clearing allocations and physical shipping manifest records."
+    ],
+    "riskIndicators": [
+      {
+        "id": "freight_variance",
+        "name": "International Freight Clearing Gap",
+        "weight": 3.4,
+        "severity": "HIGH",
+        "source": "Customs Transit & Manifest Data",
+        "description": "Transit clearance fees exceed declared domestic transport revenue."
+      },
+      {
+        "id": "shipping_wht_omission",
+        "name": "Maritime Feeder Withholding Omission",
+        "weight": 3.0,
+        "severity": "HIGH",
+        "source": "National Bank / Commercial Banking",
+        "description": "Offshore remittances without required 30% tax retention."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Captain Yonas Berhanu",
+        "title": "Chief Executive Officer",
+        "phone": "+251-911-567890",
+        "email": "y.berhanu@ethionile.com.et"
+      },
+      {
+        "name": "Ato Dawit Girma",
+        "title": "Director of Finance",
+        "phone": "+251-911-678901",
+        "email": "d.girma@ethionile.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-aa3-01",
+    "tin": "0081234003",
+    "name": "East Africa Pharmaceutical Manufacturing & Chemical Imports Corp",
+    "sector": "Healthcare & Pharmaceuticals",
+    "businessType": "Drug Formulation & Active Pharmaceutical Ingredient (API) Import",
+    "segment": "LARGE",
+    "taxCenter": "addis_ababa-tc3",
+    "region": "addis_ababa",
+    "city": "Addis Ababa",
+    "address": "Akaki-Kality Sub-City, Woreda 08, House 77",
+    "riskScore": 89,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 2400000000,
+    "totalAmount": 64000000,
+    "assessmentScore": "90",
+    "employees": 420,
+    "registeredDate": "2016-09-01",
+    "lastAudit": "2022-04-10",
+    "complianceHistory": "Customs duty-free incentive abuse, unreported local commercial sales of duty-exempt APIs",
+    "customsImportCIF": 1450000000,
+    "domesticVatTurnover": 980000000,
+    "customsDomesticGap": 470000000,
+    "unreconciledVatCredit": 14000000,
+    "nonResidentWithholdingExposure": 18500000,
+    "nbeForexDiscrepancy": 26000000,
+    "complianceIssues": [
+      "Abuse of Second Schedule customs duty-free exemptions: imported raw chemicals diverted to taxable commercial re-sale.",
+      "Input VAT credits claimed on duty-exempt inputs in violation of Article 21 of the VAT Proclamation.",
+      "Unreported foreign license royalty payments to European patent holding subsidiary."
+    ],
+    "riskIndicators": [
+      {
+        "id": "duty_free_leakage",
+        "name": "Customs Duty-Free Diversion",
+        "weight": 3.6,
+        "severity": "HIGH",
+        "source": "Customs Tariff & Duty Exemption Monitoring",
+        "description": "Duty-free imported chemicals found in taxable domestic commercial distribution."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Dr. Aster Bekele",
+        "title": "Managing Director",
+        "phone": "+251-911-789012",
+        "email": "a.bekele@eastafricapharma.com.et"
+      },
+      {
+        "name": "Ato Henok Alemayehu",
+        "title": "Head of Finance & Tax",
+        "phone": "+251-911-890123",
+        "email": "h.alemayehu@eastafricapharma.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-or1-01",
+    "tin": "0081234004",
+    "name": "Awash Agro-Industrial Processing & Fertilizer Importers PLC",
+    "sector": "Agro-Industry",
+    "businessType": "Agricultural Commodity Export & Agro-Chemical Import",
+    "segment": "LARGE",
+    "taxCenter": "oromia-tc1",
+    "region": "oromia",
+    "city": "Adama",
+    "address": "Adama Industrial Zone, Kebele 02",
+    "riskScore": 93,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 3200000000,
+    "totalAmount": 92000000,
+    "assessmentScore": "94",
+    "employees": 890,
+    "registeredDate": "2014-11-20",
+    "lastAudit": "2021-08-05",
+    "complianceHistory": "Export proceeds under-repatriation, customs import valuation manipulation",
+    "customsImportCIF": 2100000000,
+    "domesticVatTurnover": 1350000000,
+    "customsDomesticGap": 750000000,
+    "unreconciledVatCredit": 21000000,
+    "nonResidentWithholdingExposure": 26000000,
+    "nbeForexDiscrepancy": 41000000,
+    "complianceIssues": [
+      "Customs export declarations show under-invoicing of sesame and pulses exports by 24% compared to ECX auction benchmark prices.",
+      "Substantial delay in mandatory export proceeds repatriation exceeding NBE 90-day statutory directive.",
+      "Input VAT credits claimed on exempt agricultural machinery components."
+    ],
+    "riskIndicators": [
+      {
+        "id": "export_underinvoicing",
+        "name": "Export Value Under-Invoicing",
+        "weight": 3.7,
+        "severity": "CRITICAL",
+        "source": "ECX / Customs Export Reconciliation",
+        "description": "Declared export contracts systematically lower than transparent market commodity benchmarks."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Gemechu Tufa",
+        "title": "General Manager",
+        "phone": "+251-911-901234",
+        "email": "g.tufa@awashagro.com.et"
+      },
+      {
+        "name": "W/ro Chaltu Lema",
+        "title": "Finance Controller",
+        "phone": "+251-911-012345",
+        "email": "c.lema@awashagro.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-or2-01",
+    "tin": "0081234005",
+    "name": "Mojo Leather & Footwear Manufacturing Cross-Border Consortium",
+    "sector": "Manufacturing",
+    "businessType": "Tannery & Export Leather Goods Production",
+    "segment": "LARGE",
+    "taxCenter": "oromia-tc2",
+    "region": "oromia",
+    "city": "Mojo",
+    "address": "Mojo Industrial Corridor, Plot 45",
+    "riskScore": 88,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1950000000,
+    "totalAmount": 52000000,
+    "assessmentScore": "89",
+    "employees": 610,
+    "registeredDate": "2017-03-15",
+    "lastAudit": "2022-05-19",
+    "complianceHistory": "Imported tanning chemicals diverted to informal market, export rebate anomalies",
+    "customsImportCIF": 1200000000,
+    "domesticVatTurnover": 850000000,
+    "customsDomesticGap": 350000000,
+    "unreconciledVatCredit": 11000000,
+    "nonResidentWithholdingExposure": 14000000,
+    "nbeForexDiscrepancy": 21000000,
+    "complianceIssues": [
+      "Duty-free imported tanning agents diverted to unorganized local micro-processors.",
+      "Export voucher scheme non-reconciliation: finished leather export output does not match imported raw chemical input formulas."
+    ],
+    "riskIndicators": [
+      {
+        "id": "voucher_reconciliation",
+        "name": "Export Voucher Scheme Discrepancy",
+        "weight": 3.3,
+        "severity": "HIGH",
+        "source": "Customs Voucher Monitoring System",
+        "description": "Chemical consumption ratios deviate from standard industrial leather formulation yields."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Diriba Keneni",
+        "title": "Managing Director",
+        "phone": "+251-911-123450",
+        "email": "d.keneni@mojoleather.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-or3-01",
+    "tin": "0081234006",
+    "name": "Rift Valley Commercial Farming & Chemical Supply PLC",
+    "sector": "Agriculture & Trading",
+    "businessType": "Large Scale Commercial Horticulture & Agro-Supplies",
+    "segment": "LARGE",
+    "taxCenter": "oromia-tc3",
+    "region": "oromia",
+    "city": "Bishoftu",
+    "address": "Bishoftu Commercial Axis, Kebele 01",
+    "riskScore": 86,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1750000000,
+    "totalAmount": 46000000,
+    "assessmentScore": "88",
+    "employees": 450,
+    "registeredDate": "2018-07-22",
+    "lastAudit": "2022-07-11",
+    "complianceHistory": "Forex diversion, transfer pricing on imported greenhouse materials",
+    "customsImportCIF": 1100000000,
+    "domesticVatTurnover": 790000000,
+    "customsDomesticGap": 310000000,
+    "unreconciledVatCredit": 9500000,
+    "nonResidentWithholdingExposure": 12500000,
+    "nbeForexDiscrepancy": 19000000,
+    "complianceIssues": [
+      "Disproportionate transfer prices on greenhouse equipment imported from Dutch affiliate.",
+      "Omission of withholding tax on offshore consulting and agronomist fees."
+    ],
+    "riskIndicators": [
+      {
+        "id": "tp_greenhouse",
+        "name": "Related Party Equipment Valuation",
+        "weight": 3.1,
+        "severity": "HIGH",
+        "source": "Customs Valuation & TP Benchmarks",
+        "description": "Import invoice values 35% higher than independent arm length imports."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Fikadu Negash",
+        "title": "Operations Director",
+        "phone": "+251-911-234501",
+        "email": "f.negash@riftfarming.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-am1-01",
+    "tin": "0081234007",
+    "name": "Blue Nile Cement & Heavy Industrial Mining Corp",
+    "sector": "Mining & Industrial",
+    "businessType": "Limestone Mining & Clinker Cement Production",
+    "segment": "LARGE",
+    "taxCenter": "amhara-tc1",
+    "region": "amhara",
+    "city": "Bahir Dar",
+    "address": "Industrial Highway, Kebele 11",
+    "riskScore": 92,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 3100000000,
+    "totalAmount": 88000000,
+    "assessmentScore": "93",
+    "employees": 720,
+    "registeredDate": "2015-04-10",
+    "lastAudit": "2021-11-25",
+    "complianceHistory": "Imported plant spares input VAT overstatement, royalty fee omissions",
+    "customsImportCIF": 1950000000,
+    "domesticVatTurnover": 1380000000,
+    "customsDomesticGap": 570000000,
+    "unreconciledVatCredit": 19500000,
+    "nonResidentWithholdingExposure": 25000000,
+    "nbeForexDiscrepancy": 36000000,
+    "complianceIssues": [
+      "Customs input VAT deductions claimed on heavy conveyor equipment without SAD customs vouchers.",
+      "Offshore technical management royalties paid without 30% withholding retention."
+    ],
+    "riskIndicators": [
+      {
+        "id": "mining_spares_vat",
+        "name": "Unsubstantiated Heavy Equipment VAT",
+        "weight": 3.5,
+        "severity": "HIGH",
+        "source": "SIGTAS / Customs Cross-Match",
+        "description": "Discrepancy between port clearance entries and SIGTAS return schedules."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Tadesse Kebede",
+        "title": "Managing Director",
+        "phone": "+251-911-345012",
+        "email": "t.kebede@bluenilecement.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-am2-01",
+    "tin": "0081234008",
+    "name": "Gondar Agro-Export & Sesame Cleansing Enterprise",
+    "sector": "Agro-Export",
+    "businessType": "Agricultural Cleaning & Global Export",
+    "segment": "LARGE",
+    "taxCenter": "amhara-tc2",
+    "region": "amhara",
+    "city": "Gondar",
+    "address": "Airport Road Industrial Sector",
+    "riskScore": 87,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1850000000,
+    "totalAmount": 49000000,
+    "assessmentScore": "89",
+    "employees": 390,
+    "registeredDate": "2016-12-05",
+    "lastAudit": "2022-03-30",
+    "complianceHistory": "Export proceeds mismatch, customs export documentation discrepancies",
+    "customsImportCIF": 920000000,
+    "domesticVatTurnover": 680000000,
+    "customsDomesticGap": 240000000,
+    "unreconciledVatCredit": 8500000,
+    "nonResidentWithholdingExposure": 13000000,
+    "nbeForexDiscrepancy": 22000000,
+    "complianceIssues": [
+      "Under-reporting of export contract FOB amounts compared to destination customs manifests.",
+      "Failure to reconcile foreign exchange surrender requirements with NBE."
+    ],
+    "riskIndicators": [
+      {
+        "id": "export_manifest_gap",
+        "name": "Port Manifest vs Return Variance",
+        "weight": 3.2,
+        "severity": "HIGH",
+        "source": "Customs Export Division",
+        "description": "Tonnage cleared through Metema border exceeds declared sales invoices."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Getnet Alemu",
+        "title": "Chief Executive",
+        "phone": "+251-911-450123",
+        "email": "g.alemu@gondarexport.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-am3-01",
+    "tin": "0081234009",
+    "name": "Wollo Textile & Garment Manufacturing S.C.",
+    "sector": "Textiles & Apparel",
+    "businessType": "Yarn Spinning & Apparel Export",
+    "segment": "LARGE",
+    "taxCenter": "amhara-tc3",
+    "region": "amhara",
+    "city": "Dessie",
+    "address": "Kombolcha Industrial Park, Shed 03",
+    "riskScore": 85,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1650000000,
+    "totalAmount": 42000000,
+    "assessmentScore": "87",
+    "employees": 680,
+    "registeredDate": "2017-08-19",
+    "lastAudit": "2022-06-14",
+    "complianceHistory": "Duty-free fabric imports sold locally, withholding omissions",
+    "customsImportCIF": 890000000,
+    "domesticVatTurnover": 640000000,
+    "customsDomesticGap": 250000000,
+    "unreconciledVatCredit": 7800000,
+    "nonResidentWithholdingExposure": 11500000,
+    "nbeForexDiscrepancy": 18000000,
+    "complianceIssues": [
+      "Industrial park duty-free synthetic fabric imported for export diverted to domestic retail traders.",
+      "Exempt raw material waste ratios inflated to conceal unaccounted local fabric sales."
+    ],
+    "riskIndicators": [
+      {
+        "id": "park_fabric_diversion",
+        "name": "Industrial Park Duty-Free Diversion",
+        "weight": 3.4,
+        "severity": "HIGH",
+        "source": "Park Customs Monitoring Office",
+        "description": "Significant discrepancy between imported yarn weights and exported garment weights."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "W/ro Hirut Kebede",
+        "title": "Managing Director",
+        "phone": "+251-911-501234",
+        "email": "h.kebede@wollotextile.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-dd1-01",
+    "tin": "0081234010",
+    "name": "Dire Dawa International Dry Port Logistics & Assembly Enterprise",
+    "sector": "Logistics & Assembly",
+    "businessType": "Vehicle CKD Assembly & Multimodal Freight Logistics",
+    "segment": "LARGE",
+    "taxCenter": "dire_dawa-tc1",
+    "region": "dire_dawa",
+    "city": "Dire Dawa",
+    "address": "Free Trade Zone, Area A",
+    "riskScore": 95,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 3600000000,
+    "totalAmount": 105000000,
+    "assessmentScore": "96",
+    "employees": 820,
+    "registeredDate": "2013-08-14",
+    "lastAudit": "2021-09-12",
+    "complianceHistory": "Free Trade Zone tax exemption violations, transfer pricing on vehicle component kits",
+    "customsImportCIF": 2500000000,
+    "domesticVatTurnover": 1650000000,
+    "customsDomesticGap": 850000000,
+    "unreconciledVatCredit": 23000000,
+    "nonResidentWithholdingExposure": 29000000,
+    "nbeForexDiscrepancy": 46000000,
+    "complianceIssues": [
+      "Goods cleared through Free Trade Zone tariff shelter sold into domestic customs territory without duty payment.",
+      "CKD vehicle component kits misclassified under lower customs tariff subheadings.",
+      "Unwithheld 30% tax on overseas technical assembly supervisory contracts."
+    ],
+    "riskIndicators": [
+      {
+        "id": "ftz_leakage",
+        "name": "Free Trade Zone Domestic Infiltration",
+        "weight": 3.8,
+        "severity": "CRITICAL",
+        "source": "FTZ Customs Control Division",
+        "description": "Uncontrolled transfer of bonded FTZ assembly kits into domestic wholesale channels."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Ibrahim Hassan",
+        "title": "Managing Director",
+        "phone": "+251-911-612345",
+        "email": "i.hassan@diredawadryport.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-dd2-01",
+    "tin": "0081234011",
+    "name": "Horn of Africa Petroleum Products Import & Bunkering Ltd",
+    "sector": "Energy & Petroleum",
+    "businessType": "Petroleum Lubricants & Industrial Fuel Imports",
+    "segment": "LARGE",
+    "taxCenter": "dire_dawa-tc2",
+    "region": "dire_dawa",
+    "city": "Dire Dawa",
+    "address": "Railway Compound, Depot 04",
+    "riskScore": 90,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 2800000000,
+    "totalAmount": 74000000,
+    "assessmentScore": "91",
+    "employees": 310,
+    "registeredDate": "2015-10-28",
+    "lastAudit": "2022-02-18",
+    "complianceHistory": "Excise tax discrepancies, customs fuel density and volume conversion variances",
+    "customsImportCIF": 1900000000,
+    "domesticVatTurnover": 1320000000,
+    "customsDomesticGap": 580000000,
+    "unreconciledVatCredit": 15500000,
+    "nonResidentWithholdingExposure": 21000000,
+    "nbeForexDiscrepancy": 33000000,
+    "complianceIssues": [
+      "Customs declared metric tons vs SIGTAS domestic cubic meter sales show significant volume shrinkage unaccounted for.",
+      "Under-payment of excise tax on specialized synthetic lubricants."
+    ],
+    "riskIndicators": [
+      {
+        "id": "fuel_volume_shrinkage",
+        "name": "Customs Volume vs Declared Sales Discrepancy",
+        "weight": 3.5,
+        "severity": "HIGH",
+        "source": "Customs Petroleum Division",
+        "description": "Discrepancy exceeding allowable transit evaporation thresholds."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Kedir Gemeda",
+        "title": "General Manager",
+        "phone": "+251-911-723456",
+        "email": "k.gemeda@hornoil.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-dd3-01",
+    "tin": "0081234012",
+    "name": "Ethio-Djibouti Railway Multimodal Freight Transit S.C.",
+    "sector": "Transportation",
+    "businessType": "Rail Freight & Container Terminal Management",
+    "segment": "LARGE",
+    "taxCenter": "dire_dawa-tc3",
+    "region": "dire_dawa",
+    "city": "Dire Dawa",
+    "address": "Terminal Station Complex",
+    "riskScore": 86,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1800000000,
+    "totalAmount": 47000000,
+    "assessmentScore": "88",
+    "employees": 480,
+    "registeredDate": "2016-06-11",
+    "lastAudit": "2022-05-23",
+    "complianceHistory": "Cross-border transit fee apportionment disputes, withholding omissions",
+    "customsImportCIF": 1100000000,
+    "domesticVatTurnover": 790000000,
+    "customsDomesticGap": 310000000,
+    "unreconciledVatCredit": 9800000,
+    "nonResidentWithholdingExposure": 13500000,
+    "nbeForexDiscrepancy": 20000000,
+    "complianceIssues": [
+      "Failure to properly apportion railway freight turnover between Ethiopian and Djibouti sovereign tax jurisdictions.",
+      "Withholding omissions on locomotive maintenance contracts paid to foreign engineers."
+    ],
+    "riskIndicators": [
+      {
+        "id": "rail_jurisdiction_split",
+        "name": "Cross-Border Revenue Allocation Mismatch",
+        "weight": 3.1,
+        "severity": "HIGH",
+        "source": "Bilateral Railway Joint Audit Commission",
+        "description": "Disputed apportionment of transit tariffs between neighboring tax authorities."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Tesfaye Hailu",
+        "title": "Chief Financial Controller",
+        "phone": "+251-911-834567",
+        "email": "t.hailu@edrailway.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-sn1-01",
+    "tin": "0081234013",
+    "name": "Southern Ethiopia Agro-Industrial Park Processing S.C.",
+    "sector": "Agro-Processing",
+    "businessType": "Avocado Oil & Fruit Processing for Global Export",
+    "segment": "LARGE",
+    "taxCenter": "snnpr-tc1",
+    "region": "snnpr",
+    "city": "Hawassa",
+    "address": "Yirgalem Agro-Industrial Park, Plot 02",
+    "riskScore": 91,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 2750000000,
+    "totalAmount": 72000000,
+    "assessmentScore": "92",
+    "employees": 650,
+    "registeredDate": "2017-02-14",
+    "lastAudit": "2021-12-08",
+    "complianceHistory": "Duty-free processing equipment imported and under-utilized, transfer pricing on oil exports",
+    "customsImportCIF": 1750000000,
+    "domesticVatTurnover": 1150000000,
+    "customsDomesticGap": 600000000,
+    "unreconciledVatCredit": 15800000,
+    "nonResidentWithholdingExposure": 20500000,
+    "nbeForexDiscrepancy": 31000000,
+    "complianceIssues": [
+      "Transfer pricing variance on crude avocado oil shipped to Dutch holding company at 30% below global spot market.",
+      "Input VAT credits claimed on packaging materials without customs export proof."
+    ],
+    "riskIndicators": [
+      {
+        "id": "agro_tp_variance",
+        "name": "Related Party Commodity Transfer Pricing",
+        "weight": 3.6,
+        "severity": "HIGH",
+        "source": "International Market Price Index",
+        "description": "Export pricing deviates significantly from benchmark international sales."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Yonas Mengistu",
+        "title": "Managing Director",
+        "phone": "+251-911-945678",
+        "email": "y.mengistu@southernagro.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-sn2-01",
+    "tin": "0081234014",
+    "name": "Hawassa Textile & Industrial Apparel Exporters PLC",
+    "sector": "Textiles & Garments",
+    "businessType": "Garment Export & Synthetic Thread Import",
+    "segment": "LARGE",
+    "taxCenter": "snnpr-tc2",
+    "region": "snnpr",
+    "city": "Hawassa",
+    "address": "Hawassa Industrial Park, Shed 14",
+    "riskScore": 87,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1900000000,
+    "totalAmount": 51000000,
+    "assessmentScore": "89",
+    "employees": 950,
+    "registeredDate": "2018-05-20",
+    "lastAudit": "2022-04-18",
+    "complianceHistory": "Duty-free thread and button diversion, employee withholding reconciliation issues",
+    "customsImportCIF": 1150000000,
+    "domesticVatTurnover": 820000000,
+    "customsDomesticGap": 330000000,
+    "unreconciledVatCredit": 10500000,
+    "nonResidentWithholdingExposure": 14500000,
+    "nbeForexDiscrepancy": 21000000,
+    "complianceIssues": [
+      "Customs voucher non-clearance for imported specialized synthetic fabrics.",
+      "Withholding tax non-deduction on expatriate managerial salaries paid into overseas bank accounts."
+    ],
+    "riskIndicators": [
+      {
+        "id": "expat_salary_wht",
+        "name": "Expatriate Managerial Remuneration Omission",
+        "weight": 3.2,
+        "severity": "HIGH",
+        "source": "Immigration & Labor Records",
+        "description": "Expatriate executive benefits not reflected in domestic payroll tax declarations."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Berhanu Nega",
+        "title": "Plant General Manager",
+        "phone": "+251-911-056789",
+        "email": "b.nega@hawassatextile.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-sn3-01",
+    "tin": "0081234015",
+    "name": "Gibe River Agricultural Machinery & Irrigation Importers Ltd",
+    "sector": "Wholesale & Machinery",
+    "businessType": "Heavy Agricultural Implements & Irrigation System Imports",
+    "segment": "LARGE",
+    "taxCenter": "snnpr-tc3",
+    "region": "snnpr",
+    "city": "Wolaita Sodo",
+    "address": "Commercial Avenue, Plot 10",
+    "riskScore": 84,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1550000000,
+    "totalAmount": 39000000,
+    "assessmentScore": "86",
+    "employees": 280,
+    "registeredDate": "2019-01-15",
+    "lastAudit": "2022-08-25",
+    "complianceHistory": "Tariff classification manipulation on irrigation pump assemblies",
+    "customsImportCIF": 980000000,
+    "domesticVatTurnover": 710000000,
+    "customsDomesticGap": 270000000,
+    "unreconciledVatCredit": 8200000,
+    "nonResidentWithholdingExposure": 11000000,
+    "nbeForexDiscrepancy": 17000000,
+    "complianceIssues": [
+      "Commercial diesel water pumps imported under zero-tariff agricultural duty heading instead of standard commercial tariff.",
+      "Input VAT credits claimed on vehicles registered as private rather than commercial."
+    ],
+    "riskIndicators": [
+      {
+        "id": "tariff_misclassification",
+        "name": "Customs Tariff Misclassification",
+        "weight": 3.3,
+        "severity": "HIGH",
+        "source": "Customs Tariff Audit Team",
+        "description": "Inappropriate tariff lines selected to avoid statutory customs and excise duties."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Daniel Tesfaye",
+        "title": "Commercial Director",
+        "phone": "+251-911-167890",
+        "email": "d.tesfaye@gibemachinery.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-so1-01",
+    "tin": "0081234016",
+    "name": "Ogaden Natural Gas Exploration Logistics & Engineering S.C.",
+    "sector": "Energy & Extraction",
+    "businessType": "Energy Drilling Logistics & Heavy Equipment Importation",
+    "segment": "LARGE",
+    "taxCenter": "somali-tc1",
+    "region": "somali",
+    "city": "Jigjiga",
+    "address": "Industrial Sector, Zone 01",
+    "riskScore": 94,
+    "riskLevel": "CRITICAL",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 3400000000,
+    "totalAmount": 98000000,
+    "assessmentScore": "95",
+    "employees": 520,
+    "registeredDate": "2015-09-18",
+    "lastAudit": "2021-07-29",
+    "complianceHistory": "Cross-border equipment lease withholding omission, customs temporary import violations",
+    "customsImportCIF": 2300000000,
+    "domesticVatTurnover": 1500000000,
+    "customsDomesticGap": 800000000,
+    "unreconciledVatCredit": 21500000,
+    "nonResidentWithholdingExposure": 28000000,
+    "nbeForexDiscrepancy": 44000000,
+    "complianceIssues": [
+      "Heavy drilling equipment brought in under temporary customs import status expired without re-export or full duty settlement.",
+      "Offshore equipment lease payments executed without statutory 30% Non-Resident Withholding Tax deduction."
+    ],
+    "riskIndicators": [
+      {
+        "id": "temp_import_breach",
+        "name": "Expired Temporary Customs Importation",
+        "weight": 3.7,
+        "severity": "CRITICAL",
+        "source": "Customs Temporary Admission Registry",
+        "description": "High-value machinery exceeding allowable temporary admission duration without duty assessment."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Ibrahim Mohammed",
+        "title": "Managing Director",
+        "phone": "+251-911-278901",
+        "email": "i.mohammed@ogadenenergy.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-so2-01",
+    "tin": "0081234017",
+    "name": "Jigjiga Livestock Export & Veterinary Pharmaceuticals Union",
+    "sector": "Livestock & Agro-Export",
+    "businessType": "Quarantine Processing, Live Animal Export & Veterinary Imports",
+    "segment": "LARGE",
+    "taxCenter": "somali-tc2",
+    "region": "somali",
+    "city": "Jigjiga",
+    "address": "Quarantine Corridor, Road 05",
+    "riskScore": 88,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 2100000000,
+    "totalAmount": 56000000,
+    "assessmentScore": "90",
+    "employees": 380,
+    "registeredDate": "2016-11-12",
+    "lastAudit": "2022-03-15",
+    "complianceHistory": "Border crossing informal trade leakage, export proceeds repatriation delays",
+    "customsImportCIF": 1300000000,
+    "domesticVatTurnover": 920000000,
+    "customsDomesticGap": 380000000,
+    "unreconciledVatCredit": 11800000,
+    "nonResidentWithholdingExposure": 15500000,
+    "nbeForexDiscrepancy": 24000000,
+    "complianceIssues": [
+      "Declared live animal export headcounts mismatch regional quarantine border transit certificates.",
+      "Substantial delay in repatriation of hard currency export proceeds from Gulf purchasers."
+    ],
+    "riskIndicators": [
+      {
+        "id": "quarantine_transit_mismatch",
+        "name": "Border Quarantine vs Customs Declarations",
+        "weight": 3.4,
+        "severity": "HIGH",
+        "source": "Regional Quarantine Authority & Customs",
+        "description": "Discrepancy in live animal export counts cleared through Tog Wajale border post."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Ahmed Hassan",
+        "title": "Union Chairman",
+        "phone": "+251-911-389012",
+        "email": "a.hassan@jigjigalivestock.com.et"
+      }
+    ]
+  },
+  {
+    "id": "tp-joint-so3-01",
+    "tin": "0081234018",
+    "name": "Somali Region Cross-Border Commercial Trading & Haulage PLC",
+    "sector": "Trading & Transport",
+    "businessType": "General Merchandize Importation & Heavy Fleet Transport",
+    "segment": "LARGE",
+    "taxCenter": "somali-tc3",
+    "region": "somali",
+    "city": "Degehabur",
+    "address": "Trade Transit Boulevard",
+    "riskScore": 86,
+    "riskLevel": "HIGH",
+    "suggestedAuditType": "joint_audit",
+    "annualRevenue": 1700000000,
+    "totalAmount": 44000000,
+    "assessmentScore": "88",
+    "employees": 290,
+    "registeredDate": "2018-04-20",
+    "lastAudit": "2022-09-02",
+    "complianceHistory": "Customs valuation disputes on consumer goods imports, parallel transit sales",
+    "customsImportCIF": 1050000000,
+    "domesticVatTurnover": 760000000,
+    "customsDomesticGap": 290000000,
+    "unreconciledVatCredit": 9100000,
+    "nonResidentWithholdingExposure": 12000000,
+    "nbeForexDiscrepancy": 18500000,
+    "complianceIssues": [
+      "Customs valuation disputes on containerized consumer commodities transiting from Berbera port.",
+      "Failure to reconcile domestic sales invoices with imported bulk goods."
+    ],
+    "riskIndicators": [
+      {
+        "id": "berbera_transit_variance",
+        "name": "Berbera Corridor Valuation Gap",
+        "weight": 3.2,
+        "severity": "HIGH",
+        "source": "Cross-Border Transit Taskforce",
+        "description": "Declared CIF values 25% below equivalent imports cleared through Djibouti."
+      }
+    ],
+    "representatives": [
+      {
+        "name": "Ato Farah Abdi",
+        "title": "Operations Director",
+        "phone": "+251-911-490123",
+        "email": "f.abdi@somalitrading.com.et"
+      }
+    ]
+  }
+];

@@ -29,6 +29,22 @@ public class CaseManagementController {
     private final CaseManagementPort caseManagementPort;
     private final ApResponseDtoMapper dtoMapper;
 
+    // ==================== CASE GENERATION ====================
+
+    /**
+     * Generate audit cases from a finalized annual plan and cascade to tax centers / committee
+     */
+    @PostMapping("/generate-from-plan/{planId}")
+    public ResponseEntity<GenericResponse<List<AuditCaseResponse>>> generateCasesFromPlan(
+            @PathVariable UUID planId,
+            @RequestHeader(value = "X-Actor-Id", required = false, defaultValue = "national-process-owner") String actorId) {
+        List<AuditCase> cases = caseManagementPort.generateCasesForPlan(planId, actorId);
+        List<AuditCaseResponse> response = cases.stream()
+                .map(dtoMapper::toAuditCaseResponse)
+                .toList();
+        return ResponseEntity.ok(GenericResponse.success(response, response.size(), (long) response.size()));
+    }
+
     // ==================== CASE QUERIES ====================
 
     /**

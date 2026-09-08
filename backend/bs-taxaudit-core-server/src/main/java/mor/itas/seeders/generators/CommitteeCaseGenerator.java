@@ -31,7 +31,12 @@ public class CommitteeCaseGenerator {
     private static final String[] SEGMENTS = {"LARGE", "MEDIUM", "SMALL"};
 
     private static final String[] TAX_CENTERS = {
-        "addis_ababa-tc1", "addis_ababa-tc2", "addis_ababa-tc3", "oromia-tc1"
+        "addis_ababa-tc1", "addis_ababa-tc2", "addis_ababa-tc3",
+        "oromia-tc1", "oromia-tc2", "oromia-tc3",
+        "amhara-tc1", "amhara-tc2", "amhara-tc3",
+        "dire_dawa-tc1", "dire_dawa-tc2", "dire_dawa-tc3",
+        "snnpr-tc1", "snnpr-tc2", "snnpr-tc3",
+        "somali-tc1", "somali-tc2", "somali-tc3"
     };
 
     private static final String[] CASE_STATUSES = {
@@ -103,7 +108,7 @@ public class CommitteeCaseGenerator {
 
         // Determine tax center and get tax center-specific data
         String taxCenter = TAX_CENTERS[index % TAX_CENTERS.length];
-        List<Map<String, String>> tcCases = TAX_CENTER_CASES.get(taxCenter);
+        List<Map<String, String>> tcCases = TAX_CENTER_CASES.getOrDefault(taxCenter, TAX_CENTER_CASES.get("addis_ababa-tc1"));
         Map<String, String> caseData = tcCases.get(index / TAX_CENTERS.length % tcCases.size());
 
         // Generate taxpayer information from tax center-specific data
@@ -112,7 +117,7 @@ public class CommitteeCaseGenerator {
 
         entity.setTaxpayerId(generateDeterministicUUID("taxpayer", index));
         entity.setTaxpayerName(caseData.get("name"));
-        entity.setTaxIdNumber(caseData.get("tin"));
+        entity.setTaxIdNumber(caseData.get("tin") + "-" + String.format("%03d", index));
         entity.setSegment(segment);
         entity.setIndustry(industry);
 
@@ -143,14 +148,22 @@ public class CommitteeCaseGenerator {
             entity.setCaseCode(String.format("JAC-2024-%04d", index));
         }
 
+        int tcIdx = (index % TAX_CENTERS.length) + 1;
+        UUID tcChairUuid = UUID.fromString(String.format("20000000-0000-0000-%04d-000000000001", tcIdx));
+        UUID tcMemberUuid = UUID.fromString(String.format("20000000-0000-0000-%04d-000000000002", tcIdx));
+        UUID tcTeamLeadUuid = UUID.fromString(String.format("10000000-0000-0000-%04d-000000000001", tcIdx));
+
+        entity.setChairpersonId(tcChairUuid);
+        entity.setCreatedBy(tcChairUuid);
+
         // Assign team lead for cases past TEAM_ASSIGNED (business rule: team lead must exist before viability)
-        if (status.equals("PENDING_VIABILITY") || status.equals("APPROVED") || status.equals("REJECTED")) {
-            entity.setTeamLeadId(generateDeterministicUUID("teamlead", index));
+        if (status.equals("PENDING_VIABILITY") || status.equals("APPROVED") || status.equals("REJECTED") || status.equals("TEAM_ASSIGNED")) {
+            entity.setTeamLeadId(tcTeamLeadUuid);
         }
 
-        // Generate ownership (about 66% of cases have owner)
+        // Generate ownership (assigned to TC Member or Chair)
         if ((index % 3) != 0) {
-            entity.setCurrentOwnerId(generateMemberId(index));
+            entity.setCurrentOwnerId((index % 2 == 0) ? tcMemberUuid : tcChairUuid);
             entity.setOwnershipAcquiredAt(OffsetDateTime.now().minusDays(random.nextInt(7) + 1));
         }
 
@@ -158,12 +171,10 @@ public class CommitteeCaseGenerator {
         if (status.equals("APPROVED")) {
             entity.setDecision("APPROVED");
             entity.setDecisionDate(entity.getCommitteeDeadline().minusDays(random.nextInt(5) + 1));
-            entity.setChairpersonId(generateDeterministicUUID("chairperson", 0));
         } else if (status.equals("REJECTED")) {
             entity.setDecision("REJECTED");
             entity.setDecisionDate(entity.getCommitteeDeadline().minusDays(random.nextInt(5) + 1));
-            entity.setDecisionReason("Risk assessment indicates insufficient controls for audit approval");
-            entity.setChairpersonId(generateDeterministicUUID("chairperson", 0));
+            entity.setDecisionReason("Risk assessment indicates insufficient multi-tax compliance controls for joint audit approval");
         }
 
         // Add handoff info for team-assigned cases
@@ -259,7 +270,7 @@ public class CommitteeCaseGenerator {
      */
     private String generateCompanyName(int index) {
         String taxCenter = TAX_CENTERS[index % TAX_CENTERS.length];
-        List<Map<String, String>> tcCases = TAX_CENTER_CASES.get(taxCenter);
+        List<Map<String, String>> tcCases = TAX_CENTER_CASES.getOrDefault(taxCenter, TAX_CENTER_CASES.get("addis_ababa-tc1"));
         Map<String, String> caseData = tcCases.get(index / TAX_CENTERS.length % tcCases.size());
         return caseData.get("name");
     }
@@ -269,7 +280,7 @@ public class CommitteeCaseGenerator {
      */
     private String generateTIN(int index) {
         String taxCenter = TAX_CENTERS[index % TAX_CENTERS.length];
-        List<Map<String, String>> tcCases = TAX_CENTER_CASES.get(taxCenter);
+        List<Map<String, String>> tcCases = TAX_CENTER_CASES.getOrDefault(taxCenter, TAX_CENTER_CASES.get("addis_ababa-tc1"));
         Map<String, String> caseData = tcCases.get(index / TAX_CENTERS.length % tcCases.size());
         return caseData.get("tin");
     }

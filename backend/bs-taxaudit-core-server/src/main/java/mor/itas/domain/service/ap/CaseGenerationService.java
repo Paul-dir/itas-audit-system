@@ -32,6 +32,7 @@ public class CaseGenerationService {
     private final AnnualAuditPlanRepository planRepository;
     private final AuditCaseMapper caseMapper;
     private final UserJpaRepository userRepository;
+    private final JointCaseRoutingBridgeService jointCaseRoutingBridge;
 
     /**
      * Generate audit cases from a finalized plan
@@ -42,7 +43,7 @@ public class CaseGenerationService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("FINALIZED")) {
+        if (plan.getStatus() != mor.itas.domain.model.ap.PlanStatus.FINALIZED) {
             throw new IllegalStateException("Can only generate cases from FINALIZED plans. Current: " + plan.getStatus());
         }
 
@@ -81,6 +82,12 @@ public class CaseGenerationService {
 
                 // Save and convert to domain model
                 ApAuditCaseEntity saved = caseRepository.save(caseEntity);
+                
+                // If this is a Joint Audit case, bridge it into Josi's Committee Case system
+                if (jointCaseRoutingBridge.isJointAudit(auditType)) {
+                    jointCaseRoutingBridge.routeApCaseToCommittee(saved, taxCenter);
+                }
+                
                 generatedCases.add(caseMapper.toDomain(saved));
             }
         }
