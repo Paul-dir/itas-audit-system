@@ -134,8 +134,16 @@ public class CaseManagementController {
                 final String requestedType = auditType != null && !auditType.isBlank() ? auditType.toUpperCase() : null;
 
                 if (resolvedTC != null) {
-                    cases = caseRepository.findByTaxCenterCode(resolvedTC)
-                            .stream()
+                    List<String> tcVariants = getTaxCenterVariants(resolvedTC);
+                    List<ApAuditCaseEntity> found = new ArrayList<>();
+                    for (String v : tcVariants) {
+                        found.addAll(caseRepository.findByTaxCenterCode(v));
+                    }
+                    Map<UUID, ApAuditCaseEntity> dedup = new LinkedHashMap<>();
+                    for (ApAuditCaseEntity c : found) {
+                        dedup.putIfAbsent(c.getId(), c);
+                    }
+                    cases = dedup.values().stream()
                             .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
                                       || "JOINT_AUDIT".equals(c.getAuditType())
                                       || "TRANSFER_PRICING".equals(c.getAuditType()))
@@ -259,7 +267,96 @@ public class CaseManagementController {
 
     /**
      * Assign a single case to a team leader.
-     * PENDING_ASSIGNMENT → ASSIGNED_TO_TEAM_LEADER
+    /**
+     * Universal single case assignment endpoint supporting committee, team leader, and auditor assignment.
+     * Route: POST /api/v1/backoffice/ap/cases/{caseId}/assign
+     */
+    @PostMapping("/{caseId}/assign")
+    @Transactional
+    public ResponseEntity<GenericResponse<Map<String, Object>>> assignCase(
+            @PathVariable UUID caseId,
+            @RequestParam(required = false) String committeeId,
+            @RequestParam(required = false) String teamLeaderId,
+            @RequestParam(required = false) String auditorId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String notes,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestHeader(value = "X-Actor-Id", required = false) String actorId) {
+        try {
+            ApAuditCaseEntity entity = caseRepository.findById(caseId)
+                    .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+            String targetCommId = committeeId != null ? committeeId : (body != null ? (String) body.get("committeeId") : null);
+            String targetTLId = teamLeaderId != null ? teamLeaderId : (body != null ? (String) body.get("teamLeaderId") : null);
+            String targetAudId = auditorId != null ? auditorId : (body != null ? (String) body.get("auditorId") : null);
+            String targetStatus = status != null ? status : (body != null ? (String) body.get("status") : null);
+
+            if (targetCommId != null && !targetCommId.isBlank()) {
+                try {
+                    entity.setCommitteeId(UUID.fromString(targetCommId));
+                } catch (Exception ignored) {}
+                entity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE);
+            }
+
+            if (targetTLId != null && !targetTLId.isBlank()) {
+                String canonicalTL = resolveTeamLeaderCanonicalId(targetTLId);
+                entity.setAssignedTeamLeaderId(canonicalTL != null ? canonicalTL : targetTLId);
+                entity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER);
+            }
+
+            if (targetAudId != null && !targetAudId.isBlank()) {
+                String canonicalAud = resolveAuditorCanonicalId(targetAudId);
+                entity.setAssignedAuditorId(canonicalAud != null ? canonicalAud : targetAudId);
+                entity.setStatus(ApAuditCaseEntity.STATUS_IN_PROGRESS);
+                entity.setStartedAt(OffsetDateTime.now());
+            }
+
+            if (targetStatus != null && !targetStatus.isBlank()) {
+                entity.setStatus(targetStatus);
+            }
+
+            entity.setUpdatedAt(OffsetDateTime.now());
+            caseRepository.save(entity);
+
+            return ResponseEntity.ok(GenericResponse.success(toDto(entity)));
+        } catch (Exception e) {
+            return ResponseEntity.ok(GenericResponse.error("ASSIGN_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Assign a single case to a committee.
+     * PENDING_ASSIGNMENT → ASSIGNED_TO_COMMITTEE
+     */
+    @PostMapping("/{caseId}/assign-committee")
+    @Transactional
+    public ResponseEntity<GenericResponse<Map<String, Object>>> assignToCommittee(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(value = "X-Actor-Id", required = false) String actorId) {
+        try {
+            String commId = (String) body.get("committeeId");
+            ApAuditCaseEntity entity = caseRepository.findById(caseId)
+                    .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+            if (commId != null && !commId.isBlank()) {
+                try {
+                    entity.setCommitteeId(UUID.fromString(commId));
+                } catch (Exception ignored) {}
+            }
+            entity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE);
+            entity.setUpdatedAt(OffsetDateTime.now());
+            caseRepository.save(entity);
+
+            return ResponseEntity.ok(GenericResponse.success(toDto(entity)));
+        } catch (Exception e) {
+            return ResponseEntity.ok(GenericResponse.error("ASSIGN_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Assign a single case to a team leader.
+     * PENDING_ASSIGNMENT / ASSIGNED_TO_COMMITTEE → ASSIGNED_TO_TEAM_LEADER
      */
     @PostMapping("/{caseId}/assign-team-leader")
     @Transactional
@@ -275,9 +372,10 @@ public class CaseManagementController {
             ApAuditCaseEntity entity = caseRepository.findById(caseId)
                     .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
-            // Allow re-assignment if already PENDING or already ASSIGNED_TO_TEAM_LEADER
+            // Allow re-assignment if PENDING, ASSIGNED_TO_COMMITTEE, or already ASSIGNED_TO_TEAM_LEADER
             if (!ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT.equals(entity.getStatus())
-                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())) {
+                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
+                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())) {
                 return ResponseEntity.ok(GenericResponse.error("INVALID_STATE",
                         "Case cannot be assigned to team leader in status: " + entity.getStatus()));
             }
@@ -312,7 +410,7 @@ public class CaseManagementController {
 
     /**
      * Assign a single case to an auditor (Team Leader action).
-     * ASSIGNED_TO_TEAM_LEADER → IN_PROGRESS
+     * ASSIGNED_TO_TEAM_LEADER / ASSIGNED_TO_COMMITTEE → IN_PROGRESS
      */
     @PostMapping("/{caseId}/assign-auditor")
     @Transactional
@@ -329,7 +427,8 @@ public class CaseManagementController {
                     .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
             if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
-                    && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())) {
+                    && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())
+                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())) {
                 return ResponseEntity.ok(GenericResponse.error("INVALID_STATE",
                         "Case must be assigned to team leader before auditor assignment. Status: " + entity.getStatus()));
             }
@@ -790,6 +889,9 @@ public class CaseManagementController {
         // u-aud-aa1a → addis_ababa-tc1 → TC-AA-01
         if (userId != null) {
             String lower = userId.toLowerCase();
+            if (lower.contains("fed") || lower.contains("federal")) {
+                return "federal-lto1";
+            }
             // Extract region+tc number from user ID
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:tc|tl|aud)(?:om)?-([a-z]{2})(\\d)").matcher(lower);
             if (m.find()) {

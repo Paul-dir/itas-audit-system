@@ -7,6 +7,7 @@ import { formatRevenue } from '../../utils/revenueFormatter.js';
 import TpTeamLeaderReviewModal from '../../../tp/components/TpTeamLeaderReviewModal.jsx';
 import TpWorkflowTaskPanel from '../../../tp/components/TpWorkflowTaskPanel.jsx';
 import IssueTeamLeaderReviewModal from '../../../issue/components/IssueTeamLeaderReviewModal.jsx';
+import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
 
 const API = '/api/v1/backoffice/ap/cases';
 
@@ -60,7 +61,7 @@ function mapCase(c) {
   };
 }
 
-export default function TeamLeaderDashboard() {
+export default function TeamLeaderDashboard({ view }) {
   const { user } = useAuth();
   const isCommitteeUser = user?.role === 'committee';
 
@@ -82,6 +83,52 @@ export default function TeamLeaderDashboard() {
   const [itemsPerPage, setItemsPerPage]   = useState(10);
   const [yearFilter, setYearFilter]       = useState('ALL');
   const [availablePlanYears, setAvailablePlanYears] = useState([2026, 2027, 2028, 2029, 2030, 2031, 2032]);
+
+  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
+  const [tpWorkspacePhase, setTpWorkspacePhase] = useState(null);
+
+  const PHASE_MAP = {
+    'phase-1': 'DETAILED_RISK_ASSESSMENT',
+    'phase-2': 'WORKING_HYPOTHESIS',
+    'phase-3': 'PLANNING',
+    'phase-4': 'FIELD_WORK',
+    'phase-5': 'ANALYSIS',
+    'phase-6': 'REPORT',
+    'phase-assessment': 'ASSESSMENT',
+    'phase-7': 'NOTICE',
+    'phase-8': 'COMPLETION'
+  };
+
+  useEffect(() => {
+    if (view && PHASE_MAP[view]) {
+      const nextPhase = PHASE_MAP[view];
+      setTpWorkspacePhase(nextPhase);
+
+      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER'));
+      const activeCase = tpCase || {
+        id: '0a4500d1-0842-4c07-a077-ceed404af705',
+        caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
+        taxpayerName: 'Crest Textiles SC',
+        taxpayerId: '1000080599',
+        sector: 'Textiles',
+        auditType: 'TRANSFER_PRICING',
+        riskLevel: 'HIGH',
+        riskScore: 99,
+        estimatedRevenue: 1468782000,
+        planYear: 2026,
+        status: 'IN_PROGRESS',
+        frontendStatus: 'IN_PROGRESS'
+      };
+      setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
+    } else if (view === 'tp-tasks') {
+      setTpWorkspaceCase(null);
+      setTpWorkspacePhase(null);
+      setTab('tp_tasks');
+    } else if (view === 'dashboard' || view === 'cases') {
+      setTpWorkspaceCase(null);
+      setTpWorkspacePhase(null);
+    }
+  }, [view, cases]);
 
   // ── Fetch cases assigned to this TL / committee member ──────────────────────
   const fetchCases = useCallback(async () => {
@@ -318,6 +365,22 @@ export default function TeamLeaderDashboard() {
     } finally { setAssignLoading(false); }
   };
 
+  if (tpWorkspaceCase) {
+    return (
+      <TpAuditWorkspace
+        caseData={tpWorkspaceCase}
+        user={user}
+        initialPhase={tpWorkspacePhase || 'DETAILED_RISK_ASSESSMENT'}
+        onClose={() => { setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
+        onRefresh={() => {
+          fetchCases();
+          setTpWorkspaceCase(null);
+          setTpWorkspacePhase(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -330,7 +393,34 @@ export default function TeamLeaderDashboard() {
             {loading ? 'Loading cases…' : `${stats.total} cases assigned to you`}
           </p>
         </div>
-        <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>Refresh</Button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || {
+                id: '0a4500d1-0842-4c07-a077-ceed404af705',
+                caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
+                taxpayerName: 'Crest Textiles SC',
+                taxpayerId: '1000080599',
+                sector: 'Textiles',
+                auditType: 'TRANSFER_PRICING',
+                riskLevel: 'HIGH',
+                riskScore: 99,
+                estimatedRevenue: 1468782000,
+                planYear: 2026,
+                status: 'IN_PROGRESS',
+                frontendStatus: 'IN_PROGRESS'
+              };
+              setTpWorkspacePhase('WORKING_HYPOTHESIS');
+              setTpWorkspaceCase(tpCase);
+            }}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-xs cursor-pointer"
+          >
+            <Users className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Process Owner / Committee Console</span>
+          </button>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>Refresh</Button>
+        </div>
       </div>
 
       {user?.role === 'committee' && (
@@ -545,18 +635,31 @@ export default function TeamLeaderDashboard() {
                           </Button>
                         )}
                         <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
-                        {(c.auditType || '').toUpperCase() === 'TRANSFER_PRICING' && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            icon={ShieldCheck}
-                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                            onClick={() => setTlReviewCase(c)}
-                          >
-                            {['SUBMITTED_FOR_TL_REVIEW', 'REPORT_SUBMITTED_FOR_TL_REVIEW'].includes(c.status)
-                              ? 'Review & Endorse'
-                              : 'TP Review'}
-                          </Button>
+                        {(c.auditType || '').toUpperCase().includes('TRANSFER') && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              icon={ShieldCheck}
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                              onClick={() => setTlReviewCase(c)}
+                            >
+                              {['SUBMITTED_FOR_TL_REVIEW', 'REPORT_SUBMITTED_FOR_TL_REVIEW'].includes(c.status)
+                                ? 'Review & Endorse'
+                                : 'TP Review'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={Layers3}
+                              onClick={() => {
+                                setTpWorkspacePhase('DETAILED_RISK_ASSESSMENT');
+                                setTpWorkspaceCase(c);
+                              }}
+                            >
+                              Workspace
+                            </Button>
+                          </>
                         )}
                         {['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase()) && (
                           <Button

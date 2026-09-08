@@ -108,6 +108,54 @@ public class TpAuditExecutionController {
         return ResponseEntity.ok(state);
     }
 
+    // ── Phase Transition & Lifecycle Management ──────────────────────────────
+
+    @PostMapping("/start-execution")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> startExecution(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+        c.setStatus("IN_PROGRESS");
+        c.setTpCurrentPhase("DETAILED_RISK_ASSESSMENT");
+        c.setStartedAt(OffsetDateTime.now());
+        caseRepository.save(c);
+
+        logAction(caseId, "TP_EXECUTION_STARTED", "RISK_ASSESSMENT", actorId, "AUDITOR",
+                "Transfer Pricing Audit Execution started. Phase 1: Detailed Risk Assessment initiated.",
+                req, "ASSIGNED", "IN_PROGRESS", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "IN_PROGRESS");
+        res.put("currentPhase", "DETAILED_RISK_ASSESSMENT");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/advance-phase")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> advancePhase(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        String targetPhase = req != null ? (String) req.get("targetPhase") : null;
+        if (targetPhase != null && !targetPhase.isBlank()) {
+            c.setTpCurrentPhase(targetPhase);
+            caseRepository.save(c);
+        }
+
+        logAction(caseId, "TP_PHASE_ADVANCED", targetPhase != null ? targetPhase : "EXECUTION", actorId, "AUDITOR",
+                "Transfer Pricing Audit advanced to phase: " + targetPhase,
+                req, null, targetPhase, null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", c.getStatus());
+        res.put("currentPhase", c.getTpCurrentPhase());
+        return ResponseEntity.ok(res);
+    }
+
     // ── Phase 1: Risk Assessment & Working Hypothesis ────────────────────────
 
     @PostMapping("/risk-assessment")
@@ -408,6 +456,41 @@ public class TpAuditExecutionController {
     }
 
     // ── Phase 3: BUC-TA-014 (1.15 Conduct TP Audit Fieldwork) ─────────────────
+
+    @PostMapping("/field-work")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> saveFieldWorkProgress(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setTpCurrentPhase("ANALYSIS");
+        caseRepository.save(c);
+
+        logAction(caseId, "FIELD_WORK_PROGRESS_SAVED", "FIELD_WORK", actorId, "AUDITOR",
+                "Fieldwork documentation and working papers recorded. Ready for Transfer Pricing Analysis.",
+                req, "FIELD_WORK", "ANALYSIS", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "SAVED");
+        res.put("currentPhase", "ANALYSIS");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/field-work/contract-verify")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> verifyContract(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        String title = req != null && req.get("title") != null ? req.get("title").toString() : "Intercompany Contract";
+        logAction(caseId, "CONTRACT_VERIFIED", "FIELD_WORK", actorId, "AUDITOR",
+                "Verified intercompany agreement and terms: " + title, req, null, "VERIFIED", null, null);
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "VERIFIED");
+        return ResponseEntity.ok(res);
+    }
 
     @PostMapping("/field-work/accounting")
     public ResponseEntity<Void> saveAccountingAssessment(@PathVariable UUID caseId, @RequestBody TpFieldWorkRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
@@ -967,6 +1050,48 @@ public class TpAuditExecutionController {
     }
 
     // ── Phase 7: BUC-TA-018 (1.19 Issue Assessment Notice & Conclude Audit) ────
+
+    @PostMapping("/assessment/save")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> saveAssessmentComputation(
+            @PathVariable UUID caseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("ASSESSMENT_COMPUTED");
+        c.setTpCurrentPhase("NOTICE");
+        caseRepository.save(c);
+
+        logAction(caseId, "ASSESSMENT_COMPUTATION_SAVED", "ASSESSMENT", actorId, "AUDITOR",
+                "Transfer Pricing Assessment & Penalties computed pursuant to Proclamation 979/2016",
+                req, "ASSESSMENT", "ASSESSMENT_COMPUTED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "ASSESSMENT_COMPUTED");
+        res.put("currentPhase", "NOTICE");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/notice/fraud-referral")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> noticeFraudReferral(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("CRIMINAL_INVESTIGATION_REFERRAL");
+        caseRepository.save(c);
+
+        logAction(caseId, "FRAUD_CRIMINAL_REFERRAL", "NOTICE", actorId, "AUDITOR",
+                "Form FR-04.5-22 Criminal Referral Submitted to MoR Tax Fraud Division",
+                req, null, "CRIMINAL_INVESTIGATION_REFERRAL", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "CRIMINAL_INVESTIGATION_REFERRAL");
+        return ResponseEntity.ok(res);
+    }
 
     @PostMapping("/assessment/generate-final-notice")
     @Transactional

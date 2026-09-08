@@ -8,6 +8,7 @@ import {
 import TpCommitteeApprovalModal from '../../../tp/components/TpCommitteeApprovalModal.jsx';
 import TpWorkflowTaskPanel from '../../../tp/components/TpWorkflowTaskPanel.jsx';
 import CaseAssignmentToTeamLeaders from '../../components/CaseAssignmentToTeamLeaders.jsx';
+import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
 
 /**
  * CommitteeDashboard — TP Process Owner / Committee Dashboard
@@ -34,6 +35,56 @@ export default function CommitteeDashboard({ view }) {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('tasks');
   const [committeeReviewCase, setCommitteeReviewCase] = useState(null);
+
+  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
+  const [tpWorkspacePhase, setTpWorkspacePhase] = useState(null);
+
+  const PHASE_MAP = {
+    'phase-1': 'DETAILED_RISK_ASSESSMENT',
+    'phase-2': 'WORKING_HYPOTHESIS',
+    'phase-3': 'PLANNING',
+    'phase-4': 'FIELD_WORK',
+    'phase-5': 'ANALYSIS',
+    'phase-6': 'REPORT',
+    'phase-assessment': 'ASSESSMENT',
+    'phase-7': 'NOTICE',
+    'phase-8': 'COMPLETION'
+  };
+
+  useEffect(() => {
+    if (view && PHASE_MAP[view]) {
+      const nextPhase = PHASE_MAP[view];
+      setTpWorkspacePhase(nextPhase);
+
+      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER'));
+      const activeCase = tpCase || {
+        id: '0a4500d1-0842-4c07-a077-ceed404af705',
+        caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
+        taxpayerName: 'Crest Textiles SC',
+        taxpayerId: '1000080599',
+        sector: 'Textiles',
+        auditType: 'TRANSFER_PRICING',
+        riskLevel: 'HIGH',
+        riskScore: 99,
+        estimatedRevenue: 1468782000,
+        planYear: 2026,
+        status: 'IN_PROGRESS',
+        frontendStatus: 'IN_PROGRESS'
+      };
+      setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
+    } else if (view === 'deliberations') {
+      setTpWorkspaceCase(null);
+      setTpWorkspacePhase(null);
+      setTab('deliberation');
+    } else if (view === 'assign-cases') {
+      setTpWorkspaceCase(null);
+      setTpWorkspacePhase(null);
+      setTab('assign');
+    } else if (view === 'dashboard' || view === 'cases') {
+      setTpWorkspaceCase(null);
+      setTpWorkspacePhase(null);
+    }
+  }, [view, cases]);
 
   const isTP = (user?.auditType || '').toUpperCase().includes('TRANSFER');
 
@@ -166,6 +217,22 @@ export default function CommitteeDashboard({ view }) {
     COMPLETION:          'Closed',
   };
 
+  if (tpWorkspaceCase) {
+    return (
+      <TpAuditWorkspace
+        caseData={tpWorkspaceCase}
+        user={user}
+        initialPhase={tpWorkspacePhase || 'WORKING_HYPOTHESIS'}
+        onClose={() => { setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
+        onRefresh={() => {
+          fetchCases();
+          setTpWorkspaceCase(null);
+          setTpWorkspacePhase(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -182,6 +249,31 @@ export default function CommitteeDashboard({ view }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || {
+                id: '0a4500d1-0842-4c07-a077-ceed404af705',
+                caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
+                taxpayerName: 'Crest Textiles SC',
+                taxpayerId: '1000080599',
+                sector: 'Textiles',
+                auditType: 'TRANSFER_PRICING',
+                riskLevel: 'HIGH',
+                riskScore: 99,
+                estimatedRevenue: 1468782000,
+                planYear: 2026,
+                status: 'IN_PROGRESS',
+                frontendStatus: 'IN_PROGRESS'
+              };
+              setTpWorkspacePhase('WORKING_HYPOTHESIS');
+              setTpWorkspaceCase(tpCase);
+            }}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-xs transition cursor-pointer"
+          >
+            <Users className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>Process Owner / Committee Console</span>
+          </button>
           <Button
             size="sm"
             variant="primary"
@@ -393,6 +485,18 @@ export default function CommitteeDashboard({ view }) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={ClipboardList}
+                              className="border-amber-600/40 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                              onClick={() => {
+                                setTpWorkspacePhase('WORKING_HYPOTHESIS');
+                                setTpWorkspaceCase(c);
+                              }}
+                            >
+                              Working Hypothesis
+                            </Button>
                             <Button
                               size="sm"
                               variant="primary"

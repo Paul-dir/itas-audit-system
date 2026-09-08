@@ -21,6 +21,18 @@ import AuditRequesterDashboard from './features/ap/pages/requester/AuditRequeste
 import TaxpayerPortalDashboard from './features/portal/pages/TaxpayerPortalDashboard.jsx';
 import { Spinner } from './components/ui/index.jsx';
 
+const TP_PHASE_TITLES = {
+  'phase-1':          { title: 'Risk Assessment',               subtitle: 'Detailed TP risk scoring and indicators' },
+  'phase-2':          { title: 'Working Hypothesis',            subtitle: 'Formulate audit scope and transfer pricing risk hypothesis' },
+  'phase-3':          { title: 'Planning & Meeting',            subtitle: 'Entry conference schedule and initial document request' },
+  'phase-4':          { title: 'Field Work',                    subtitle: 'Fact statement verification & document gathering' },
+  'phase-5':          { title: 'Economic Analysis',             subtitle: 'Interquartile range (IQR) benchmarking & FAR analysis' },
+  'phase-6':          { title: 'TP Report',                     subtitle: 'Draft audit report and multi-level approval chain' },
+  'phase-assessment': { title: 'Assessment',                    subtitle: 'Arm’s length tax liability and penalty calculations' },
+  'phase-7':          { title: 'Notice & Objection',            subtitle: 'Assessment notice generation and taxpayer objection window' },
+  'phase-8':          { title: 'Audit Closure',                 subtitle: 'Final case sign-off and audit file archiving' },
+};
+
 const PAGE_TITLES = {
   planning_team: {
     dashboard:     { title: 'Planning Dashboard',    subtitle: 'Manage and track national audit plans'         },
@@ -45,31 +57,29 @@ const PAGE_TITLES = {
     risk_engine: { title: 'Risk Engine',          subtitle: 'Map taxpayers to plans and generate cases'         },
   },
   team_leader: {
-    dashboard: { title: 'Team Leader Dashboard', subtitle: 'Assign cases to your audit team' },
-    cases:     { title: 'Assigned Cases',         subtitle: 'Cases under your team'           },
+    dashboard: { title: 'Team Leader Dashboard', subtitle: 'Assign cases and supervise audit team' },
+    cases:     { title: 'Assigned Cases',         subtitle: 'Cases under your supervisory team' },
+    'tp-tasks': { title: 'TP Workflow Tasks',     subtitle: 'Review gates and pending supervisory actions' },
+    ...TP_PHASE_TITLES,
   },
   auditor: {
     dashboard:          { title: 'Auditor Dashboard',            subtitle: 'Your active audit cases' },
     cases:              { title: 'My Cases',                      subtitle: 'Cases assigned to you'   },
-    'phase-1':          { title: 'Risk Assessment',               subtitle: 'Detailed TP risk scoring and indicators' },
-    'phase-2':          { title: 'Working Hypothesis',            subtitle: 'Formulate audit scope and transfer pricing risk hypothesis' },
-    'phase-3':          { title: 'Planning & Meeting',            subtitle: 'Entry conference schedule and initial document request' },
-    'phase-4':          { title: 'Field Work',                    subtitle: 'Fact statement verification & document gathering' },
-    'phase-5':          { title: 'Economic Analysis',             subtitle: 'Interquartile range (IQR) benchmarking & FAR analysis' },
-    'phase-6':          { title: 'TP Report',                     subtitle: 'Draft audit report and multi-level approval chain' },
-    'phase-assessment': { title: 'Assessment',                    subtitle: 'Arm’s length tax liability and penalty calculations' },
-    'phase-7':          { title: 'Notice & Objection',            subtitle: 'Assessment notice generation and taxpayer objection window' },
-    'phase-8':          { title: 'Audit Closure',                 subtitle: 'Final case sign-off and audit file archiving' },
+    ...TP_PHASE_TITLES,
   },
   committee: {
     dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
     reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
     'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
+    deliberations:  { title: 'Committee Deliberations', subtitle: 'Formal session records and statutory voting resolutions' },
+    ...TP_PHASE_TITLES,
   },
   committee_member: {
     dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
     reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
     'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
+    deliberations:  { title: 'Committee Deliberations', subtitle: 'Formal session records and statutory voting resolutions' },
+    ...TP_PHASE_TITLES,
   },
   senior_management: {
     dashboard: { title: 'Senior Management',  subtitle: 'Final approval of national audit plans' },

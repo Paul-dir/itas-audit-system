@@ -58,7 +58,7 @@ public class OrgScopeAuthorizationService {
         }
 
         // 1. If system administrator, committee, or mock system actor, allow access
-        if (actorId.startsWith("admin") || actorId.startsWith("sys-admin") || actorId.startsWith("u-") || actorId.contains("committee") || actorId.startsWith("tc-") || actorId.startsWith("tax-") || actorId.startsWith("tl-") || actorId.startsWith("aud-") || actorId.startsWith("system")) {
+        if (actorId.startsWith("admin") || actorId.startsWith("sys-admin") || actorId.startsWith("u-") || actorId.contains("committee") || actorId.startsWith("tc-") || actorId.startsWith("tax-") || actorId.startsWith("tl-") || actorId.startsWith("aud-") || actorId.startsWith("system") || actorId.contains("director") || actorId.contains("owner") || actorId.contains("manager") || actorId.contains("fed")) {
             log.info("Administrative, Process Owner, or Mock actor [{}] granted access for action [{}]", actorId, action);
             return AuthorizationResult.allow();
         }

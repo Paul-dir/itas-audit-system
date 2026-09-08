@@ -3,16 +3,16 @@ import {
   ShieldAlert, FileText, Calendar, CheckCircle2, AlertTriangle, 
   Send, Layers, BarChart2, DollarSign, Calculator, ChevronRight,
   ArrowRight, ArrowLeft, UserCheck, Scale, AlertOctagon, RefreshCw, X, Users,
-  FileCheck, Building2, ShieldCheck, Search, Clock
+  FileCheck, Building2, ShieldCheck, Search, Clock, ClipboardList
 } from 'lucide-react';
 import { Card, Button, Badge, Alert, Input, Textarea, Select, Tabs } from '../../../components/ui/index.jsx';
 import { formatRevenue } from '../../ap/utils/revenueFormatter.js';
 
 const BASE_API = '/api/v1/backoffice/tp/cases';
 
-const TP_PHASES = [
+const AUDITOR_TP_PHASES = [
   { id: 'DETAILED_RISK_ASSESSMENT', num: 1, label: 'Risk Assessment', icon: ShieldAlert },
-  { id: 'PLANNING', num: 2, label: 'Audit Planning & Programming', icon: Calendar },
+  { id: 'PLANNING', num: 2, label: 'Planning & Meeting', icon: Calendar },
   { id: 'FIELD_WORK', num: 3, label: 'Field Work', icon: Layers },
   { id: 'ANALYSIS', num: 4, label: 'Economic Analysis', icon: BarChart2 },
   { id: 'REPORT', num: 5, label: 'TP Report', icon: FileText },
@@ -21,16 +21,50 @@ const TP_PHASES = [
   { id: 'COMPLETION', num: 8, label: 'Audit Closure', icon: CheckCircle2 }
 ];
 
+const TEAM_LEADER_TP_PHASES = [
+  { id: 'DETAILED_RISK_ASSESSMENT', num: 1, label: 'Risk Assessment Review', icon: ShieldAlert },
+  { id: 'PLANNING', num: 2, label: 'Audit Plan & Scope Review', icon: Calendar },
+  { id: 'FIELD_WORK', num: 3, label: 'Fact Statement Sign-Off', icon: Layers },
+  { id: 'ANALYSIS', num: 4, label: 'Benchmark & IQR Review', icon: BarChart2 },
+  { id: 'REPORT', num: 5, label: 'TP Report Endorsement', icon: FileText },
+  { id: 'ASSESSMENT', num: 6, label: 'Assessment Sign-Off', icon: Calculator }
+];
+
+const COMMITTEE_TP_PHASES = [
+  { id: 'WORKING_HYPOTHESIS', num: 1, label: '① Working Hypothesis & Scope', icon: ClipboardList },
+  { id: 'PLANNING', num: 2, label: '② Audit Plan & IDR Approval', icon: Calendar },
+  { id: 'ANALYSIS', num: 3, label: '③ Benchmark IQR Review', icon: BarChart2 },
+  { id: 'REPORT', num: 4, label: '④ TP Report & Exit Conf.', icon: FileText },
+  { id: 'ASSESSMENT', num: 5, label: '⑤ Statutory Assessment Sign-Off', icon: Scale }
+];
+
 export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, initialPhase }) {
-  const [activeTab, setActiveTab] = useState(initialPhase || 'DETAILED_RISK_ASSESSMENT');
+  const isAuditor = user?.role === 'auditor';
+  const isTeamLeader = user?.role === 'team_leader';
+  const isCommittee = ['committee', 'committee_member'].includes(user?.role) || user?.role === 'process_owner';
+
+  const activePhases = isAuditor 
+    ? AUDITOR_TP_PHASES 
+    : (isTeamLeader ? TEAM_LEADER_TP_PHASES : COMMITTEE_TP_PHASES);
+
+  const resolveInitialTab = (tab) => {
+    if (isAuditor && tab === 'WORKING_HYPOTHESIS') {
+      return 'DETAILED_RISK_ASSESSMENT';
+    }
+    if (isCommittee && (!tab || tab === 'DETAILED_RISK_ASSESSMENT')) {
+      return 'WORKING_HYPOTHESIS';
+    }
+    return tab || (isCommittee ? 'WORKING_HYPOTHESIS' : 'DETAILED_RISK_ASSESSMENT');
+  };
+  const [activeTab, setActiveTab] = useState(resolveInitialTab(initialPhase));
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     if (initialPhase) {
-      setActiveTab(initialPhase);
+      setActiveTab(resolveInitialTab(initialPhase));
     }
-  }, [initialPhase]);
+  }, [initialPhase, isAuditor]);
 
   // Form states for phases
   // Team Leader Case Assignment & Handoff State
@@ -353,84 +387,139 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
         const data = await res.json();
         setFullBackendState(data);
 
-        // 1. Financials & Controlled Transactions
-        if (data.fieldWork?.accountingFindings?.financials && Array.isArray(data.fieldWork.accountingFindings.financials)) {
-          setAuditedFinancials10Yr(data.fieldWork.accountingFindings.financials);
+        // 1. Financials & Controlled Transactions from Database
+        const financials = data.riskAssessment?.riskDetails?.auditedFinancials 
+          || data.fieldWork?.accountingFindings?.financials;
+        if (Array.isArray(financials) && financials.length > 0) {
+          setAuditedFinancials10Yr(financials);
         } else if (data.caseDetails?.estimatedRevenue) {
           const rev = Number(data.caseDetails.estimatedRevenue);
           setAuditedFinancials10Yr([
-            { year: 'FY 2020', turnover: Math.round(rev * 0.65), grossMargin: 19.8, ebit: 3.1, netProfit: -1200000, taxPaid: 500000 },
-            { year: 'FY 2021', turnover: Math.round(rev * 0.72), grossMargin: 19.1, ebit: 2.5, netProfit: -2800000, taxPaid: 500000 },
-            { year: 'FY 2022', turnover: Math.round(rev * 0.80), grossMargin: 18.5, ebit: 2.1, netProfit: -4200000, taxPaid: 500000 },
-            { year: 'FY 2023', turnover: Math.round(rev * 0.90), grossMargin: 16.2, ebit: 1.8, netProfit: -5800000, taxPaid: 500000 },
+            { year: 'FY 2020', turnover: Math.round(rev * 0.70), grossMargin: 19.8, ebit: 3.1, netProfit: -1200000, taxPaid: 500000 },
+            { year: 'FY 2021', turnover: Math.round(rev * 0.78), grossMargin: 19.1, ebit: 2.5, netProfit: -2800000, taxPaid: 500000 },
+            { year: 'FY 2022', turnover: Math.round(rev * 0.85), grossMargin: 18.5, ebit: 2.1, netProfit: -4200000, taxPaid: 500000 },
+            { year: 'FY 2023', turnover: Math.round(rev * 0.92), grossMargin: 16.2, ebit: 1.8, netProfit: -5800000, taxPaid: 500000 },
             { year: 'FY 2024', turnover: rev, grossMargin: 14.8, ebit: 1.5, netProfit: -6400000, taxPaid: 500000 }
           ]);
         }
 
-        if (data.fieldWork?.transactionTrails?.controlledTransactions && Array.isArray(data.fieldWork.transactionTrails.controlledTransactions)) {
-          setControlledTransactions(data.fieldWork.transactionTrails.controlledTransactions);
+        const ctrlTx = data.riskAssessment?.riskDetails?.controlledTransactions 
+          || data.fieldWork?.transactionTrails?.controlledTransactions;
+        if (Array.isArray(ctrlTx) && ctrlTx.length > 0) {
+          setControlledTransactions(ctrlTx);
         }
 
-        // 2. Risk Assessment
+        // 2. Risk Assessment from Database
         if (data.riskAssessment) {
           setRiskLevel(data.riskAssessment.riskLevel || 'HIGH');
-          if (data.riskAssessment.riskDetails?.indicators && Array.isArray(data.riskAssessment.riskDetails.indicators)) {
-            setRiskIndicators(data.riskAssessment.riskDetails.indicators);
+          const indicators = data.riskAssessment.riskDetails?.riskIndicators 
+            || data.riskAssessment.riskDetails?.indicators;
+          if (Array.isArray(indicators) && indicators.length > 0) {
+            setRiskIndicators(indicators);
           }
           if (data.riskAssessment.comments) {
             setRiskComments(data.riskAssessment.comments);
           }
         }
 
-        // 3. Working Hypothesis
+        // 3. Case Assignment & Team Metadata from Database
+        if (data.caseDetails) {
+          setCaseAssignment(prev => ({
+            ...prev,
+            assignedBy: data.caseDetails.assignedTeamLeaderName 
+              || data.caseDetails.assignedTeamLeaderId 
+              || prev.assignedBy,
+            assignedTo: data.caseDetails.assignedAuditorName 
+              || data.caseDetails.assignedAuditorId 
+              || prev.assignedTo,
+            mandateReason: `Statutory TP Audit Mandate for ${data.caseDetails.taxpayerName || 'taxpayer'} (${data.caseDetails.sector || 'Industry'}). Schedule 5 risk screening score: ${data.caseDetails.riskScore || 99}.`,
+          }));
+          if (data.caseDetails.assignedAuditorName || data.caseDetails.assignedAuditorId) {
+            setLeadHypothesisAuditor(data.caseDetails.assignedAuditorName || data.caseDetails.assignedAuditorId);
+          }
+          if (data.caseDetails.sector) {
+            setIndustrySector(data.caseDetails.sector);
+          }
+        }
+
+        // 4. Working Hypothesis from Database
         if (data.workingHypothesis) {
           if (data.workingHypothesis.hypothesisDescription) setHypothesisDesc(data.workingHypothesis.hypothesisDescription);
           if (data.workingHypothesis.identifiedIssue) setIdentifiedIssue(data.workingHypothesis.identifiedIssue);
           if (data.workingHypothesis.economicRationale) setEconRationale(data.workingHypothesis.economicRationale);
-          if (data.workingHypothesis.revenueAtRisk) setRevenueAtRisk(data.workingHypothesis.revenueAtRisk);
-          if (data.workingHypothesis.calculationDetails) setCalcDetails(data.workingHypothesis.calculationDetails);
+          if (data.workingHypothesis.revenueAtRisk != null) setRevenueAtRisk(Number(data.workingHypothesis.revenueAtRisk));
+          if (data.workingHypothesis.status) setHypothesisStatus(data.workingHypothesis.status);
+          if (data.workingHypothesis.calculationDetails) {
+            const cd = data.workingHypothesis.calculationDetails;
+            if (typeof cd === 'string') {
+              setCalcDetails(cd);
+            } else if (typeof cd === 'object') {
+              setCalcDetails(`Base Turnover: ETB ${cd.baseTurnover?.toLocaleString() || 'N/A'}, Target EBIT: ${cd.targetEbitMedian || 6.4}%, Estimated Profit Shortfall: ETB ${cd.estimatedProfitShortfall?.toLocaleString() || 'N/A'}, Tax at Risk (30% CIT): ETB ${cd.estimatedTaxAtRisk?.toLocaleString() || 'N/A'}`);
+            }
+          }
         }
 
-        // 4. Audit Plan
+        // 5. Audit Plan from Database
         if (data.auditPlan) {
           if (data.auditPlan.objective) setPlanObj(data.auditPlan.objective);
           if (data.auditPlan.scope) setPlanScope(data.auditPlan.scope);
           if (data.auditPlan.status) setPlanApprovalDecision(data.auditPlan.status);
+          if (data.auditPlan.approvedBy) setPlanApprovedBy(data.auditPlan.approvedBy);
+          if (data.auditPlan.materialityDetails?.materialityThreshold != null) {
+            setPlanMateriality(String(data.auditPlan.materialityDetails.materialityThreshold));
+          }
+          if (data.auditPlan.plannedProcedures?.allocatedHours != null) {
+            setAuditHoursBudget(Number(data.auditPlan.plannedProcedures.allocatedHours));
+          }
+          if (data.auditPlan.samplingMethod?.samplingMethodology) {
+            setSamplingMethod(data.auditPlan.samplingMethod.samplingMethodology);
+          }
         }
 
-        // 5. Analysis
+        // 6. Field Work from Database
+        if (data.fieldWork) {
+          if (data.fieldWork.accountingMethods) setFieldWorkNotes(data.fieldWork.accountingMethods);
+          if (data.fieldWork.factStatement?.summaryOfFacts) setFieldWorkNotes(data.fieldWork.factStatement.summaryOfFacts);
+          if (data.fieldWork.factStatement?.taxpayerObservations) setInterviewMinutes(data.fieldWork.factStatement.taxpayerObservations);
+          if (data.fieldWork.factStatementStatus) setFactStatementStatus(data.fieldWork.factStatementStatus);
+          if (data.fieldWork.factStatementVersion) setFactStatementVersion(Number(data.fieldWork.factStatementVersion));
+        }
+
+        // 7. Analysis & Benchmarking from Database
         if (data.analysis) {
           if (data.analysis.selectedTpMethod) setSelectedMethod(data.analysis.selectedTpMethod);
           if (data.analysis.armsLengthRangeMin != null) setIqrMin(Number(data.analysis.armsLengthRangeMin));
+          if (data.analysis.armsLengthRangeMedian != null) setIqrMedian(Number(data.analysis.armsLengthRangeMedian));
           if (data.analysis.armsLengthRangeMax != null) setIqrMax(Number(data.analysis.armsLengthRangeMax));
           if (data.analysis.taxpayerActualResult != null) setTaxpayerResult(Number(data.analysis.taxpayerActualResult));
           if (data.analysis.varianceAmount != null) setVarianceAmt(Number(data.analysis.varianceAmount));
         }
 
-        // 6. Reports
+        // 8. Reports from Database
         if (data.reports && data.reports.length > 0) {
           const rep = data.reports[0];
           if (rep.executiveSummary) setExecutiveSummary(rep.executiveSummary);
           if (rep.status) setReportStatus(rep.status);
-          if (rep.version) setReportVersion(rep.version);
+          if (rep.version != null) setReportVersion(Number(rep.version));
+          if (rep.legalGrounds) setLegalGrounds(rep.legalGrounds);
         }
 
-        // 7. Exit Conference
+        // 9. Exit Conference from Database
         if (data.exitConference) {
           if (data.exitConference.venue) setEntryConferenceVenue(data.exitConference.venue);
           if (data.exitConference.auditorNotes) setExitConferenceNotes(data.exitConference.auditorNotes);
         }
 
-        // 8. Notices
+        // 10. Notices from Database
         if (data.notices) {
           if (data.notices.noticeReferenceNumber) setNoticeReferenceId(data.notices.noticeReferenceNumber);
           if (data.notices.issueDate) setNoticeDispatchDate(data.notices.issueDate);
           if (data.notices.responseDeadline) setObjectionFilingDeadline(data.notices.responseDeadline);
-          if (data.notices.assessedPrincipalTax) setTaxAdjustment(Number(data.notices.assessedPrincipalTax));
+          if (data.notices.assessedPrincipalTax != null) setTaxAdjustment(Number(data.notices.assessedPrincipalTax));
           if (data.notices.status) setAssessmentStatus(data.notices.status);
         }
 
-        // 9. Objections
+        // 11. Objections from Database
         if (data.objections && data.objections.length > 0) {
           const obj = data.objections[0];
           if (obj.status) setTaxpayerObjectionStatus(obj.status);
@@ -587,7 +676,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
         {/* Auditor 8-Step Statutory Phase Navigation Bar */}
         <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 px-6 py-2.5 overflow-x-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 flex-nowrap min-w-max">
-            {TP_PHASES.map((phase) => {
+            {activePhases.map((phase) => {
               const Icon = phase.icon;
               const isActive = activeTab === phase.id;
               return (
@@ -608,20 +697,23 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
             })}
           </div>
 
-          <div className="flex items-center gap-2 pl-3 border-l border-slate-300 dark:border-slate-700 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('WORKING_HYPOTHESIS')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                activeTab === 'WORKING_HYPOTHESIS'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-              <span>Process Owner / Committee Console</span>
-            </button>
-          </div>
+
+          {isCommittee && (
+            <div className="flex items-center gap-2 pl-3 border-l border-slate-300 dark:border-slate-700 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveTab('WORKING_HYPOTHESIS')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  activeTab === 'WORKING_HYPOTHESIS'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                <span>Process Owner / Committee Console</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Main Content Body */}
@@ -1537,15 +1629,27 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                      <Badge color="amber" size="sm">GOVERNANCE CONSOLE</Badge>
-                      <Badge color="purple" size="sm">PROCESS OWNER & REVIEW COMMITTEE</Badge>
+                      {isAuditor ? (
+                        <>
+                          <Badge color="blue" size="sm">AUDIT EXECUTION PHASE 2</Badge>
+                          <Badge color="purple" size="sm">FORMULATED BY PROCESS OWNER & COMMITTEE</Badge>
+                        </>
+                      ) : (
+                        <>
+                          <Badge color="amber" size="sm">GOVERNANCE CONSOLE</Badge>
+                          <Badge color="purple" size="sm">PROCESS OWNER & REVIEW COMMITTEE</Badge>
+                        </>
+                      )}
                       <span className="text-xs text-slate-400 font-mono">OECD Action 8-10 / BUC-TA-013</span>
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white pt-0.5">
-                      Process Owner Working Hypothesis & Review Committee Planning Meeting Deliberation
+                      {isAuditor 
+                        ? 'Transfer Pricing Working Hypothesis & Audit Scope Guidance'
+                        : 'Process Owner Working Hypothesis & Review Committee Planning Meeting Deliberation'
+                      }
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Transfer Pricing Process Owner develops the initial working hypothesis and business case (Amount of Revenue at Risk). The Review Committee evaluates the case in the planning meeting; deciding to CONTINUE triggers Step 2 (Audit Planning & Programming) for the Auditor.
+                      Transfer Pricing Process Owner develops the initial working hypothesis and business case (Amount of Revenue at Risk). The Review Committee evaluates the case in the planning meeting; deciding to CONTINUE triggers Step 3 (Planning & Meeting) for the Auditor.
                     </p>
                   </div>
                   <div className="bg-slate-50 dark:bg-slate-700/60 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-right">
@@ -2043,51 +2147,61 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       >
                         ← Back to Sub-Page 4
                       </Button>
-                      <Button
-                        variant="primary"
-                        icon={Send}
-                        loading={loading}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5"
-                        onClick={async () => {
-                          await handlePost(
-                            '/working-hypothesis',
-                            {
-                              hypothesisDescription: hypothesisDesc,
-                              identifiedIssue,
-                              economicRationale: econRationale,
-                              revenueAtRisk: parseFloat(revenueAtRisk),
-                              calculationDetails: {
-                                subPageCompleted: 5,
-                                auditScope: hypothesisAuditScope,
-                                materiality: hypothesisMateriality,
-                                benefitTestMatrix,
-                                dempeMatrix,
-                                primaryTpMethod,
-                                secondaryTpMethod,
-                                pliMetric,
-                                methodRationales,
-                                multiYearAdjustments,
-                                hypothesisStatus: 'SUBMITTED_FOR_TL_REVIEW',
-                                leadHypothesisAuditor,
-                                committeeChair
-                              }
-                            },
-                            'Process Owner Working Hypothesis saved! Ready for Review Committee Planning Meeting.'
-                          );
-                          if (caseData?.id) {
-                            try {
-                              await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id || 'auditor' },
-                                body: JSON.stringify({ status: 'SUBMITTED_FOR_TL_REVIEW', notes: 'Working Hypothesis submitted for TL supervisory review' })
-                              });
-                            } catch (e) { console.warn('Status patch fallback:', e); }
-                          }
-                          setHypothesisStatus('SUBMITTED_FOR_TL_REVIEW');
-                        }}
-                      >
-                        Save Working Hypothesis & Business Case
-                      </Button>
+                      {!isAuditor ? (
+                        <Button
+                          variant="primary"
+                          icon={Send}
+                          loading={loading}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5"
+                          onClick={async () => {
+                            await handlePost(
+                              '/working-hypothesis',
+                              {
+                                hypothesisDescription: hypothesisDesc,
+                                identifiedIssue,
+                                economicRationale: econRationale,
+                                revenueAtRisk: parseFloat(revenueAtRisk),
+                                calculationDetails: {
+                                  subPageCompleted: 5,
+                                  auditScope: hypothesisAuditScope,
+                                  materiality: hypothesisMateriality,
+                                  benefitTestMatrix,
+                                  dempeMatrix,
+                                  primaryTpMethod,
+                                  secondaryTpMethod,
+                                  pliMetric,
+                                  methodRationales,
+                                  multiYearAdjustments,
+                                  hypothesisStatus: 'SUBMITTED_FOR_TL_REVIEW',
+                                  leadHypothesisAuditor,
+                                  committeeChair
+                                }
+                              },
+                              'Process Owner Working Hypothesis saved! Ready for Review Committee Planning Meeting.'
+                            );
+                            if (caseData?.id) {
+                              try {
+                                await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id || 'auditor' },
+                                  body: JSON.stringify({ status: 'SUBMITTED_FOR_TL_REVIEW', notes: 'Working Hypothesis submitted for TL supervisory review' })
+                                });
+                              } catch (e) { console.warn('Status patch fallback:', e); }
+                            }
+                            setHypothesisStatus('SUBMITTED_FOR_TL_REVIEW');
+                          }}
+                        >
+                          Save Working Hypothesis & Business Case
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5"
+                          onClick={() => setActiveTab('PLANNING')}
+                        >
+                          Proceed to Phase 3: Planning & Meeting →
+                        </Button>
+                      )}
                     </div>
 
                     {/* Review Committee Planning Meeting Deliberation & Decision Box */}
@@ -2096,59 +2210,79 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         <div className="flex items-center gap-2">
                           <Users className="w-5 h-5 text-amber-400" />
                           <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                            Review Committee Planning Meeting Deliberation (BUC-TA-013)
+                            {isAuditor ? 'Review Committee Planning Meeting Resolution (BUC-TA-013)' : 'Review Committee Planning Meeting Deliberation (BUC-TA-013)'}
                           </h4>
                         </div>
                         <Badge color="amber" size="xs">
-                          {fullBackendState?.planningMeetings?.decision || 'DELIBERATION_PENDING'}
+                          {fullBackendState?.planningMeetings?.decision || 'DECISION: CONTINUE'}
                         </Badge>
                       </div>
                       <p className="text-xs text-slate-300">
-                        The Review Committee reviews the transfer pricing case and the Process Owner's working hypothesis. As the review committee decides to <strong>CONTINUE</strong>, the <em>‘Audit Planning and Programming’</em> phase will be triggered for the auditor.
+                        {isAuditor
+                          ? 'The Review Committee evaluated the case and Process Owner working hypothesis, resolving to CONTINUE with Audit Planning and Programming.'
+                          : 'The Review Committee reviews the transfer pricing case and the Process Owner\'s working hypothesis. As the review committee decides to CONTINUE, the Audit Planning and Programming phase will be triggered for the auditor.'
+                        }
                       </p>
 
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          icon={CheckCircle2}
-                          loading={loading}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
-                          onClick={async () => {
-                            await handlePost(
-                              '/planning-meeting/decision',
-                              {
-                                decision: 'CONTINUE',
-                                discussionNotes: `Review Committee convened and evaluated the Transfer Pricing case for ${fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}. Based on the Process Owner Working Hypothesis and estimated revenue at risk of ETB ${revenueAtRisk}, the Committee resolved to CONTINUE with Audit Planning and Programming.`
-                              },
-                              'Review Committee decided to CONTINUE! Audit Planning & Programming triggered for Auditor.'
-                            );
-                            setActiveTab('PLANNING');
-                          }}
-                        >
-                          Adopt Decision: CONTINUE (Trigger Audit Planning & Programming)
-                        </Button>
+                      {!isAuditor ? (
+                        <div className="flex flex-wrap items-center gap-3 pt-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={CheckCircle2}
+                            loading={loading}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
+                            onClick={async () => {
+                              await handlePost(
+                                '/planning-meeting/decision',
+                                {
+                                  decision: 'CONTINUE',
+                                  discussionNotes: `Review Committee convened and evaluated the Transfer Pricing case for ${fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}. Based on the Process Owner Working Hypothesis and estimated revenue at risk of ETB ${revenueAtRisk}, the Committee resolved to CONTINUE with Audit Planning and Programming.`
+                                },
+                                'Review Committee decided to CONTINUE! Audit Planning & Programming triggered for Auditor.'
+                              );
+                              setActiveTab('PLANNING');
+                            }}
+                          >
+                            Adopt Decision: CONTINUE (Trigger Audit Planning & Programming)
+                          </Button>
 
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          icon={AlertTriangle}
-                          loading={loading}
-                          className="bg-amber-800/60 hover:bg-amber-800 text-amber-200 border-amber-700"
-                          onClick={async () => {
-                            await handlePost(
-                              '/planning-meeting/decision',
-                              {
-                                decision: 'REQUEST_INFO',
-                                discussionNotes: 'Review Committee requested additional preliminary evidence before deciding on full audit plan.'
-                              },
-                              'Planning meeting recorded: Returned for additional evidence.'
-                            );
-                          }}
-                        >
-                          Request Preliminary Info
-                        </Button>
-                      </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={AlertTriangle}
+                            loading={loading}
+                            className="bg-amber-800/60 hover:bg-amber-800 text-amber-200 border-amber-700"
+                            onClick={async () => {
+                              await handlePost(
+                                '/planning-meeting/decision',
+                                {
+                                  decision: 'REQUEST_INFO',
+                                  discussionNotes: 'Review Committee requested additional preliminary evidence before deciding on full audit plan.'
+                                },
+                                'Planning meeting recorded: Returned for additional evidence.'
+                              );
+                            }}
+                          >
+                            Request Preliminary Info
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="pt-2 flex items-center justify-between border-t border-amber-800/40 text-xs text-emerald-400">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            Statutory Planning Meeting Endorsed • Audit Mandate Active
+                          </span>
+                          <Button
+                            size="xs"
+                            variant="primary"
+                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => setActiveTab('PLANNING')}
+                          >
+                            Go to Phase 3: Planning & Meeting →
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 </div>

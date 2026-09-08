@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, ClipboardList, CheckSquare, Map, Building2,
   Users, Search, Star, LogOut, ChevronRight, Activity, Target, Settings,
+  Landmark, Scale, FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
@@ -97,7 +98,19 @@ const NAV_SECTIONS = {
     {
       title: 'AUDIT OPERATIONS',
       items: [
-        { id: 'cases', label: 'Assigned Cases', icon: Users }
+        { id: 'cases', label: 'Assigned Cases', icon: Users },
+        { id: 'tp-tasks', label: 'TP Workflow Tasks', icon: Activity }
+      ]
+    },
+    {
+      title: 'SUPERVISORY REVIEWS & GATES',
+      items: [
+        { id: 'phase-1', label: 'Risk Assessment Review', icon: CheckSquare },
+        { id: 'phase-3', label: 'Audit Plan & Scope Review', icon: Target },
+        { id: 'phase-4', label: 'Fact Statement Sign-Off', icon: Building2 },
+        { id: 'phase-5', label: 'Benchmark & IQR Review', icon: Activity },
+        { id: 'phase-6', label: 'TP Report Endorsement', icon: FileText },
+        { id: 'phase-assessment', label: 'Assessment Sign-Off', icon: Star }
       ]
     }
   ],
@@ -112,6 +125,22 @@ const NAV_SECTIONS = {
         { id: 'cases', label: 'Committee Cases', icon: Users },
         { id: 'assign-cases', label: 'Assign Cases to TLs', icon: Users }
       ]
+    },
+    {
+      title: 'STATUTORY REVIEW GATES',
+      items: [
+        { id: 'phase-2', label: '① Working Hypothesis & Scope', icon: ClipboardList },
+        { id: 'phase-3', label: '② Audit Plan & IDR Approval', icon: Target },
+        { id: 'phase-5', label: '③ Benchmark IQR Review', icon: Activity },
+        { id: 'phase-6', label: '④ TP Report & Exit Conf.', icon: FileText },
+        { id: 'phase-assessment', label: '⑤ Statutory Assessment Sign-Off', icon: Scale }
+      ]
+    },
+    {
+      title: 'COMMITTEE GOVERNANCE',
+      items: [
+        { id: 'deliberations', label: 'Deliberations & Resolutions', icon: Landmark }
+      ]
     }
   ],
   committee_member: [
@@ -124,6 +153,22 @@ const NAV_SECTIONS = {
       items: [
         { id: 'cases', label: 'Committee Cases', icon: Users },
         { id: 'assign-cases', label: 'Assign Cases to TLs', icon: Users }
+      ]
+    },
+    {
+      title: 'STATUTORY REVIEW GATES',
+      items: [
+        { id: 'phase-2', label: '① Working Hypothesis & Scope', icon: ClipboardList },
+        { id: 'phase-3', label: '② Audit Plan & IDR Approval', icon: Target },
+        { id: 'phase-5', label: '③ Benchmark IQR Review', icon: Activity },
+        { id: 'phase-6', label: '④ TP Report & Exit Conf.', icon: FileText },
+        { id: 'phase-assessment', label: '⑤ Statutory Assessment Sign-Off', icon: Scale }
+      ]
+    },
+    {
+      title: 'COMMITTEE GOVERNANCE',
+      items: [
+        { id: 'deliberations', label: 'Deliberations & Resolutions', icon: Landmark }
       ]
     }
   ],
@@ -142,7 +187,6 @@ const NAV_SECTIONS = {
       title: 'TP AUDIT EXECUTION',
       items: [
         { id: 'phase-1', label: 'Risk Assessment', icon: CheckSquare },
-        { id: 'phase-2', label: 'Working Hypothesis', icon: ClipboardList },
         { id: 'phase-3', label: 'Planning & Meeting', icon: Target },
         { id: 'phase-4', label: 'Field Work', icon: Building2 },
         { id: 'phase-5', label: 'Economic Analysis', icon: Activity },
