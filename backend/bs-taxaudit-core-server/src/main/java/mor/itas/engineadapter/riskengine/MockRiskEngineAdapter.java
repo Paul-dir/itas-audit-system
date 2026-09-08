@@ -11,7 +11,7 @@ import java.util.Map;
  * Mock Risk Engine Adapter
  */
 @Component
-@Profile("mock")
+@Profile({"mock", "test"})
 public class MockRiskEngineAdapter implements RiskEnginePort {
 
     @Override
