@@ -91,7 +91,8 @@ public class TpAuditReportUseCase {
             r.setStatus("FULLY_APPROVED");
             ApAuditCaseEntity c = r.getAuditCase();
             if (c != null) {
-                c.setTpCurrentPhase("NOTICE");
+                c.setTpCurrentPhase("ASSESSMENT");
+                c.setStatus("REPORT_APPROVED");
                 auditCaseRepository.save(c);
             }
         } else {

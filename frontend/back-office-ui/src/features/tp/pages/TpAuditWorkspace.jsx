@@ -2312,7 +2312,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <Card className="p-6 space-y-5">
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      Step 3.1: Statutory Audit Plan Objectives & Scope (MoR Standard Form FR-04.5.1-01)
+                      Step 2.1: Statutory Audit Plan Objectives & Scope (MoR Standard Form FR-04.5.1-01)
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2503,7 +2503,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <Card className="p-6 space-y-5">
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
                       <Users className="w-5 h-5 text-emerald-600" />
-                      Step 3.3: Taxpayer Entry Conference & Supervisory Committee Schedule (Form FR-04.2.1)
+                      Step 2.3: Taxpayer Entry Conference & Supervisory Committee Schedule (Form FR-04.2.1)
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2593,7 +2593,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <FileText className="w-5 h-5 text-emerald-600" />
-                          Step 3.4: Initial Information Document Request (IDR-01) Builder (Form FR-04.5.2-IDR)
+                          Step 2.4: Initial Information Document Request (IDR-01) Builder (Form FR-04.5.2-IDR)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Configure statutory documents required from Taxpayer within <span className="font-bold text-emerald-600">{idrNoticeDays} working days</span> of Entry Conference.
@@ -2691,7 +2691,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <Card className="p-6 space-y-5">
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
                       <FileText className="w-5 h-5 text-emerald-600" />
-                      Step 3.5: Final Audit Plan Committee Sign-Off & IDR-01 Statutory Dispatch
+                      Step 2.5: Final Audit Plan Committee Sign-Off & IDR-01 Statutory Dispatch
                     </h3>
 
                     {/* Statutory Summary Card */}
@@ -2709,42 +2709,177 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       </div>
                     </div>
 
-                    {/* Supervisory Audit Committee Sign-Off Controls */}
-                    <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 space-y-4">
-                      <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-emerald-600" />
-                        TP Supervisory Audit Committee Plan Approval & Sign-Off
-                      </h4>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Input
-                          label="Lead TP Auditor"
-                          value={leadHypothesisAuditor}
-                          onChange={(e) => setLeadHypothesisAuditor(e.target.value)}
-                        />
-                        <Input
-                          label="Committee Chair Representative"
-                          value={planApprovedBy}
-                          onChange={(e) => setPlanApprovedBy(e.target.value)}
-                        />
-                        <Select
-                          label="Committee Approval Decision"
-                          value={planApprovalDecision}
-                          onChange={(e) => setPlanApprovalDecision(e.target.value)}
-                          options={[
-                            { value: 'APPROVED', label: 'APPROVED — Issue IDR-01 & Proceed to Fieldwork' },
-                            { value: 'REVISION_REQUESTED', label: 'REVISION REQUESTED — Adjust Scope or Hours' },
-                            { value: 'DISAPPROVED', label: 'DISAPPROVED — Reject Audit Plan' }
-                          ]}
-                        />
+                    {/* 3-Gate Sequential Audit Plan Approval Chain (Auditor -> TL -> Committee) */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                          <UserCheck className="w-4 h-4 text-emerald-600" />
+                          Statutory 3-Stage Audit Plan Approval Chain (Form FR-04.5.1)
+                        </h4>
+                        <Badge 
+                          color={
+                            fullBackendState?.auditPlan?.status === 'APPROVED' ? 'green' :
+                            fullBackendState?.auditPlan?.status === 'SUBMITTED_FOR_REVIEW' ? 'purple' :
+                            fullBackendState?.auditPlan?.status === 'UNDER_TL_REVIEW' ? 'amber' : 'gray'
+                          } 
+                          size="sm"
+                        >
+                          STATUS: {fullBackendState?.auditPlan?.status || 'DRAFT'}
+                        </Badge>
                       </div>
 
-                      <Textarea
-                        label="Supervisory Committee Final Instructions & Rationale"
-                        rows={3}
-                        value={planComments}
-                        onChange={(e) => setPlanComments(e.target.value)}
-                      />
+                      {/* Approval Chain Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Gate 1: Lead Auditor Plan Draft & Submission */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[10px] font-bold rounded-full">
+                              GATE 1: AUDITOR
+                            </span>
+                            <Badge color="green" size="xs">DRAFTED</Badge>
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-slate-900 dark:text-white">1. Audit Team Plan Finalization</p>
+                            <p className="text-[11px] text-slate-500">Lead Senior TP Auditor</p>
+                          </div>
+                          <Textarea
+                            label="Auditor Strategy & Materiality Justification Notes"
+                            rows={4}
+                            value={planComments}
+                            onChange={(e) => setPlanComments(e.target.value)}
+                            placeholder="Document scope years, materiality rationale, and covered controlled transactions..."
+                          />
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={Send}
+                            loading={loading}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={async () => {
+                              await handlePost('/audit-plan', {
+                                objective: planObj,
+                                scope: planScope,
+                                materialityDetails: { materialityFloor: parseFloat(planMateriality) || 5000000 },
+                                industryResearch: { sector: industrySector, ratios: benchmarkingRatios },
+                                samplingMethod: { method: samplingMethod, auditHoursBudget: parseInt(auditHoursBudget) },
+                                plannedProcedures: { subPageCompleted: 5, comments: planComments }
+                              }, 'Audit Plan (Form FR-04.5.1) Saved Successfully!');
+
+                              await handlePost('/audit-plan/submit-tl', {}, 'Audit Plan submitted to Team Leader for review!');
+                            }}
+                          >
+                            Submit Plan to Team Leader
+                          </Button>
+                        </div>
+
+                        {/* Gate 2: Team Leader Supervisory Endorsement */}
+                        <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-200 text-[10px] font-bold rounded-full">
+                              GATE 2: TEAM LEADER
+                            </span>
+                            <Badge 
+                              color={['SUBMITTED_FOR_REVIEW', 'APPROVED'].includes(fullBackendState?.auditPlan?.status) ? 'green' : fullBackendState?.auditPlan?.status === 'UNDER_TL_REVIEW' ? 'amber' : 'gray'} 
+                              size="xs"
+                            >
+                              {['SUBMITTED_FOR_REVIEW', 'APPROVED'].includes(fullBackendState?.auditPlan?.status) ? 'ENDORSED' : 'SUPERVISION'}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-purple-950 dark:text-purple-200">2. Team Leader Technical QA</p>
+                            <p className="text-[11px] text-slate-500">Quality Assurance & Resource Endorsement</p>
+                          </div>
+                          <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-purple-100 dark:border-purple-900 text-xs text-slate-600 dark:text-slate-300">
+                            Team Leader reviews scope, materiality calculations (ETB {formatRevenue(parseFloat(planMateriality) || 5000000)}), and allocated {auditHoursBudget} hours before committee endorsement.
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={UserCheck}
+                            loading={loading}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
+                            onClick={async () => {
+                              await handlePost('/audit-plan/tl-endorse', {}, 'Team Leader endorsed Audit Plan and submitted to Review Committee!');
+                            }}
+                          >
+                            TL Endorse & Submit to Committee
+                          </Button>
+                        </div>
+
+                        {/* Gate 3: Review Committee / Process Owner Approval */}
+                        <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200 text-[10px] font-bold rounded-full">
+                              GATE 3: REVIEW COMMITTEE
+                            </span>
+                            <Badge color={fullBackendState?.auditPlan?.status === 'APPROVED' ? 'green' : 'amber'} size="xs">
+                              {fullBackendState?.auditPlan?.status === 'APPROVED' ? 'APPROVED' : 'APPROVAL PENDING'}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-blue-950 dark:text-blue-200">3. Process Owner & Committee Sign-Off</p>
+                            <p className="text-[11px] text-slate-500">Statutory Form FR-04.5.1 Authorization</p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              icon={CheckCircle2}
+                              loading={loading}
+                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                              onClick={async () => {
+                                await handlePost('/audit-plan/approve', {}, 'Audit Plan (Form FR-04.5.1) Formally Approved by Review Committee! Fieldwork unlocked.');
+                              }}
+                            >
+                              Adopt Decision: APPROVE Audit Plan
+                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                className="flex-1 text-[11px]"
+                                onClick={() => handlePost('/audit-plan/request-revision', { reason: 'Adjust audit hours budget and sampling threshold.' }, 'Plan revisions requested.')}
+                              >
+                                Request Revision
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                className="flex-1 text-[11px]"
+                                onClick={() => handlePost('/audit-plan/additional-research', { instructions: 'Conduct secondary benchmark query.' }, 'Additional research requested.')}
+                              >
+                                Need Research
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Committee Approval Success Banner & Transition to Fieldwork */}
+                      {fullBackendState?.auditPlan?.status === 'APPROVED' && (
+                        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div>
+                              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                                Audit Plan Approved by Review Committee / Process Owner!
+                              </p>
+                              <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                Case has been resent to the Auditor. Form FR-04.5.1 is officially signed and filed. You can now proceed to Step 3: Field Work & FAR Analysis.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="md"
+                            variant="primary"
+                            icon={ArrowRight}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
+                            onClick={() => setActiveTab('FIELD_WORK')}
+                          >
+                            Proceed to Step 3: Field Work →
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-700">
@@ -2775,7 +2910,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                             agenda: meetingAgenda,
                             idrNoticeDays: parseInt(idrNoticeDays) || 15,
                             idrItemsRequested: idrItems.filter(i => i.checked)
-                          }, `Step 3 (Planning & Meeting) 5-Page Process Completed & Saved! Entry Conference scheduled and IDR-01 issued (${idrItems.filter(i => i.checked).length} document streams requested). Transitioning to Step 4 (Field Work)...`);
+                          }, `Step 2 (Planning & Programming) Process Completed & Saved! Entry Conference scheduled and IDR-01 issued.`);
                         }}
                       >
                         Save & Issue Audit Plan & IDR-01 Request
@@ -2787,16 +2922,48 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
             </div>
           )}
 
-          {/* Phase 4: Field Work - Enterprise 5-Sub-Page Wide Process Stepper */}
+          {/* Step 3: Field Work - Enterprise 5-Sub-Page Wide Process Stepper */}
           {activeTab === 'FIELD_WORK' && (
             <div className="space-y-6">
+              {/* Audit Plan Gate Banner */}
+              {(() => {
+                const plan = fullBackendState?.auditPlan;
+                const isPlanApproved = plan?.status === 'APPROVED' || fullBackendState?.caseDetails?.status === 'IN_PROGRESS';
+                if (!isPlanApproved) {
+                  return (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                            Awaiting Review Committee Approval of Audit Plan (Form FR-04.5.1)
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            Statutory field work commences after the Audit Plan has been reviewed by the Team Leader and formally approved by the Review Committee.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                        onClick={() => { setActiveTab('PLANNING'); setPlanningSubPage(5); }}
+                      >
+                        Review Plan Approval Status
+                      </Button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* 1. Sub-Page Stepper Header */}
               <Card className="p-6 bg-gradient-to-r from-teal-950 via-slate-900 to-slate-900 border-teal-800/40 text-white shadow-xl">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
                       <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-400/30 text-xs font-mono font-semibold rounded-full">
-                        PHASE 4: FIELD WORK & FAR ANALYSIS
+                        STEP 3: FIELD WORK & FAR ANALYSIS
                       </span>
                       <span className="text-xs text-slate-400 font-mono">Step {fieldWorkSubPage} of 5</span>
                     </div>
@@ -3914,7 +4081,17 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                             size="sm"
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
                             onClick={async () => {
-                              await handlePost('/report/1/submit-for-team-leader-review', {}, 'Draft Report submitted to Team Leader for review!');
+                              await handlePost('/report/draft', {
+                                executiveSummary,
+                                auditBackground: legalGrounds,
+                                scope: 'FY 2020 - FY 2024',
+                                proceduresPerformed: 'FAR analysis and comparability study',
+                                findingsAndConclusions: executiveSummary,
+                                issuesAnalyzed: 'Management Fees & Royalty Disallowance',
+                                complianceAssessment: 'Non-compliant with Arm\'s Length Principle'
+                              }, 'Draft TP Report created.');
+
+                              await handlePost('/report/default/submit-for-team-leader-review', {}, 'Draft Report submitted to Team Leader for review!');
                               if (caseData?.id) {
                                 try {
                                   await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
@@ -3940,7 +4117,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div className="p-4 bg-blue-50/70 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-800 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="px-2.5 py-0.5 bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200 text-[10px] font-bold rounded-full">
-                            GATEKEEPER 2
+                            GATEKEEPER 2: TEAM LEADER
                           </span>
                           <Badge color={['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE', 'COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'green' : reportStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'amber' : 'gray'} size="sm">
                             {['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE', 'COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'APPROVED' : reportStatus === 'SUBMITTED_FOR_TL_REVIEW' ? 'UNDER SUPERVISOR REVIEW' : 'AWAITING SUBMISSION'}
@@ -3950,41 +4127,100 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <h4 className="font-bold text-xs text-blue-950 dark:text-blue-200">2. Team Leader Technical Review</h4>
                           <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{teamLeaderSignOff.name}</p>
                           <p className="text-[10px] text-slate-500">{teamLeaderSignOff.title}</p>
-                          <p className="text-[10px] text-blue-700 dark:text-blue-400 font-mono mt-0.5">{teamLeaderSignOff.date}</p>
                         </div>
-                        <div className="p-2 bg-white dark:bg-slate-900 rounded border border-blue-100 dark:border-blue-900 text-[11px] italic text-slate-600 dark:text-slate-400">
-                          "{teamLeaderSignOff.comments || 'Awaiting supervisory review and quality gate check in Team Leader Review Console.'}"
-                        </div>
-                        <div className="p-2 bg-blue-100/60 dark:bg-blue-900/30 rounded text-[10px] text-blue-800 dark:text-blue-300">
-                          🛡️ <em>Authorization is executed strictly by the Team Leader in the Team Leader Console.</em>
-                        </div>
+                        <Textarea
+                          label="Team Leader Technical Quality Review Notes"
+                          rows={3}
+                          value={teamLeaderSignOff.comments}
+                          onChange={(e) => setTeamLeaderSignOff({ ...teamLeaderSignOff, comments: e.target.value })}
+                          placeholder="Technical review comments on comparability, IQR calculations, and legal grounds..."
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={UserCheck}
+                          loading={loading}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs shadow-xs"
+                          onClick={async () => {
+                            await handlePost('/report/default/team-leader-review', {
+                              decision: 'APPROVE',
+                              comments: teamLeaderSignOff.comments || 'TL endorsed TP Audit Report technical quality and legal citations.'
+                            }, 'Team Leader endorsed TP Report!');
+                            await handlePost('/report/default/submit-for-process-owner-review', {}, 'Report submitted to Review Committee / Process Owner!');
+                            setReportStatus('SUBMITTED_FOR_COMMITTEE');
+                          }}
+                        >
+                          TL Endorse & Submit to Committee
+                        </Button>
                       </div>
 
                       {/* Gatekeeper 3: Process Owner / Committee */}
                       <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="px-2.5 py-0.5 bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 text-[10px] font-bold rounded-full">
-                            GATEKEEPER 3
+                            GATEKEEPER 3: COMMITTEE
                           </span>
                           <Badge color={['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'green' : ['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE'].includes(reportStatus) ? 'amber' : 'gray'} size="sm">
-                            {['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'APPROVED' : ['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE'].includes(reportStatus) ? 'AWAITING COMMITTEE DELIBERATION' : 'PENDING PREVIOUS GATES'}
+                            {['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) ? 'APPROVED' : ['TL_APPROVED', 'SUBMITTED_FOR_COMMITTEE'].includes(reportStatus) ? 'AWAITING DELIBERATION' : 'PENDING PREVIOUS GATES'}
                           </Badge>
                         </div>
                         <div>
                           <h4 className="font-bold text-xs text-emerald-950 dark:text-emerald-200">3. Joint & TP Committee Deliberation</h4>
                           <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{processOwnerSignOff.name}</p>
                           <p className="text-[10px] text-slate-500">{processOwnerSignOff.title}</p>
-                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">{processOwnerSignOff.date}</p>
                         </div>
-                        <div className="p-2 bg-white dark:bg-slate-900 rounded border border-emerald-100 dark:border-emerald-900 text-[11px] italic text-slate-600 dark:text-slate-400">
-                          "{processOwnerSignOff.comments || 'Awaiting formal committee quorum review and resolution adoption.'}"
-                        </div>
-                        <div className="p-2 bg-emerald-100/60 dark:bg-emerald-900/30 rounded text-[10px] text-emerald-800 dark:text-emerald-300">
-                          🏛️ <em>Final assessment authorization is executed strictly by the Committee in the Deliberation Console.</em>
-                        </div>
+                        <Textarea
+                          label="Committee Deliberation Minutes & Formal Resolution"
+                          rows={3}
+                          value={processOwnerSignOff.comments}
+                          onChange={(e) => setProcessOwnerSignOff({ ...processOwnerSignOff, comments: e.target.value })}
+                          placeholder="Quorum recorded. Committee votes to authorize proposed TP tax adjustments..."
+                        />
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={CheckCircle2}
+                          loading={loading}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+                          onClick={async () => {
+                            await handlePost('/report/default/committee-approval', {
+                              decision: 'APPROVE',
+                              comments: processOwnerSignOff.comments || 'Review Committee quorum adopted resolution authorizing proposed TP assessment demand.'
+                            }, 'Review Committee adopted resolution approving TP Audit Report! Assessment & Computation unlocked.');
+                            setReportStatus('COMMITTEE_APPROVED');
+                          }}
+                        >
+                          Adopt Decision: APPROVE TP Report
+                        </Button>
                       </div>
 
                     </div>
+
+                    {/* Committee Report Approval Success Banner */}
+                    {['COMMITTEE_APPROVED', 'PO_APPROVED'].includes(reportStatus) && (
+                      <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center justify-between gap-4 mt-4">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                              TP Audit Report Formally Approved by Review Committee!
+                            </p>
+                            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                              Resolution adopted. The case is returned to the Auditor to execute Step 6: Assessment & Computation (CIT recomputation, interest, and Art. 104 penalties).
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="md"
+                          variant="primary"
+                          icon={ArrowRight}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
+                          onClick={() => setActiveTab('ASSESSMENT')}
+                        >
+                          Proceed to Step 6: Assessment →
+                        </Button>
+                      </div>
+                    )}
 
                     <div className="flex justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
                       <Button variant="secondary" icon={ArrowLeft} onClick={() => setReportSubPage(3)}>← Back to Sub-Page 3</Button>
