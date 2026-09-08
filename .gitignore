@@ -20,3 +20,6 @@ dist/
 
 # Kiro local development notes (not in git)
 .kiro/
+
+# Presentation documents
+**/Presentation/**
