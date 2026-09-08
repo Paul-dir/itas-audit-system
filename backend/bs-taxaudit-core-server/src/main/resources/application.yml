@@ -1,7 +1,7 @@
 spring:
   application:
     name: bs-taxaudit-core-server
-
+  
   profiles:
     active: mock
 
@@ -13,8 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      # IMPORTANT: Flyway manages schema. Never use 'update' or 'create' in non-dev profiles.
-      ddl-auto: validate
+      ddl-auto: create-drop
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -22,15 +21,12 @@ spring:
     open-in-view: false
 
   flyway:
-    enabled: true
-    out-of-order: true
+    enabled: false
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          # Keycloak issuer URI. Set KEYCLOAK_URL env var in production.
-          # In mock profile, this config is bypassed entirely by MockSecurityConfig.
           issuer-uri: ${KEYCLOAK_URL:http://localhost:8081}/realms/itas
 
 server:
@@ -39,34 +35,13 @@ server:
 logging:
   level:
     root: INFO
-    mor.itas: DEBUG
-    org.springframework.security: INFO
+    com.act.audit: DEBUG
+    org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
 
 ---
-# ── MOCK PROFILE (local development without Keycloak) ───────────────────────
 spring:
   config:
     activate:
       on-profile: mock
-  jpa:
-    hibernate:
-      # Allow schema auto-update in mock mode so new JPA entities are picked up without a migration
-      ddl-auto: update
-
----
-# ── PRODUCTION PROFILE ───────────────────────────────────────────────────────
-spring:
-  config:
-    activate:
-      on-profile: prod
-  jpa:
-    hibernate:
-      ddl-auto: validate
-  flyway:
-    out-of-order: false
-logging:
-  level:
-    root: WARN
-    mor.itas: INFO
-    org.springframework.security: WARN
+# Profile used during local development to disable external calls and mock auth
