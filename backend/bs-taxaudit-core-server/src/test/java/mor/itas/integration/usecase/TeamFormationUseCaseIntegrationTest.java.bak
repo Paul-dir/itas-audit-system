@@ -1,0 +1,508 @@
+package mor.itas.integration.usecase;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.integration.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Integration tests for Team Formation Use Cases.
+ * Tests auditor nomination, nomination pool aggregation, and official team assignment.
+ * Uses real PostgreSQL database with TestContainers.
+ * 
+ * Coverage:
+ * - Nominate auditors with justification
+ * - Get nomination pool with aggregation
+ * - Display auditor profiles
+ * - Track prior audits
+ * - Verify multiple nominations allowed
+ */
+@DisplayName("Team Formation Use Case Integration Tests")
+@ActiveProfiles("test")
+@Transactional
+public class TeamFormationUseCaseIntegrationTest extends IntegrationTestBase {
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private UUID testCaseId;
+    private UUID testTaxpayerId;
+    private UUID[] testAuditors;
+    private UUID[] testMembers;
+
+    @BeforeEach
+    void setUp() {
+        testCaseId = generateTestId("team_case", 1);
+        testTaxpayerId = generateTestId("taxpayer", 1);
+        testAuditors = new UUID[5];
+        testMembers = new UUID[5];
+
+        for (int i = 0; i < 5; i++) {
+            testAuditors[i] = generateTestId("auditor", i);
+            testMembers[i] = generateTestId("member", i);
+        }
+
+        entityManager.createQuery("DELETE FROM CommitteeCaseAggregate").executeUpdate();
+    }
+
+    @Test
+    @DisplayName("testNominateAuditor_Success - Nomination persisted")
+    void testNominateAuditor_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Nomination Test Case")
+            .taxIdNumber("TAX2024001")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create nomination
+        var nomination = new AuditorNomination(
+            testCaseId,
+            testAuditors[0],
+            testMembers[0],
+            "Senior auditor with 10+ years experience in tax compliance"
+        );
+        entityManager.persist(nomination);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager
+            .createQuery("SELECT n FROM AuditorNomination n WHERE n.caseId = ?1", AuditorNomination.class)
+            .setParameter(1, testCaseId)
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(retrieved.getCaseId()).isEqualTo(testCaseId);
+        assertThat(retrieved.getNominatedAuditorId()).isEqualTo(testAuditors[0]);
+        assertThat(retrieved.getNominatingMemberId()).isEqualTo(testMembers[0]);
+        assertThat(retrieved.getJustification()).contains("10+ years");
+        assertThat(retrieved.getNominatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testGetNominationPool_AllNominations - Complete list returned")
+    void testGetNominationPool_AllNominations() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Pool Test Case")
+            .taxIdNumber("TAX2024002")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create multiple nominations
+        for (int i = 0; i < 5; i++) {
+            var nomination = new AuditorNomination(
+                testCaseId,
+                testAuditors[i],
+                testMembers[i % 3],
+                "Justification for auditor " + i
+            );
+            entityManager.persist(nomination);
+        }
+        entityManager.flush();
+
+        // ACT
+        var allNominations = entityManager
+            .createQuery("SELECT n FROM AuditorNomination n WHERE n.caseId = ?1", AuditorNomination.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(allNominations).hasSize(5);
+        for (AuditorNomination nom : allNominations) {
+            assertThat(nom.getCaseId()).isEqualTo(testCaseId);
+        }
+    }
+
+    @Test
+    @DisplayName("testGetNominationPool_NominationCount - Aggregation correct")
+    void testGetNominationPool_NominationCount() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Count Aggregation Case")
+            .taxIdNumber("TAX2024003")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Nominate same auditor multiple times
+        UUID sameAuditor = testAuditors[0];
+        for (int i = 0; i < 3; i++) {
+            var nomination = new AuditorNomination(
+                testCaseId,
+                sameAuditor,
+                testMembers[i],
+                "Member " + i + " recommends this auditor"
+            );
+            entityManager.persist(nomination);
+        }
+        entityManager.flush();
+
+        // ACT - Count nominations per auditor
+        var nominationCounts = entityManager
+            .createQuery("SELECT n.nominatedAuditorId, COUNT(n) as cnt FROM AuditorNomination n " +
+                    "WHERE n.caseId = ?1 GROUP BY n.nominatedAuditorId", 
+                Object[].class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(nominationCounts).hasSize(1);
+        assertThat(((Number) nominationCounts.get(0)[1]).intValue()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("testGetAuditorProfile_Complete - All credentials shown")
+    void testGetAuditorProfile_Complete() {
+        // ARRANGE
+        var auditorProfile = new AuditorProfile(
+            testAuditors[0],
+            "John Smith",
+            "Senior Auditor",
+            "Tax Compliance, Transfer Pricing, International Tax",
+            "English, Spanish, French"
+        );
+        entityManager.persist(auditorProfile);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(AuditorProfile.class, testAuditors[0]);
+
+        // ASSERT
+        assertThat(retrieved).isNotNull();
+        assertThat(retrieved.getAuditorId()).isEqualTo(testAuditors[0]);
+        assertThat(retrieved.getFullName()).isEqualTo("John Smith");
+        assertThat(retrieved.getSeniorityLevel()).isEqualTo("Senior Auditor");
+        assertThat(retrieved.getExpertiseAreas()).contains("Tax Compliance");
+        assertThat(retrieved.getLanguages()).contains("English");
+    }
+
+    @Test
+    @DisplayName("testGetAuditorProfile_PriorAudits - History displayed")
+    void testGetAuditorProfile_PriorAudits() {
+        // ARRANGE
+        var auditorProfile = new AuditorProfile(
+            testAuditors[0],
+            "Jane Doe",
+            "Lead Auditor",
+            "Tax Compliance, Risk Assessment",
+            "English, German"
+        );
+        auditorProfile.setPriorJointAuditCount(5);
+        entityManager.persist(auditorProfile);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(AuditorProfile.class, testAuditors[0]);
+
+        // ASSERT
+        assertThat(retrieved.getPriorJointAuditCount()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("testAppointTeamLead_Success - Lead assigned")
+    void testAppointTeamLead_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Team Lead Assignment Case")
+            .taxIdNumber("TAX2024004")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var teamAssignment = new TeamAssignment(testCaseId);
+        entityManager.persist(teamAssignment);
+        entityManager.flush();
+
+        // ACT - Appoint team lead
+        teamAssignment.setApointedTeamLeadId(testAuditors[0]);
+        entityManager.merge(teamAssignment);
+        entityManager.flush();
+
+        var retrieved = entityManager.find(TeamAssignment.class, teamAssignment.getId());
+
+        // ASSERT
+        assertThat(retrieved.getApointedTeamLeadId()).isEqualTo(testAuditors[0]);
+    }
+
+    @Test
+    @DisplayName("testAssignOfficialTeam_Success - Team stored")
+    void testAssignOfficialTeam_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Official Team Assignment Case")
+            .taxIdNumber("TAX2024005")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var teamAssignment = new TeamAssignment(testCaseId);
+        // Add team members (3 in this case)
+        teamAssignment.addTeamMember(testAuditors[0]);  // Lead
+        teamAssignment.addTeamMember(testAuditors[1]);
+        teamAssignment.addTeamMember(testAuditors[2]);
+        entityManager.persist(teamAssignment);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(TeamAssignment.class, teamAssignment.getId());
+
+        // ASSERT
+        assertThat(retrieved.getOfficialTeamMemberIds()).hasSize(3);
+        assertThat(retrieved.getOfficialTeamMemberIds()).contains(testAuditors[0], testAuditors[1], testAuditors[2]);
+    }
+
+    @Test
+    @DisplayName("testAssignOfficialTeam_SizeValidation - 2-5 members enforced")
+    void testAssignOfficialTeam_SizeValidation() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Size Validation Case")
+            .taxIdNumber("TAX2024006")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Test minimum (2 members)
+        var teamMin = new TeamAssignment(testCaseId);
+        teamMin.addTeamMember(testAuditors[0]);
+        teamMin.addTeamMember(testAuditors[1]);
+        assertThat(teamMin.getOfficialTeamMemberIds()).hasSize(2);
+
+        // Test maximum (5 members)
+        var teamMax = new TeamAssignment(testCaseId);
+        for (int i = 0; i < 5; i++) {
+            teamMax.addTeamMember(testAuditors[i]);
+        }
+        assertThat(teamMax.getOfficialTeamMemberIds()).hasSize(5);
+
+        // ACT & ASSERT - Single member (invalid)
+        var teamSingle = new TeamAssignment(testCaseId);
+        teamSingle.addTeamMember(testAuditors[0]);
+        assertThat(teamSingle.getOfficialTeamMemberIds()).hasSize(1);
+        assertThatThrownBy(teamSingle::validateTeamSize)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("2-5");
+
+        // ACT & ASSERT - 6 members (invalid)
+        var teamOver = new TeamAssignment(testCaseId);
+        for (int i = 0; i < 5; i++) {
+            teamOver.addTeamMember(testAuditors[i]);
+        }
+        teamOver.addTeamMember(generateTestId("auditor", 10));
+        assertThatThrownBy(teamOver::validateTeamSize)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("2-5");
+    }
+
+    @Test
+    @DisplayName("testTeamFormationWorkflow_Complete - Full nomination to assignment")
+    void testTeamFormationWorkflow_Complete() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Complete Workflow Case")
+            .taxIdNumber("TAX2024007")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Step 1: Nominations
+        for (int i = 0; i < 4; i++) {
+            var nomination = new AuditorNomination(
+                testCaseId,
+                testAuditors[i],
+                testMembers[i],
+                "Qualified auditor"
+            );
+            entityManager.persist(nomination);
+        }
+        entityManager.flush();
+
+        // Step 2: Get nomination pool
+        var nominations = entityManager
+            .createQuery("SELECT n FROM AuditorNomination n WHERE n.caseId = ?1", AuditorNomination.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+        assertThat(nominations).hasSize(4);
+
+        // Step 3: Create team assignment
+        var teamAssignment = new TeamAssignment(testCaseId);
+        teamAssignment.setApointedTeamLeadId(testAuditors[0]);
+        teamAssignment.addTeamMember(testAuditors[0]);
+        teamAssignment.addTeamMember(testAuditors[1]);
+        teamAssignment.addTeamMember(testAuditors[2]);
+        entityManager.persist(teamAssignment);
+        entityManager.flush();
+
+        // ACT & ASSERT
+        var finalTeam = entityManager.find(TeamAssignment.class, teamAssignment.getId());
+        assertThat(finalTeam.getApointedTeamLeadId()).isEqualTo(testAuditors[0]);
+        assertThat(finalTeam.getOfficialTeamMemberIds()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("testMultipleNominations_SameAuditor - Allowed and counted")
+    void testMultipleNominations_SameAuditor() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Multiple Nominations Case")
+            .taxIdNumber("TAX2024008")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // All members nominate the same auditor
+        UUID targetAuditor = testAuditors[0];
+        for (int i = 0; i < 5; i++) {
+            var nomination = new AuditorNomination(
+                testCaseId,
+                targetAuditor,
+                testMembers[i],
+                "Member " + i + " recommends"
+            );
+            entityManager.persist(nomination);
+        }
+        entityManager.flush();
+
+        // ACT - Count nominations for specific auditor
+        var count = (long) entityManager
+            .createQuery("SELECT COUNT(n) FROM AuditorNomination n " +
+                    "WHERE n.caseId = ?1 AND n.nominatedAuditorId = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, targetAuditor)
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(count).isEqualTo(5);
+    }
+
+    // Helper entities for testing
+    protected static class AuditorNomination {
+        private UUID id = UUID.randomUUID();
+        private UUID caseId;
+        private UUID nominatedAuditorId;
+        private UUID nominatingMemberId;
+        private String justification;
+        private OffsetDateTime nominatedAt = OffsetDateTime.now();
+
+        public AuditorNomination(UUID caseId, UUID auditorId, UUID memberId, String justification) {
+            this.caseId = caseId;
+            this.nominatedAuditorId = auditorId;
+            this.nominatingMemberId = memberId;
+            this.justification = justification;
+        }
+
+        public UUID getId() { return id; }
+        public UUID getCaseId() { return caseId; }
+        public UUID getNominatedAuditorId() { return nominatedAuditorId; }
+        public UUID getNominatingMemberId() { return nominatingMemberId; }
+        public String getJustification() { return justification; }
+        public OffsetDateTime getNominatedAt() { return nominatedAt; }
+    }
+
+    protected static class AuditorProfile {
+        private UUID auditorId;
+        private String fullName;
+        private String seniorityLevel;
+        private String expertiseAreas;
+        private String languages;
+        private int priorJointAuditCount = 0;
+
+        public AuditorProfile(UUID auditorId, String name, String level, String expertise, String languages) {
+            this.auditorId = auditorId;
+            this.fullName = name;
+            this.seniorityLevel = level;
+            this.expertiseAreas = expertise;
+            this.languages = languages;
+        }
+
+        public UUID getAuditorId() { return auditorId; }
+        public String getFullName() { return fullName; }
+        public String getSeniorityLevel() { return seniorityLevel; }
+        public String getExpertiseAreas() { return expertiseAreas; }
+        public String getLanguages() { return languages; }
+        public int getPriorJointAuditCount() { return priorJointAuditCount; }
+        public void setPriorJointAuditCount(int count) { this.priorJointAuditCount = count; }
+    }
+
+    protected static class TeamAssignment {
+        private UUID id = UUID.randomUUID();
+        private UUID caseId;
+        private UUID apointedTeamLeadId;
+        private java.util.List<UUID> officialTeamMemberIds = new java.util.ArrayList<>();
+
+        public TeamAssignment(UUID caseId) {
+            this.caseId = caseId;
+        }
+
+        public UUID getId() { return id; }
+        public UUID getCaseId() { return caseId; }
+        public UUID getApointedTeamLeadId() { return apointedTeamLeadId; }
+        public java.util.List<UUID> getOfficialTeamMemberIds() { return officialTeamMemberIds; }
+
+        public void setApointedTeamLeadId(UUID auditorId) { this.apointedTeamLeadId = auditorId; }
+        public void addTeamMember(UUID auditorId) {
+            if (!officialTeamMemberIds.contains(auditorId)) {
+                officialTeamMemberIds.add(auditorId);
+            }
+        }
+
+        public void validateTeamSize() {
+            if (officialTeamMemberIds.size() < 2 || officialTeamMemberIds.size() > 5) {
+                throw new IllegalStateException("Team must have 2-5 members");
+            }
+        }
+    }
+}

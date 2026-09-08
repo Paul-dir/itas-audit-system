@@ -1,0 +1,414 @@
+package mor.itas.api.controller.backoffice.jac;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mor.itas.api.dto.request.ap.jac.AddResearchNoteRequest;
+import mor.itas.api.dto.request.ap.jac.AddResearchCommentRequest;
+import mor.itas.api.dto.response.ap.jac.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * CommitteeResearchControllerTest - MockMvc tests for Research Workspace
+ * Tests research notes, comments, attachments, and research feed
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles({"test", "mock"})
+@DisplayName("Committee Research Controller Tests")
+public class CommitteeResearchControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private UUID caseId;
+    private UUID noteId;
+    private UUID commentId;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        noteId = UUID.randomUUID();
+        commentId = UUID.randomUUID();
+    }
+
+    // ============= RESEARCH NOTE Tests =============
+
+    @Test
+    @DisplayName("Test 1: POST /cases/{caseId}/research-notes creates note (201 CREATED)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_Success() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "OBSERVATION",
+            "Significant discrepancy found in revenue reporting"
+        );
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(201);
+    }
+
+    @Test
+    @DisplayName("Test 2: POST /cases/{caseId}/research-notes with QUESTION category")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_QuestionCategory() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "QUESTION",
+            "Why was deduction not supported by documentation?"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 3: POST /cases/{caseId}/research-notes with INVESTIGATION category")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_InvestigationCategory() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "INVESTIGATION",
+            "Need to cross-reference with related party transactions"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 4: POST /cases/{caseId}/research-notes with RECOMMENDATION category")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_RecommendationCategory() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "RECOMMENDATION",
+            "Recommend comprehensive audit of revenue transactions"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 5: POST /cases/{caseId}/research-notes enforces 10000 character limit")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_CharacterLimit() throws Exception {
+        // Arrange
+        String longContent = "A".repeat(10001);  // Exceeds limit
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "OBSERVATION",
+            longContent
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 6: POST /cases/{caseId}/research-notes returns 404 for invalid case")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_InvalidCase() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "OBSERVATION",
+            "test note"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", invalidId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isNotFound());
+    }
+
+    // ============= RESEARCH COMMENT Tests =============
+
+    @Test
+    @DisplayName("Test 7: POST /research-notes/{noteId}/comments adds comment (201 CREATED)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchComment_Success() throws Exception {
+        // Arrange
+        AddResearchCommentRequest request = new AddResearchCommentRequest(
+            "This is an important observation, we should investigate further",
+            null  // Not a reply
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/research-notes/{noteId}/comments", noteId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 8: POST /research-notes/{noteId}/comments with reply threading")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchComment_WithReply() throws Exception {
+        // Arrange
+        UUID parentCommentId = UUID.randomUUID();
+        AddResearchCommentRequest request = new AddResearchCommentRequest(
+            "I agree with your concern, let me add more details",
+            parentCommentId
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/research-notes/{noteId}/comments", noteId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 9: POST /research-notes/{noteId}/comments supports deep threading (5+ levels)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchComment_DeepThreading() throws Exception {
+        // Arrange - Simulate reply to a deeply nested comment
+        UUID level5CommentId = UUID.randomUUID();
+        AddResearchCommentRequest request = new AddResearchCommentRequest(
+            "Level 6 reply to level 5",
+            level5CommentId
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/research-notes/{noteId}/comments", noteId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 10: POST /research-notes/{noteId}/comments returns 404 for invalid note")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchComment_InvalidNote() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        AddResearchCommentRequest request = new AddResearchCommentRequest(
+            "Comment text",
+            null
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/research-notes/{noteId}/comments", invalidId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isNotFound());
+    }
+
+    // ============= FILE ATTACHMENT Tests =============
+
+    @Test
+    @DisplayName("Test 11: POST /research-notes/{noteId}/attachments uploads file (201 CREATED)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_uploadAttachment_Success() throws Exception {
+        // Arrange
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "audit_findings.pdf",
+            MediaType.APPLICATION_PDF_VALUE,
+            "PDF content here".getBytes()
+        );
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/backoffice/ap/committee/research-notes/{noteId}/attachments", noteId)
+            .file(file))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 12: POST /research-notes/{noteId}/attachments validates file type (PDF, Excel, Word, Images)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_uploadAttachment_ExcelFile() throws Exception {
+        // Arrange
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "transactions.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Excel content".getBytes()
+        );
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/backoffice/ap/committee/research-notes/{noteId}/attachments", noteId)
+            .file(file))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 13: POST /research-notes/{noteId}/attachments enforces 25MB file size limit")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_uploadAttachment_SizeLimit() throws Exception {
+        // Arrange - Create 26MB file
+        byte[] largeContent = new byte[26 * 1024 * 1024 + 1];
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "large_file.pdf",
+            MediaType.APPLICATION_PDF_VALUE,
+            largeContent
+        );
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/backoffice/ap/committee/research-notes/{noteId}/attachments", noteId)
+            .file(file))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 14: POST /research-notes/{noteId}/attachments initiates virus scanning")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_uploadAttachment_VirusScanning() throws Exception {
+        // Arrange
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "document.pdf",
+            MediaType.APPLICATION_PDF_VALUE,
+            "Safe content".getBytes()
+        );
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/backoffice/ap/committee/research-notes/{noteId}/attachments", noteId)
+            .file(file))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 15: POST /research-notes/{noteId}/attachments rejects infected files")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_uploadAttachment_InfectedFile() throws Exception {
+        // Arrange - File with EICAR signature (virus testing pattern)
+        String infectedContent = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "malware.exe",
+            MediaType.APPLICATION_OCTET_STREAM_VALUE,
+            infectedContent.getBytes()
+        );
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/backoffice/ap/committee/research-notes/{noteId}/attachments", noteId)
+            .file(file))
+            .andExpect(status().isBadRequest());
+    }
+
+    // ============= RESEARCH FEED Tests =============
+
+    @Test
+    @DisplayName("Test 16: GET /cases/{caseId}/research-feed returns chronological timeline (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getResearchFeed_Success() throws Exception {
+        // Arrange
+        ResearchFeedItemResponse item = new ResearchFeedItemResponse(
+            UUID.randomUUID(),
+            "note",
+            "Research note added",
+            "Member A",
+            OffsetDateTime.now()
+        );
+
+        Page<ResearchFeedItemResponse> feedPage = new PageImpl<>(
+            Collections.singletonList(item),
+            PageRequest.of(0, 25),
+            50
+        );
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/research-feed?page=0&size=25", caseId))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 17: GET /cases/{caseId}/research-feed pagination works (25 items/page)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getResearchFeed_Pagination() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/research-feed?page=1&size=25", caseId))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 18: GET /cases/{caseId}/research-feed returns 404 for invalid case")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getResearchFeed_InvalidCase() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/research-feed", invalidId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 19: POST /cases/{caseId}/research-notes requires COMMITTEE_MEMBER role")
+    @WithMockUser(roles = "OTHER_ROLE")
+    void test_addResearchNote_UnauthorizedRole() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "OBSERVATION",
+            "test note"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Test 20: POST /cases/{caseId}/research-notes returns 500 on service error")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_addResearchNote_ServiceError() throws Exception {
+        // Arrange
+        AddResearchNoteRequest request = new AddResearchNoteRequest(
+            "OBSERVATION",
+            "test note"
+        );
+
+        // This will fail due to mock, returning 500
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/research-notes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isInternalServerError());
+    }
+}

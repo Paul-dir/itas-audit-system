@@ -1,0 +1,547 @@
+package mor.itas.domain.service.ap;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.domain.aggregate.ap.TeamAssignmentAggregate;
+import mor.itas.domain.valueobject.HandoffRecord;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for HandoffService
+ * Tests case code generation, record creation, and validation
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("HandoffService Unit Tests")
+class HandoffServiceTest {
+
+    private HandoffService service;
+
+    @Mock
+    private CommitteeCaseAggregate committeeCase;
+
+    @Mock
+    private TeamAssignmentAggregate teamAssignment;
+
+    private UUID caseId;
+    private UUID teamLeadId;
+    private UUID auditorId2;
+    private UUID auditorId3;
+    private UUID createdByUserId;
+
+    @BeforeEach
+    void setUp() {
+        service = new HandoffService();
+        caseId = UUID.randomUUID();
+        teamLeadId = UUID.randomUUID();
+        auditorId2 = UUID.randomUUID();
+        auditorId3 = UUID.randomUUID();
+        createdByUserId = UUID.randomUUID();
+    }
+
+    // ========== Case Code Generation Tests ==========
+
+    @Test
+    @DisplayName("Should generate case code with correct format")
+    void testGenerateCaseCode_FormatCorrect() {
+        // Arrange
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+
+        // Act
+        String caseCode = service.generateCaseCode(committeeCase);
+
+        // Assert
+        assertThat(caseCode).isNotNull();
+        assertThat(caseCode).matches("JAC-\\d{4}-[0-9a-f]{6}");
+        assertThat(caseCode).startsWith("JAC-");
+    }
+
+    @Test
+    @DisplayName("Should generate globally unique case codes")
+    void testGenerateCaseCode_UniquenessGuaranteed() {
+        // Arrange
+        UUID caseId1 = UUID.randomUUID();
+        UUID caseId2 = UUID.randomUUID();
+        
+        CommitteeCaseAggregate case1 = mock(CommitteeCaseAggregate.class);
+        CommitteeCaseAggregate case2 = mock(CommitteeCaseAggregate.class);
+        
+        when(case1.getCaseId()).thenReturn(caseId1);
+        when(case2.getCaseId()).thenReturn(caseId2);
+
+        // Act
+        String code1 = service.generateCaseCode(case1);
+        String code2 = service.generateCaseCode(case2);
+
+        // Assert - different cases should generate different codes
+        assertThat(code1).isNotEqualTo(code2);
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null")
+    void testGenerateCaseCode_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.generateCaseCode(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should generate same code format for same case")
+    void testGenerateCaseCode_Deterministic() {
+        // Arrange
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+
+        // Act
+        String code1 = service.generateCaseCode(committeeCase);
+        String code2 = service.generateCaseCode(committeeCase);
+
+        // Assert - same case should generate same code
+        assertThat(code1).isEqualTo(code2);
+    }
+
+    // ========== Handoff Record Creation Tests ==========
+
+    @Test
+    @DisplayName("Should create handoff record successfully")
+    void testCreateHandoffRecord_Success() {
+        // Arrange
+        List<UUID> teamMembers = Arrays.asList(teamLeadId, auditorId2, auditorId3);
+        
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+        when(committeeCase.getCaseCode()).thenReturn(null);
+        when(committeeCase.getDecision())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED);
+        
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(teamLeadId);
+        when(teamAssignment.getOfficialTeamMemberIds()).thenReturn(teamMembers);
+
+        // Act
+        HandoffRecord record = service.createHandoffRecord(
+            committeeCase,
+            teamAssignment,
+            "Summary of committee findings",
+            "Key findings and recommendations",
+            createdByUserId
+        );
+
+        // Assert
+        assertThat(record).isNotNull();
+        assertThat(record.getHandoffRecordId()).isNotNull();
+        assertThat(record.getCommitteeCaseId()).isEqualTo(caseId);
+        assertThat(record.getTeamLeadId()).isEqualTo(teamLeadId);
+        assertThat(record.getTeamMemberIds()).hasSize(3);
+        assertThat(record.getCommitteeSummary()).contains("Summary");
+        assertThat(record.getKeyFindings()).contains("Key findings");
+        assertThat(record.getCreatedBy()).isEqualTo(createdByUserId);
+    }
+
+    @Test
+    @DisplayName("Should use existing case code if available")
+    void testCreateHandoffRecord_WithExistingCaseCode() {
+        // Arrange
+        String existingCaseCode = "JAC-2024-123456";
+        List<UUID> teamMembers = Arrays.asList(teamLeadId, auditorId2);
+        
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+        when(committeeCase.getCaseCode()).thenReturn(existingCaseCode);
+        when(committeeCase.getDecision())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED);
+        
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(teamLeadId);
+        when(teamAssignment.getOfficialTeamMemberIds()).thenReturn(teamMembers);
+
+        // Act
+        HandoffRecord record = service.createHandoffRecord(
+            committeeCase, teamAssignment, "Summary", "Findings", createdByUserId
+        );
+
+        // Assert
+        assertThat(record.getCaseCode()).isEqualTo(existingCaseCode);
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is not approved")
+    void testCreateHandoffRecord_NotApproved_Throws() {
+        // Arrange
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.createHandoffRecord(
+                committeeCase, teamAssignment, "Summary", "Findings", createdByUserId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Only approved cases can be transferred");
+    }
+
+    @Test
+    @DisplayName("Should throw error if committee case is null")
+    void testCreateHandoffRecord_CommitteeCaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.createHandoffRecord(
+                null, teamAssignment, "Summary", "Findings", createdByUserId))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Case and team assignment cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if team assignment is null")
+    void testCreateHandoffRecord_TeamAssignmentNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.createHandoffRecord(
+                committeeCase, null, "Summary", "Findings", createdByUserId))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ========== Handoff Record Validation Tests ==========
+
+    @Test
+    @DisplayName("Should validate valid handoff record")
+    void testValidateHandoffRecord_Success() {
+        // Arrange
+        HandoffRecord validRecord = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2))
+            .committeeSummary("Summary")
+            .keyFindings("Findings")
+            .decision("APPROVED")
+            .handoffDate(OffsetDateTime.now())
+            .createdBy(createdByUserId)
+            .createdAt(OffsetDateTime.now())
+            .build();
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateHandoffRecord(validRecord));
+    }
+
+    @Test
+    @DisplayName("Should throw error if handoff record is null")
+    void testValidateHandoffRecord_Null_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateHandoffRecord(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Handoff record cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if handoff record missing required fields")
+    void testValidateHandoffRecord_MissingFields_Throws() {
+        // Arrange
+        HandoffRecord invalidRecord = HandoffRecord.builder()
+            .handoffRecordId(null)  // Missing
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2))
+            .build();
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateHandoffRecord(invalidRecord))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Handoff record is invalid or incomplete");
+    }
+
+    @Test
+    @DisplayName("Should throw error if team members list is empty")
+    void testValidateHandoffRecord_EmptyTeamMembers_Throws() {
+        // Arrange
+        HandoffRecord invalidRecord = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Collections.emptyList())  // Empty
+            .build();
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateHandoffRecord(invalidRecord))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ========== Case Code Uniqueness Tests ==========
+
+    @Test
+    @DisplayName("Should validate case code is unique")
+    void testIsCaseCodeUnique_ValidCode_True() {
+        // Act
+        boolean result = service.isCaseCodeUnique("JAC-2024-123456");
+
+        // Assert
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should reject null case code")
+    void testIsCaseCodeUnique_NullCode_False() {
+        // Act
+        boolean result = service.isCaseCodeUnique(null);
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should reject empty case code")
+    void testIsCaseCodeUnique_EmptyCode_False() {
+        // Act
+        boolean result = service.isCaseCodeUnique("");
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should reject whitespace-only case code")
+    void testIsCaseCodeUnique_WhitespaceCode_False() {
+        // Act
+        boolean result = service.isCaseCodeUnique("   ");
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    // ========== Handoff Delivery Tests ==========
+
+    @Test
+    @DisplayName("Should confirm handoff delivery")
+    void testConfirmHandoffDelivery_Success() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2))
+            .build();
+        
+        UUID executionCaseId = UUID.randomUUID();
+
+        // Act
+        service.confirmHandoffDelivery(record, executionCaseId);
+
+        // Assert
+        assertThat(record.getExecutionCaseId()).isEqualTo(executionCaseId);
+    }
+
+    @Test
+    @DisplayName("Should throw error if handoff record is null in delivery")
+    void testConfirmHandoffDelivery_NullRecord_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.confirmHandoffDelivery(null, UUID.randomUUID()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Handoff record cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if execution case ID is null")
+    void testConfirmHandoffDelivery_NullExecutionCaseId_Throws() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .build();
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.confirmHandoffDelivery(record, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Execution case ID cannot be null");
+    }
+
+    // ========== Team Member Count Tests ==========
+
+    @Test
+    @DisplayName("Should get team member count")
+    void testGetTeamMemberCount() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2, auditorId3))
+            .build();
+
+        // Act
+        int count = service.getTeamMemberCount(record);
+
+        // Assert
+        assertThat(count).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Should return 0 for null team members")
+    void testGetTeamMemberCount_NullTeamMembers() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(null)
+            .build();
+
+        // Act
+        int count = service.getTeamMemberCount(record);
+
+        // Assert
+        assertThat(count).isZero();
+    }
+
+    // ========== Handoff Readiness Tests ==========
+
+    @Test
+    @DisplayName("Should confirm handoff is ready for delivery")
+    void testIsReadyForDelivery_Success() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2))
+            .handoffDate(OffsetDateTime.now())
+            .build();
+
+        // Act
+        boolean ready = service.isReadyForDelivery(record);
+
+        // Assert
+        assertThat(ready).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should reject null handoff record for readiness")
+    void testIsReadyForDelivery_NullRecord_False() {
+        // Act
+        boolean ready = service.isReadyForDelivery(null);
+
+        // Assert
+        assertThat(ready).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should reject incomplete handoff record")
+    void testIsReadyForDelivery_IncompleteRecord_False() {
+        // Arrange
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(null)  // Missing team members
+            .handoffDate(OffsetDateTime.now())
+            .build();
+
+        // Act
+        boolean ready = service.isReadyForDelivery(record);
+
+        // Assert
+        assertThat(ready).isFalse();
+    }
+
+    // ========== Processing Time Tests ==========
+
+    @Test
+    @DisplayName("Should calculate handoff processing time")
+    void testGetProcessingTimeMinutes_Accuracy() {
+        // Arrange
+        OffsetDateTime decisionTime = OffsetDateTime.now().minusMinutes(30);
+        OffsetDateTime handoffTime = OffsetDateTime.now();
+        
+        when(committeeCase.getDecisionDate()).thenReturn(decisionTime);
+        
+        HandoffRecord record = HandoffRecord.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-123456")
+            .teamLeadId(teamLeadId)
+            .teamMemberIds(Arrays.asList(teamLeadId, auditorId2))
+            .handoffDate(handoffTime)
+            .build();
+
+        // Act
+        long processingTime = service.getProcessingTimeMinutes(committeeCase, record);
+
+        // Assert - should be approximately 30 minutes
+        assertThat(processingTime).isBetween(29L, 31L);
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null in processing time")
+    void testGetProcessingTimeMinutes_NullCase_Throws() {
+        // Arrange
+        HandoffRecord record = mock(HandoffRecord.class);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.getProcessingTimeMinutes(null, record))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Case and handoff record cannot be null");
+    }
+
+    // ========== Integration Scenario Tests ==========
+
+    @Test
+    @DisplayName("Should complete full handoff workflow")
+    void testHandoffWorkflow_Complete() {
+        // Arrange
+        List<UUID> teamMembers = Arrays.asList(teamLeadId, auditorId2, auditorId3);
+        
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+        when(committeeCase.getCaseCode()).thenReturn(null);
+        when(committeeCase.getDecision())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED);
+        
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(teamLeadId);
+        when(teamAssignment.getOfficialTeamMemberIds()).thenReturn(teamMembers);
+
+        // Act - generate case code
+        String caseCode = service.generateCaseCode(committeeCase);
+        assertThat(caseCode).isNotNull();
+
+        // Create handoff record
+        HandoffRecord record = service.createHandoffRecord(
+            committeeCase, teamAssignment, "Summary", "Findings", createdByUserId
+        );
+
+        // Validate record
+        assertThatNoException()
+            .isThrownBy(() -> service.validateHandoffRecord(record));
+
+        // Check readiness
+        boolean ready = service.isReadyForDelivery(record);
+        assertThat(ready).isTrue();
+
+        // Confirm delivery
+        UUID executionCaseId = UUID.randomUUID();
+        service.confirmHandoffDelivery(record, executionCaseId);
+
+        // Assert
+        assertThat(record.getExecutionCaseId()).isEqualTo(executionCaseId);
+        assertThat(service.getTeamMemberCount(record)).isEqualTo(3);
+    }
+}

@@ -1,0 +1,387 @@
+package mor.itas.api.controller.backoffice.jac;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mor.itas.api.dto.request.ap.jac.CastVoteRequest;
+import mor.itas.api.dto.response.ap.jac.*;
+import mor.itas.application.usecase.ap.CastAdvisoryVoteUseCase;
+import mor.itas.application.usecase.ap.FetchCommitteeCasesUseCase;
+import mor.itas.application.usecase.ap.GetDashboardMetricsUseCase;
+import mor.itas.application.usecase.ap.GetVoteTallyUseCase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * CommitteeWorkspaceControllerTest - MockMvc tests for Committee Case Portfolio & Dashboard
+ * Tests dashboard metrics, case listing, filtering, pagination, case detail, and ownership management
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles({"test", "mock"})
+@DisplayName("Committee Workspace Controller Tests")
+public class CommitteeWorkspaceControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private FetchCommitteeCasesUseCase fetchCommitteeCasesUseCase;
+
+    @MockBean
+    private GetDashboardMetricsUseCase getDashboardMetricsUseCase;
+
+    @MockBean
+    private GetVoteTallyUseCase getVoteTallyUseCase;
+
+    @MockBean
+    private CastAdvisoryVoteUseCase castAdvisoryVoteUseCase;
+
+    private UUID caseId;
+    private UUID taxpayerId;
+    private DashboardMetricsResponse dashboardMetrics;
+    private CommitteeCaseResponse caseResponse;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        taxpayerId = UUID.randomUUID();
+
+        // Mock dashboard metrics
+        dashboardMetrics = new DashboardMetricsResponse(
+            100,  // totalCases
+            25,   // pendingVotes
+            15,   // pendingViability
+            5,    // overdueCases
+            3.5   // averageDecisionTime
+        );
+
+        // Mock case response
+        caseResponse = new CommitteeCaseResponse(
+            caseId,
+            taxpayerId,
+            "ABC Corporation",
+            "TIN123456",
+            "LTO",
+            "Manufacturing",
+            75,              // riskScore
+            "High",          // riskPriority
+            "PENDING_VOTES", // status
+            OffsetDateTime.now(),
+            OffsetDateTime.now().plusDays(7),
+            null,            // extendedDeadline
+            0,               // extensionCount
+            null,            // currentOwner
+            null,            // ownershipAcquiredAt
+            new VotingTallyResponse(10, 2, 3, 5, 83.33, "PASSED"),
+            null             // teamAssignment
+        );
+    }
+
+    // ============= DASHBOARD Tests =============
+
+    @Test
+    @DisplayName("Test 1: GET /dashboard returns metrics within SLA (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getDashboard_Success() throws Exception {
+        // Arrange
+        when(getDashboardMetricsUseCase.execute()).thenReturn(dashboardMetrics);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(get("/api/v1/backoffice/ap/committee/dashboard"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        DashboardMetricsResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            DashboardMetricsResponse.class
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalCases()).isEqualTo(100);
+        assertThat(response.getPendingVotes()).isEqualTo(25);
+        assertThat(response.getPendingViability()).isEqualTo(15);
+        assertThat(response.getOverdueCases()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("Test 2: GET /dashboard returns 500 when service fails")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getDashboard_ServiceError() throws Exception {
+        // Arrange
+        when(getDashboardMetricsUseCase.execute())
+            .thenThrow(new RuntimeException("Database connection error"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/dashboard"))
+            .andExpect(status().isInternalServerError());
+    }
+
+    // ============= CASE LIST Tests =============
+
+    @Test
+    @DisplayName("Test 3: GET /cases returns paginated list (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_Success() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(0, 25),
+            100
+        );
+
+        when(fetchCommitteeCasesUseCase.execute(any(), any(), any(), any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?page=0&size=25"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+
+        verify(fetchCommitteeCasesUseCase).execute(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Test 4: GET /cases with status filter applies correctly")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_WithStatusFilter() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(0, 25),
+            25
+        );
+
+        when(fetchCommitteeCasesUseCase.execute("PENDING_VOTES", null, null, any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?status=PENDING_VOTES"))
+            .andExpect(status().isOk());
+
+        verify(fetchCommitteeCasesUseCase).execute(
+            eq("PENDING_VOTES"),
+            any(),
+            any(),
+            any()
+        );
+    }
+
+    @Test
+    @DisplayName("Test 5: GET /cases with riskPriority filter works")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_WithRiskFilter() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(0, 25),
+            30
+        );
+
+        when(fetchCommitteeCasesUseCase.execute(any(), eq("High"), any(), any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?riskPriority=High"))
+            .andExpect(status().isOk());
+
+        verify(fetchCommitteeCasesUseCase).execute(any(), eq("High"), any(), any());
+    }
+
+    @Test
+    @DisplayName("Test 6: GET /cases with taxpayer name filter applies")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_WithTaxpayerFilter() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(0, 25),
+            15
+        );
+
+        when(fetchCommitteeCasesUseCase.execute(any(), any(), eq("ABC"), any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?taxpayerName=ABC"))
+            .andExpect(status().isOk());
+
+        verify(fetchCommitteeCasesUseCase).execute(any(), any(), eq("ABC"), any());
+    }
+
+    @Test
+    @DisplayName("Test 7: GET /cases pagination works (page 1, size 10)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_Pagination() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(1, 10),
+            50
+        );
+
+        when(fetchCommitteeCasesUseCase.execute(any(), any(), any(), any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?page=1&size=10"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 8: GET /cases sorting by deadline")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCases_SortByDeadline() throws Exception {
+        // Arrange
+        Page<CommitteeCaseResponse> casePage = new PageImpl<>(
+            Collections.singletonList(caseResponse),
+            PageRequest.of(0, 25),
+            100
+        );
+
+        when(fetchCommitteeCasesUseCase.execute(any(), any(), any(), any()))
+            .thenReturn(casePage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases?sort=committeeDeadline,asc"))
+            .andExpect(status().isOk());
+    }
+
+    // ============= CASE DETAIL Tests =============
+
+    @Test
+    @DisplayName("Test 9: GET /cases/{caseId} returns full dossier (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCaseDetail_Success() throws Exception {
+        // Arrange
+        when(fetchCommitteeCasesUseCase.getCaseDetail(caseId))
+            .thenReturn(caseResponse);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}", caseId))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        CommitteeCaseResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            CommitteeCaseResponse.class
+        );
+
+        assertThat(response.getId()).isEqualTo(caseId);
+        assertThat(response.getTaxpayerName()).isEqualTo("ABC Corporation");
+    }
+
+    @Test
+    @DisplayName("Test 10: GET /cases/{caseId} returns 404 for invalid ID")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getCaseDetail_NotFound() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        when(fetchCommitteeCasesUseCase.getCaseDetail(invalidId))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}", invalidId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 11: GET /cases/{caseId} returns 403 when not authorized")
+    @WithMockUser(roles = "OTHER_ROLE")
+    void test_getCaseDetail_Forbidden() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}", caseId))
+            .andExpect(status().isForbidden());
+    }
+
+    // ============= OWNERSHIP Tests =============
+
+    @Test
+    @DisplayName("Test 12: POST /cases/{caseId}/take-ownership succeeds (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_takeOwnership_Success() throws Exception {
+        // Arrange
+        CommitteeCaseResponse ownedCase = new CommitteeCaseResponse(
+            caseId, taxpayerId, "ABC Corporation", "TIN123456", "LTO", "Manufacturing",
+            75, "High", "PENDING_VOTES", OffsetDateTime.now(), OffsetDateTime.now().plusDays(7),
+            null, 0, UUID.randomUUID(), OffsetDateTime.now(),
+            new VotingTallyResponse(10, 2, 3, 5, 83.33, "PASSED"), null
+        );
+
+        when(fetchCommitteeCasesUseCase.takeOwnership(caseId))
+            .thenReturn(ownedCase);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/take-ownership", caseId))
+            .andExpect(status().isOk());
+
+        verify(fetchCommitteeCasesUseCase).takeOwnership(caseId);
+    }
+
+    @Test
+    @DisplayName("Test 13: POST /cases/{caseId}/take-ownership returns 409 when already owned")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_takeOwnership_AlreadyOwned() throws Exception {
+        // Arrange
+        when(fetchCommitteeCasesUseCase.takeOwnership(caseId))
+            .thenThrow(new IllegalStateException("Case already owned by another member"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/take-ownership", caseId))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Test 14: POST /cases/{caseId}/release-ownership succeeds (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_releaseOwnership_Success() throws Exception {
+        // Arrange
+        when(fetchCommitteeCasesUseCase.releaseOwnership(caseId))
+            .thenReturn(caseResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/release-ownership", caseId))
+            .andExpect(status().isOk());
+
+        verify(fetchCommitteeCasesUseCase).releaseOwnership(caseId);
+    }
+
+    @Test
+    @DisplayName("Test 15: POST /cases/{caseId}/release-ownership returns 404 for invalid ID")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_releaseOwnership_NotFound() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        when(fetchCommitteeCasesUseCase.releaseOwnership(invalidId))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/release-ownership", invalidId))
+            .andExpect(status().isNotFound());
+    }
+}

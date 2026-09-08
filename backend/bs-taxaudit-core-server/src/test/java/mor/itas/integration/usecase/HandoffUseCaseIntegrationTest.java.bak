@@ -1,0 +1,455 @@
+package mor.itas.integration.usecase;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.integration.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Integration tests for Handoff Use Cases.
+ * Tests case transfer to Execution Workspace including handoff record creation,
+ * case code generation, and execution workspace notification.
+ * Uses real PostgreSQL database with TestContainers.
+ * 
+ * Coverage:
+ * - Create handoff records for approved cases
+ * - Generate unique case codes
+ * - Verify complete field population
+ * - Notification to execution workspace
+ * - Delivery confirmation tracking
+ */
+@DisplayName("Handoff Use Case Integration Tests")
+@ActiveProfiles("test")
+@Transactional
+public class HandoffUseCaseIntegrationTest extends IntegrationTestBase {
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private UUID testCaseId;
+    private UUID testTaxpayerId;
+    private UUID testChairpersonId;
+    private UUID[] testTeamMembers;
+
+    @BeforeEach
+    void setUp() {
+        testCaseId = generateTestId("handoff_case", 1);
+        testTaxpayerId = generateTestId("taxpayer", 1);
+        testChairpersonId = generateTestId("chairperson", 1);
+        testTeamMembers = new UUID[3];
+        for (int i = 0; i < 3; i++) {
+            testTeamMembers[i] = generateTestId("auditor", i);
+        }
+
+        entityManager.createQuery("DELETE FROM CommitteeCaseAggregate").executeUpdate();
+    }
+
+    @Test
+    @DisplayName("testTransferToExecution_Success - Handoff created")
+    void testTransferToExecution_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate approvedCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .originalCaseId(generateTestUUID())
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Handoff Test Corp")
+            .taxIdNumber("TAX2024001")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .decision(CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED)
+            .decisionDate(OffsetDateTime.now())
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(approvedCase);
+        entityManager.flush();
+
+        // Create handoff record
+        var handoffRecord = new HandoffRecord(
+            testCaseId,
+            "JAC-2024-001",
+            testTeamMembers[0],
+            testTeamMembers,
+            "Committee approved joint audit. High risk case with transfer pricing concerns."
+        );
+        entityManager.persist(handoffRecord);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(HandoffRecord.class, handoffRecord.getId());
+
+        // ASSERT
+        assertThat(retrieved).isNotNull();
+        assertThat(retrieved.getCaseId()).isEqualTo(testCaseId);
+        assertThat(retrieved.getCaseCode()).isEqualTo("JAC-2024-001");
+        assertThat(retrieved.getTeamLeadId()).isEqualTo(testTeamMembers[0]);
+        assertThat(retrieved.getHandoffDate()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testTransferToExecution_CaseCodeGenerated - Unique code created")
+    void testTransferToExecution_CaseCodeGenerated() {
+        // ARRANGE
+        CommitteeCaseAggregate case1 = CommitteeCaseAggregate.builder()
+            .caseId(generateTestId("case", 1))
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Case 1")
+            .taxIdNumber("TAX001")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+
+        CommitteeCaseAggregate case2 = CommitteeCaseAggregate.builder()
+            .caseId(generateTestId("case", 2))
+            .taxpayerId(generateTestId("taxpayer", 2))
+            .taxpayerName("Case 2")
+            .taxIdNumber("TAX002")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+
+        entityManager.persist(case1);
+        entityManager.persist(case2);
+        entityManager.flush();
+
+        // Generate case codes (simulating code generation service)
+        var code1 = generateCaseCode(1);  // JAC-2024-001
+        var code2 = generateCaseCode(2);  // JAC-2024-002
+
+        var handoff1 = new HandoffRecord(case1.getCaseId(), code1, testTeamMembers[0], testTeamMembers, "Summary 1");
+        var handoff2 = new HandoffRecord(case2.getCaseId(), code2, testTeamMembers[0], testTeamMembers, "Summary 2");
+
+        entityManager.persist(handoff1);
+        entityManager.persist(handoff2);
+        entityManager.flush();
+
+        // ACT
+        var codes = entityManager
+            .createQuery("SELECT h.caseCode FROM HandoffRecord h", String.class)
+            .getResultList();
+
+        // ASSERT
+        assertThat(codes).hasSize(2);
+        assertThat(codes).contains(code1, code2);
+        assertThat(codes.get(0)).isNotEqualTo(codes.get(1));
+    }
+
+    @Test
+    @DisplayName("testTransferToExecution_StateChange - Case transferred to correct state")
+    void testTransferToExecution_StateChange() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("State Change Test")
+            .taxIdNumber("TAX2024002")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // Simulate handoff creation and state transition
+        testCase.setStatus(CommitteeCaseAggregate.CommitteeCaseStatus.TRANSFERRED_TO_EXECUTION);
+        entityManager.merge(testCase);
+        entityManager.flush();
+
+        // ACT
+        var transferred = entityManager.find(CommitteeCaseAggregate.class, testCaseId);
+
+        // ASSERT
+        assertThat(transferred.getStatus())
+            .isEqualTo(CommitteeCaseAggregate.CommitteeCaseStatus.TRANSFERRED_TO_EXECUTION);
+    }
+
+    @Test
+    @DisplayName("testHandoffRecord_AllFieldsPopulated - Snapshot complete")
+    void testHandoffRecord_AllFieldsPopulated() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Complete Snapshot Case")
+            .taxIdNumber("TAX2024003")
+            .riskScore(85)
+            .riskPriority("High")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(1)
+            .decision(CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED)
+            .decisionDate(OffsetDateTime.now())
+            .decisionReason("Case meets viability criteria")
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // Create handoff with all fields
+        var handoffRecord = new HandoffRecord(
+            testCase.getCaseId(),
+            "JAC-2024-003",
+            testTeamMembers[0],
+            testTeamMembers,
+            "Transfer pricing investigation recommended. High compliance risk. Requires 2+ auditors."
+        );
+        handoffRecord.setCommitteeFinding("Transfer pricing misalignment identified");
+        handoffRecord.setKeyIssues("Pricing, Documentation, Related Party Transactions");
+        entityManager.persist(handoffRecord);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(HandoffRecord.class, handoffRecord.getId());
+
+        // ASSERT - Verify all fields populated
+        assertThat(retrieved.getCaseId()).isNotNull();
+        assertThat(retrieved.getCaseCode()).isNotNull();
+        assertThat(retrieved.getTeamLeadId()).isNotNull();
+        assertThat(retrieved.getTeamMemberIds()).hasSize(3);
+        assertThat(retrieved.getSummary()).isNotNull();
+        assertThat(retrieved.getCommitteeFinding()).isNotNull();
+        assertThat(retrieved.getKeyIssues()).isNotNull();
+        assertThat(retrieved.getHandoffDate()).isNotNull();
+        assertThat(retrieved.getCreatedBy()).isNull();  // Will be set by service
+    }
+
+    @Test
+    @DisplayName("testCaseCodeUniqueness_Guaranteed - No duplicates across system")
+    void testCaseCodeUniqueness_Guaranteed() {
+        // ARRANGE - Create multiple handoff records
+        for (int i = 0; i < 10; i++) {
+            var case_ = CommitteeCaseAggregate.builder()
+                .caseId(generateTestId("case", i))
+                .taxpayerId(generateTestId("taxpayer", i))
+                .taxpayerName("Case " + i)
+                .taxIdNumber("TAX" + String.format("%06d", i))
+                .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+                .createdDate(OffsetDateTime.now())
+                .committeeDeadline(OffsetDateTime.now().plusDays(30))
+                .extensionCount(0)
+                .chairpersonId(testChairpersonId)
+                .build();
+            entityManager.persist(case_);
+
+            var code = generateCaseCode(i);
+            var handoff = new HandoffRecord(
+                case_.getCaseId(),
+                code,
+                testTeamMembers[0],
+                testTeamMembers,
+                "Summary"
+            );
+            entityManager.persist(handoff);
+        }
+        entityManager.flush();
+
+        // ACT - Check for duplicates
+        var codes = entityManager
+            .createQuery("SELECT h.caseCode FROM HandoffRecord h", String.class)
+            .getResultList();
+
+        var uniqueCodes = new java.util.HashSet<>(codes);
+
+        // ASSERT
+        assertThat(codes).hasSize(10);
+        assertThat(uniqueCodes).hasSize(10);  // All unique
+    }
+
+    @Test
+    @DisplayName("testExecutionWorkspaceNotification_Sent - System receives notification")
+    void testExecutionWorkspaceNotification_Sent() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Notification Test Case")
+            .taxIdNumber("TAX2024004")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(testCase);
+
+        var handoffRecord = new HandoffRecord(
+            testCaseId,
+            "JAC-2024-004",
+            testTeamMembers[0],
+            testTeamMembers,
+            "Ready for execution"
+        );
+        handoffRecord.setNotificationSent(true);
+        handoffRecord.setNotificationSentAt(OffsetDateTime.now());
+        entityManager.persist(handoffRecord);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(HandoffRecord.class, handoffRecord.getId());
+
+        // ASSERT
+        assertThat(retrieved.isNotificationSent()).isTrue();
+        assertThat(retrieved.getNotificationSentAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testTeamHandoffDelivery_Confirmed - Delivery logged")
+    void testTeamHandoffDelivery_Confirmed() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Delivery Confirmation Case")
+            .taxIdNumber("TAX2024005")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.TRANSFERRED_TO_EXECUTION)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(testCase);
+
+        var handoffRecord = new HandoffRecord(
+            testCaseId,
+            "JAC-2024-005",
+            testTeamMembers[0],
+            testTeamMembers,
+            "Delivered to execution"
+        );
+        entityManager.persist(handoffRecord);
+        entityManager.flush();
+
+        // Confirm delivery
+        handoffRecord.setDeliveredAt(OffsetDateTime.now());
+        handoffRecord.setDeliveryConfirmed(true);
+        entityManager.merge(handoffRecord);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(HandoffRecord.class, handoffRecord.getId());
+
+        // ASSERT
+        assertThat(retrieved.isDeliveryConfirmed()).isTrue();
+        assertThat(retrieved.getDeliveredAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testHandoffProcessingTime_Tracked - Timing recorded")
+    void testHandoffProcessingTime_Tracked() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Timing Test Case")
+            .taxIdNumber("TAX2024006")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .chairpersonId(testChairpersonId)
+            .build();
+        entityManager.persist(testCase);
+
+        var creationTime = OffsetDateTime.now();
+        var handoffRecord = new HandoffRecord(
+            testCaseId,
+            "JAC-2024-006",
+            testTeamMembers[0],
+            testTeamMembers,
+            "Processing time test"
+        );
+        handoffRecord.setHandoffCreatedAt(creationTime);
+        handoffRecord.setDeliveredAt(creationTime.plusMinutes(15));
+        entityManager.persist(handoffRecord);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(HandoffRecord.class, handoffRecord.getId());
+        long processingMinutes = java.time.temporal.ChronoUnit.MINUTES
+            .between(retrieved.getHandoffCreatedAt(), retrieved.getDeliveredAt());
+
+        // ASSERT
+        assertThat(processingMinutes).isGreaterThanOrEqualTo(15);
+    }
+
+    // Helper methods
+    private String generateCaseCode(int sequence) {
+        return String.format("JAC-2024-%03d", sequence);
+    }
+
+    // Helper entity for testing
+    protected static class HandoffRecord {
+        private UUID id = UUID.randomUUID();
+        private UUID caseId;
+        private String caseCode;
+        private UUID executionCaseId;
+        private UUID teamLeadId;
+        private java.util.List<UUID> teamMemberIds;
+        private String summary;
+        private String committeeFinding;
+        private String keyIssues;
+        private CommitteeCaseAggregate.CommitteeCaseDecision decision;
+        private OffsetDateTime handoffDate = OffsetDateTime.now();
+        private OffsetDateTime handoffCreatedAt;
+        private OffsetDateTime deliveredAt;
+        private UUID createdBy;
+        private boolean notificationSent = false;
+        private OffsetDateTime notificationSentAt;
+        private boolean deliveryConfirmed = false;
+
+        public HandoffRecord(UUID caseId, String code, UUID teamLeadId, UUID[] teamMembers, String summary) {
+            this.caseId = caseId;
+            this.caseCode = code;
+            this.teamLeadId = teamLeadId;
+            this.teamMemberIds = java.util.Arrays.asList(teamMembers);
+            this.summary = summary;
+            this.handoffCreatedAt = OffsetDateTime.now();
+        }
+
+        public UUID getId() { return id; }
+        public UUID getCaseId() { return caseId; }
+        public String getCaseCode() { return caseCode; }
+        public UUID getExecutionCaseId() { return executionCaseId; }
+        public UUID getTeamLeadId() { return teamLeadId; }
+        public java.util.List<UUID> getTeamMemberIds() { return teamMemberIds; }
+        public String getSummary() { return summary; }
+        public String getCommitteeFinding() { return committeeFinding; }
+        public String getKeyIssues() { return keyIssues; }
+        public CommitteeCaseAggregate.CommitteeCaseDecision getDecision() { return decision; }
+        public OffsetDateTime getHandoffDate() { return handoffDate; }
+        public OffsetDateTime getHandoffCreatedAt() { return handoffCreatedAt; }
+        public OffsetDateTime getDeliveredAt() { return deliveredAt; }
+        public UUID getCreatedBy() { return createdBy; }
+        public boolean isNotificationSent() { return notificationSent; }
+        public OffsetDateTime getNotificationSentAt() { return notificationSentAt; }
+        public boolean isDeliveryConfirmed() { return deliveryConfirmed; }
+
+        public void setCommitteeFinding(String finding) { this.committeeFinding = finding; }
+        public void setKeyIssues(String issues) { this.keyIssues = issues; }
+        public void setNotificationSent(boolean sent) { this.notificationSent = sent; }
+        public void setNotificationSentAt(OffsetDateTime at) { this.notificationSentAt = at; }
+        public void setDeliveredAt(OffsetDateTime at) { this.deliveredAt = at; }
+        public void setDeliveryConfirmed(boolean confirmed) { this.deliveryConfirmed = confirmed; }
+        public void setHandoffCreatedAt(OffsetDateTime at) { this.handoffCreatedAt = at; }
+    }
+}

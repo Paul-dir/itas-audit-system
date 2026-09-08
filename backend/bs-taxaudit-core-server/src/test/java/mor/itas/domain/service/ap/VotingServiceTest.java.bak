@@ -1,0 +1,498 @@
+package mor.itas.domain.service.ap;
+
+import mor.itas.domain.aggregate.ap.AdvisoryVotingAggregate;
+import mor.itas.domain.exception.DuplicateVoteException;
+import mor.itas.domain.exception.InvalidVotingStateException;
+import mor.itas.domain.valueobject.VoteOption;
+import mor.itas.domain.valueobject.VotingTally;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for VotingService
+ * Tests vote casting, tally calculation, and consensus detection
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("VotingService Unit Tests")
+class VotingServiceTest {
+
+    private VotingService service;
+
+    @Mock
+    private AdvisoryVotingAggregate voting;
+
+    private UUID memberId1;
+    private UUID memberId2;
+    private UUID memberId3;
+
+    @BeforeEach
+    void setUp() {
+        service = new VotingService();
+        memberId1 = UUID.randomUUID();
+        memberId2 = UUID.randomUUID();
+        memberId3 = UUID.randomUUID();
+    }
+
+    // ========== Vote Casting Tests ==========
+
+    @Test
+    @DisplayName("Should cast vote successfully")
+    void testCastVote_Success() throws DuplicateVoteException, InvalidVotingStateException {
+        // Arrange
+        when(voting.getAllVotes()).thenReturn(new ArrayList<>());
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.castVote(voting, memberId1, VoteOption.APPROVE, "Case is viable"));
+
+        verify(voting).castVote(memberId1, VoteOption.APPROVE, "Case is viable");
+    }
+
+    @Test
+    @DisplayName("Should prevent duplicate vote from same member")
+    void testCastVote_DuplicateVote_Throws() throws DuplicateVoteException, InvalidVotingStateException {
+        // Arrange
+        doThrow(new DuplicateVoteException(memberId1.toString(), "case-id"))
+            .when(voting).castVote(memberId1, VoteOption.APPROVE, "Reasoning");
+
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.castVote(voting, memberId1, VoteOption.APPROVE, "Reasoning"))
+            .isInstanceOf(DuplicateVoteException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if voting state is not OPEN")
+    void testCastVote_InvalidStatus_Throws() throws DuplicateVoteException, InvalidVotingStateException {
+        // Arrange
+        doThrow(new InvalidVotingStateException("CLOSED", "cast vote"))
+            .when(voting).castVote(memberId1, VoteOption.APPROVE, "Reasoning");
+
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.castVote(voting, memberId1, VoteOption.APPROVE, "Reasoning"))
+            .isInstanceOf(InvalidVotingStateException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if voting aggregate is null")
+    void testCastVote_NullVoting_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.castVote(null, memberId1, VoteOption.APPROVE, "Reasoning"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Voting aggregate cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if member ID is null")
+    void testCastVote_NullMemberId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.castVote(voting, null, VoteOption.APPROVE, "Reasoning"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Member ID and vote option cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if vote option is null")
+    void testCastVote_NullVoteOption_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.castVote(voting, memberId1, null, "Reasoning"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Member ID and vote option cannot be null");
+    }
+
+    // ========== Tally Calculation Tests ==========
+
+    @Test
+    @DisplayName("Should calculate tally correctly")
+    void testCalculateTally_CountsCorrect() {
+        // Arrange
+        VotingTally expectedTally = VotingTally.builder()
+            .approveCount(2)
+            .rejectCount(1)
+            .moreInfoCount(0)
+            .totalVotesCast(3)
+            .build();
+        
+        when(voting.getTally()).thenReturn(expectedTally);
+
+        // Act
+        VotingTally result = service.calculateTally(voting);
+
+        // Assert
+        assertThat(result).isNotNull();
+        assertThat(result.getApproveCount()).isEqualTo(2);
+        assertThat(result.getRejectCount()).isEqualTo(1);
+        assertThat(result.getMoreInfoCount()).isEqualTo(0);
+        assertThat(result.getTotalVotesCast()).isEqualTo(3);
+
+        verify(voting).getTally();
+    }
+
+    @Test
+    @DisplayName("Should calculate percentages correctly")
+    void testCalculateTally_PercentagesCorrect() {
+        // Arrange
+        VotingTally tally = VotingTally.builder()
+            .approveCount(6)
+            .rejectCount(2)
+            .moreInfoCount(2)
+            .totalVotesCast(10)
+            .consensusPercentage(60.0)
+            .build();
+        
+        when(voting.getTally()).thenReturn(tally);
+
+        // Act
+        VotingTally result = service.calculateTally(voting);
+
+        // Assert
+        assertThat(result.getConsensusPercentage()).isEqualTo(60.0);
+    }
+
+    @Test
+    @DisplayName("Should throw error if voting is null for tally")
+    void testCalculateTally_NullVoting_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.calculateTally(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Voting aggregate cannot be null");
+    }
+
+    // ========== Consensus Detection Tests ==========
+
+    @Test
+    @DisplayName("Should detect consensus when above threshold")
+    void testHasConsensus_AboveThreshold() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(null);
+        when(voting.hasConsensus()).thenReturn(true);
+
+        // Act
+        boolean result = service.hasConsensus(voting, 60);
+
+        // Assert
+        assertThat(result).isTrue();
+        verify(voting).setConsensusThreshold(60);
+        verify(voting).hasConsensus();
+    }
+
+    @Test
+    @DisplayName("Should detect no consensus when below threshold")
+    void testHasConsensus_BelowThreshold() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(60);
+        when(voting.hasConsensus()).thenReturn(false);
+
+        // Act
+        boolean result = service.hasConsensus(voting, 60);
+
+        // Assert
+        assertThat(result).isFalse();
+        verify(voting).hasConsensus();
+    }
+
+    @Test
+    @DisplayName("Should throw error if threshold is invalid (negative)")
+    void testHasConsensus_NegativeThreshold_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.hasConsensus(voting, -1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Threshold must be between 0 and 100");
+    }
+
+    @Test
+    @DisplayName("Should throw error if threshold is invalid (greater than 100)")
+    void testHasConsensus_ThresholdGreaterThan100_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.hasConsensus(voting, 101))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Threshold must be between 0 and 100");
+    }
+
+    @Test
+    @DisplayName("Should throw error if voting is null for consensus check")
+    void testHasConsensus_NullVoting_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.hasConsensus(null, 60))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Voting aggregate cannot be null");
+    }
+
+    // ========== Voting Outcome Tests ==========
+
+    @Test
+    @DisplayName("Should determine PASSED outcome")
+    void testDetermineOutcome_PASSED() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(null);
+        when(voting.getOutcome()).thenReturn(VotingTally.VotingOutcome.PASSED);
+
+        // Act
+        VotingTally.VotingOutcome result = service.determineOutcome(voting, 60);
+
+        // Assert
+        assertThat(result).isEqualTo(VotingTally.VotingOutcome.PASSED);
+        verify(voting).setConsensusThreshold(60);
+    }
+
+    @Test
+    @DisplayName("Should determine FAILED outcome")
+    void testDetermineOutcome_FAILED() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(60);
+        when(voting.getOutcome()).thenReturn(VotingTally.VotingOutcome.FAILED);
+
+        // Act
+        VotingTally.VotingOutcome result = service.determineOutcome(voting, 60);
+
+        // Assert
+        assertThat(result).isEqualTo(VotingTally.VotingOutcome.FAILED);
+    }
+
+    @Test
+    @DisplayName("Should determine INCONCLUSIVE outcome")
+    void testDetermineOutcome_INCONCLUSIVE() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(60);
+        when(voting.getOutcome()).thenReturn(VotingTally.VotingOutcome.INCONCLUSIVE);
+
+        // Act
+        VotingTally.VotingOutcome result = service.determineOutcome(voting, 60);
+
+        // Assert
+        assertThat(result).isEqualTo(VotingTally.VotingOutcome.INCONCLUSIVE);
+    }
+
+    @Test
+    @DisplayName("Should throw error for invalid threshold in outcome")
+    void testDetermineOutcome_InvalidThreshold_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.determineOutcome(voting, 150))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Threshold must be between 0 and 100");
+    }
+
+    // ========== Voting State Management Tests ==========
+
+    @Test
+    @DisplayName("Should close voting phase")
+    void testCloseVoting_Success() {
+        // Act
+        service.closeVoting(voting);
+
+        // Assert
+        verify(voting).closeVoting();
+    }
+
+    @Test
+    @DisplayName("Should reopen voting for more research")
+    void testReopenVoting_Success() {
+        // Act
+        service.reopenVoting(voting);
+
+        // Assert
+        verify(voting).reopenVoting();
+    }
+
+    @Test
+    @DisplayName("Should check if member has voted")
+    void testHasVoted_MemberVoted_True() {
+        // Arrange
+        when(voting.hasVoted(memberId1)).thenReturn(true);
+
+        // Act
+        boolean result = service.hasVoted(voting, memberId1);
+
+        // Assert
+        assertThat(result).isTrue();
+        verify(voting).hasVoted(memberId1);
+    }
+
+    @Test
+    @DisplayName("Should check if member has not voted")
+    void testHasVoted_MemberNotVoted_False() {
+        // Arrange
+        when(voting.hasVoted(memberId1)).thenReturn(false);
+
+        // Act
+        boolean result = service.hasVoted(voting, memberId1);
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should throw error if member ID is null in hasVoted check")
+    void testHasVoted_NullMemberId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.hasVoted(voting, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Member ID cannot be null");
+    }
+
+    // ========== Vote Count Tests ==========
+
+    @Test
+    @DisplayName("Should get total votes cast")
+    void testGetTotalVotesCast() {
+        // Arrange - create a mock collection that implements the expected interface
+        ArrayList mockVotes = new ArrayList<>();
+        mockVotes.add("vote1");
+        mockVotes.add("vote2");
+        mockVotes.add("vote3");
+        
+        when(voting.getAllVotes()).thenReturn(mockVotes);
+
+        // Act
+        int result = service.getTotalVotesCast(voting);
+
+        // Assert
+        assertThat(result).isEqualTo(3);
+        verify(voting).getAllVotes();
+    }
+
+    @Test
+    @DisplayName("Should return 0 votes when no votes cast")
+    void testGetTotalVotesCast_NoVotes() {
+        // Arrange
+        when(voting.getAllVotes()).thenReturn(new ArrayList<>());
+
+        // Act
+        int result = service.getTotalVotesCast(voting);
+
+        // Assert
+        assertThat(result).isZero();
+    }
+
+    // ========== Voting State Validation Tests ==========
+
+    @Test
+    @DisplayName("Should validate voting is open for vote casting")
+    void testValidateVotingOpen_Success() {
+        // Arrange
+        when(voting.getStatus()).thenReturn(AdvisoryVotingAggregate.VotingStatus.OPEN);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateVotingOpen(voting));
+
+        verify(voting).getStatus();
+    }
+
+    @Test
+    @DisplayName("Should throw error if voting is not open")
+    void testValidateVotingOpen_Closed_Throws() {
+        // Arrange
+        when(voting.getStatus()).thenReturn(AdvisoryVotingAggregate.VotingStatus.CLOSED);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateVotingOpen(voting))
+            .isInstanceOf(InvalidVotingStateException.class);
+    }
+
+    // ========== Consensus Threshold Tests ==========
+
+    @Test
+    @DisplayName("Should get consensus threshold with custom value")
+    void testGetConsensusThreshold_CustomValue() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(70);
+
+        // Act
+        Integer result = service.getConsensusThreshold(voting);
+
+        // Assert
+        assertThat(result).isEqualTo(70);
+    }
+
+    @Test
+    @DisplayName("Should return default consensus threshold (60)")
+    void testGetConsensusThreshold_DefaultValue() {
+        // Arrange
+        when(voting.getConsensusThreshold()).thenReturn(null);
+
+        // Act
+        Integer result = service.getConsensusThreshold(voting);
+
+        // Assert
+        assertThat(result).isEqualTo(60);
+    }
+
+    // ========== Integration Scenario Tests ==========
+
+    @Test
+    @DisplayName("Should complete full voting workflow")
+    void testVotingWorkflow_Complete() throws DuplicateVoteException, InvalidVotingStateException {
+        // Arrange
+        when(voting.getStatus()).thenReturn(AdvisoryVotingAggregate.VotingStatus.OPEN);
+        when(voting.getConsensusThreshold()).thenReturn(null);
+        when(voting.hasConsensus()).thenReturn(true);
+        when(voting.getOutcome()).thenReturn(VotingTally.VotingOutcome.PASSED);
+
+        // Act - validate voting is open
+        service.validateVotingOpen(voting);
+
+        // Cast first vote
+        service.castVote(voting, memberId1, VoteOption.APPROVE, "Case is viable");
+
+        // Cast second vote
+        service.castVote(voting, memberId2, VoteOption.APPROVE, "Agree");
+
+        // Check member has voted
+        boolean voted = service.hasVoted(voting, memberId1);
+        assertThat(voted).isTrue();
+
+        // Check consensus with threshold 60
+        boolean consensus = service.hasConsensus(voting, 60);
+        assertThat(consensus).isTrue();
+
+        // Determine outcome
+        VotingTally.VotingOutcome outcome = service.determineOutcome(voting, 60);
+        assertThat(outcome).isEqualTo(VotingTally.VotingOutcome.PASSED);
+
+        // Close voting
+        service.closeVoting(voting);
+
+        // Assert
+        verify(voting, times(2)).castVote(any(), any(), any());
+        verify(voting, times(2)).setConsensusThreshold(60);
+    }
+
+    @Test
+    @DisplayName("Should handle voting with mixed outcomes")
+    void testVotingWorkflow_MixedOutcomes() throws DuplicateVoteException, InvalidVotingStateException {
+        // Arrange
+        when(voting.getStatus()).thenReturn(AdvisoryVotingAggregate.VotingStatus.OPEN);
+        when(voting.getConsensusThreshold()).thenReturn(60);
+        when(voting.hasConsensus()).thenReturn(false);
+        when(voting.getOutcome()).thenReturn(VotingTally.VotingOutcome.INCONCLUSIVE);
+
+        // Act
+        service.castVote(voting, memberId1, VoteOption.APPROVE, "Approve");
+        service.castVote(voting, memberId2, VoteOption.REJECT, "Reject");
+        service.castVote(voting, memberId3, VoteOption.MORE_INFO, "Need more info");
+
+        boolean hasConsensus = service.hasConsensus(voting, 60);
+        VotingTally.VotingOutcome outcome = service.determineOutcome(voting, 60);
+
+        // Assert
+        assertThat(hasConsensus).isFalse();
+        assertThat(outcome).isEqualTo(VotingTally.VotingOutcome.INCONCLUSIVE);
+    }
+}

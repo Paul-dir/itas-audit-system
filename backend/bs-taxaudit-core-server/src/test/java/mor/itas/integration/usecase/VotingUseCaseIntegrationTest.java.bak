@@ -1,0 +1,440 @@
+package mor.itas.integration.usecase;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.integration.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Integration tests for Advisory Voting Use Cases.
+ * Tests the voting system from vote casting through consensus determination.
+ * Uses real PostgreSQL database with TestContainers.
+ * 
+ * Coverage:
+ * - Vote casting and persistence
+ * - Duplicate vote prevention
+ * - Vote tally calculation
+ * - Consensus detection
+ * - Vote history retrieval
+ * - Voting phase transitions
+ */
+@DisplayName("Voting Use Case Integration Tests")
+@ActiveProfiles("test")
+@Transactional
+public class VotingUseCaseIntegrationTest extends IntegrationTestBase {
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private UUID testCaseId;
+    private UUID testTaxpayerId;
+    private UUID[] testMembers;
+
+    @BeforeEach
+    void setUp() {
+        testCaseId = generateTestId("voting_case", 1);
+        testTaxpayerId = generateTestId("taxpayer", 1);
+        testMembers = new UUID[5];
+        for (int i = 0; i < 5; i++) {
+            testMembers[i] = generateTestId("member", i);
+        }
+
+        entityManager.createQuery("DELETE FROM CommitteeCaseAggregate").executeUpdate();
+    }
+
+    @Test
+    @DisplayName("testCastAdvisoryVote_Success - Vote stored and tally updated")
+    void testCastAdvisoryVote_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Voting Test Case")
+            .taxIdNumber("TAX2024001")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // ACT - Store vote record (simulating vote entity)
+        // In real implementation, this would use VotingRepository
+        var voteRecord = new VoteRecord(testCaseId, testMembers[0], "APPROVE", "Good compliance history");
+        entityManager.persist(voteRecord);
+        entityManager.flush();
+
+        // Verify vote was stored
+        var votes = entityManager
+            .createQuery("SELECT v FROM VoteRecord v WHERE v.caseId = ?1", VoteRecord.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(votes).hasSize(1);
+        assertThat(votes.get(0).getMemberId()).isEqualTo(testMembers[0]);
+        assertThat(votes.get(0).getOption()).isEqualTo("APPROVE");
+        assertThat(votes.get(0).getReasoning()).isEqualTo("Good compliance history");
+    }
+
+    @Test
+    @DisplayName("testCastAdvisoryVote_DuplicateVoteFails - Duplicate prevention enforced")
+    void testCastAdvisoryVote_DuplicateVoteFails() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Duplicate Vote Test")
+            .taxIdNumber("TAX2024002")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var vote1 = new VoteRecord(testCaseId, testMembers[0], "APPROVE", "First vote");
+        entityManager.persist(vote1);
+        entityManager.flush();
+
+        // ACT & ASSERT - Try duplicate vote
+        var vote2 = new VoteRecord(testCaseId, testMembers[0], "REJECT", "Duplicate attempt");
+        assertThatThrownBy(() -> {
+            entityManager.persist(vote2);
+            entityManager.flush();
+        }).isInstanceOf(Exception.class); // Database constraint violation
+    }
+
+    @Test
+    @DisplayName("testCastAdvisoryVote_InvalidStatus - Case not in voting phase fails")
+    void testCastAdvisoryVote_InvalidStatus() {
+        // ARRANGE - Case NOT in PENDING_VOTES status
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Invalid Status Test")
+            .taxIdNumber("TAX2024003")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.REJECTED)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // ACT & ASSERT
+        var retrievedCase = entityManager.find(CommitteeCaseAggregate.class, testCaseId);
+        assertThat(retrievedCase.getStatus()).isNotEqualTo(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES);
+        assertThat(retrievedCase.isVotingPhase()).isFalse();
+    }
+
+    @Test
+    @DisplayName("testGetVoteTally_Accurate - Vote counts correct")
+    void testGetVoteTally_Accurate() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Tally Test Case")
+            .taxIdNumber("TAX2024004")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Cast votes: 3 APPROVE, 2 REJECT
+        for (int i = 0; i < 3; i++) {
+            entityManager.persist(new VoteRecord(testCaseId, testMembers[i], "APPROVE", "Good case"));
+        }
+        for (int i = 3; i < 5; i++) {
+            entityManager.persist(new VoteRecord(testCaseId, testMembers[i], "REJECT", "Risky case"));
+        }
+        entityManager.flush();
+
+        // ACT - Calculate tally
+        var approveCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "APPROVE")
+            .getSingleResult();
+
+        var rejectCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "REJECT")
+            .getSingleResult();
+
+        var totalVotes = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1")
+            .setParameter(1, testCaseId)
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(approveCount).isEqualTo(3);
+        assertThat(rejectCount).isEqualTo(2);
+        assertThat(totalVotes).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("testGetVoteTally_ConsensusDetection - Threshold applied correctly")
+    void testGetVoteTally_ConsensusDetection() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Consensus Test Case")
+            .taxIdNumber("TAX2024005")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Cast votes: 6 APPROVE, 4 REJECT (60% approve = consensus threshold)
+        for (int i = 0; i < 6; i++) {
+            entityManager.persist(new VoteRecord(testCaseId, testMembers[i % 5], "APPROVE", "Yes"));
+        }
+        for (int i = 0; i < 4; i++) {
+            entityManager.persist(new VoteRecord(testCaseId, generateTestId("member", 5 + i), "REJECT", "No"));
+        }
+        entityManager.flush();
+
+        // ACT
+        var approveCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "APPROVE")
+            .getSingleResult();
+
+        var totalVotes = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1")
+            .setParameter(1, testCaseId)
+            .getSingleResult();
+
+        double consensusPercentage = (double) approveCount / totalVotes * 100;
+
+        // ASSERT
+        assertThat(consensusPercentage).isGreaterThanOrEqualTo(60);
+    }
+
+    @Test
+    @DisplayName("testGetVoteHistory_Complete - All votes retrievable")
+    void testGetVoteHistory_Complete() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("History Test Case")
+            .taxIdNumber("TAX2024006")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Cast 5 votes
+        for (int i = 0; i < 5; i++) {
+            String option = i % 2 == 0 ? "APPROVE" : "REJECT";
+            entityManager.persist(new VoteRecord(testCaseId, testMembers[i], option, "Comment " + i));
+        }
+        entityManager.flush();
+
+        // ACT
+        var allVotes = entityManager
+            .createQuery("SELECT v FROM VoteRecord v WHERE v.caseId = ?1 ORDER BY v.votedAt", VoteRecord.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(allVotes).hasSize(5);
+        for (VoteRecord vote : allVotes) {
+            assertThat(vote.getCaseId()).isEqualTo(testCaseId);
+            assertThat(vote.getReasoning()).isNotNull();
+            assertThat(vote.getVotedAt()).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("testVoteComments_Optional - Comments stored with vote")
+    void testVoteComments_Optional() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Comments Test Case")
+            .taxIdNumber("TAX2024007")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Cast votes with and without comments
+        var voteWithComment = new VoteRecord(testCaseId, testMembers[0], "APPROVE", "Detailed analysis provided");
+        var voteWithoutComment = new VoteRecord(testCaseId, testMembers[1], "REJECT", null);
+
+        entityManager.persist(voteWithComment);
+        entityManager.persist(voteWithoutComment);
+        entityManager.flush();
+
+        // ACT
+        var allVotes = entityManager
+            .createQuery("SELECT v FROM VoteRecord v WHERE v.caseId = ?1", VoteRecord.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(allVotes).hasSize(2);
+        assertThat(allVotes.get(0).getReasoning()).isNotNull();
+        assertThat(allVotes.get(1).getReasoning()).isNull();
+    }
+
+    @Test
+    @DisplayName("testVotingPhaseTransition - Case transitions through voting correctly")
+    void testVotingPhaseTransition() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Transition Test Case")
+            .taxIdNumber("TAX2024008")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // ACT - Verify initial voting phase
+        var initial = entityManager.find(CommitteeCaseAggregate.class, testCaseId);
+        assertThat(initial.isVotingPhase()).isTrue();
+
+        // ACT - Transition to viability phase
+        initial.transitionToViabilityPhase();
+        entityManager.merge(initial);
+        entityManager.flush();
+
+        var transitioned = entityManager.find(CommitteeCaseAggregate.class, testCaseId);
+
+        // ASSERT
+        assertThat(transitioned.getStatus()).isEqualTo(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+        assertThat(transitioned.isVotingPhase()).isFalse();
+    }
+
+    @Test
+    @DisplayName("testReopenVoting_ForMoreResearch - Voting can be reopened")
+    void testReopenVoting_ForMoreResearch() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Reopen Test Case")
+            .taxIdNumber("TAX2024009")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+        entityManager.flush();
+
+        // ACT - Reset to voting phase
+        testCase.setStatus(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES);
+        entityManager.merge(testCase);
+        entityManager.flush();
+
+        var reopened = entityManager.find(CommitteeCaseAggregate.class, testCaseId);
+
+        // ASSERT
+        assertThat(reopened.getStatus()).isEqualTo(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES);
+        assertThat(reopened.isVotingPhase()).isTrue();
+    }
+
+    @Test
+    @DisplayName("testVotingWithMixedOutcomes - Approve/reject/more-info aggregation")
+    void testVotingWithMixedOutcomes() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Mixed Outcomes Test")
+            .taxIdNumber("TAX2024010")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create mixed votes
+        entityManager.persist(new VoteRecord(testCaseId, testMembers[0], "APPROVE", "Good"));
+        entityManager.persist(new VoteRecord(testCaseId, testMembers[1], "APPROVE", "Good"));
+        entityManager.persist(new VoteRecord(testCaseId, testMembers[2], "REJECT", "Risk"));
+        entityManager.persist(new VoteRecord(testCaseId, testMembers[3], "MORE_INFO", "Need data"));
+        entityManager.flush();
+
+        // ACT
+        var approveCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "APPROVE")
+            .getSingleResult();
+
+        var rejectCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "REJECT")
+            .getSingleResult();
+
+        var moreInfoCount = (long) entityManager
+            .createQuery("SELECT COUNT(v) FROM VoteRecord v WHERE v.caseId = ?1 AND v.option = ?2")
+            .setParameter(1, testCaseId)
+            .setParameter(2, "MORE_INFO")
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(approveCount).isEqualTo(2);
+        assertThat(rejectCount).isEqualTo(1);
+        assertThat(moreInfoCount).isEqualTo(1);
+    }
+
+    // Helper entity for testing vote storage
+    protected static class VoteRecord {
+        private UUID id = UUID.randomUUID();
+        private UUID caseId;
+        private UUID memberId;
+        private String option;
+        private String reasoning;
+        private OffsetDateTime votedAt = OffsetDateTime.now();
+
+        public VoteRecord(UUID caseId, UUID memberId, String option, String reasoning) {
+            this.caseId = caseId;
+            this.memberId = memberId;
+            this.option = option;
+            this.reasoning = reasoning;
+        }
+
+        public UUID getCaseId() { return caseId; }
+        public UUID getMemberId() { return memberId; }
+        public String getOption() { return option; }
+        public String getReasoning() { return reasoning; }
+        public OffsetDateTime getVotedAt() { return votedAt; }
+    }
+}

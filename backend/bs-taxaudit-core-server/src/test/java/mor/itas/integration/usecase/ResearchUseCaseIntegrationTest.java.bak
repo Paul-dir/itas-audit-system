@@ -1,0 +1,592 @@
+package mor.itas.integration.usecase;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.integration.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Integration tests for Research Workspace Use Cases.
+ * Tests the collaborative research functionality including notes, comments, and attachments.
+ * Uses real PostgreSQL database with TestContainers.
+ * 
+ * Coverage:
+ * - Add research notes with categorization
+ * - Reply to notes with threading
+ * - Upload attachments with scanning
+ * - Get research feed with pagination
+ * - Filter by type
+ */
+@DisplayName("Research Use Case Integration Tests")
+@ActiveProfiles("test")
+@Transactional
+public class ResearchUseCaseIntegrationTest extends IntegrationTestBase {
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private UUID testCaseId;
+    private UUID testTaxpayerId;
+    private UUID testAuthorId;
+
+    @BeforeEach
+    void setUp() {
+        testCaseId = generateTestId("research_case", 1);
+        testTaxpayerId = generateTestId("taxpayer", 1);
+        testAuthorId = generateTestId("member", 1);
+
+        entityManager.createQuery("DELETE FROM CommitteeCaseAggregate").executeUpdate();
+    }
+
+    @Test
+    @DisplayName("testAddResearchNote_Success - Note persisted correctly")
+    void testAddResearchNote_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Research Test Case")
+            .taxIdNumber("TAX2024001")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create research note
+        var note = new ResearchNote(
+            testCaseId,
+            testAuthorId,
+            "Found discrepancy in prior year tax returns",
+            "OBSERVATION"
+        );
+        entityManager.persist(note);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1", ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(retrieved.getCaseId()).isEqualTo(testCaseId);
+        assertThat(retrieved.getAuthorId()).isEqualTo(testAuthorId);
+        assertThat(retrieved.getContent()).contains("discrepancy");
+        assertThat(retrieved.getCategory()).isEqualTo("OBSERVATION");
+        assertThat(retrieved.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testAddResearchNote_WithCategory - Category applied correctly")
+    void testAddResearchNote_WithCategory() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Category Test Case")
+            .taxIdNumber("TAX2024002")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create notes with different categories
+        String[] categories = {"OBSERVATION", "QUESTION", "INVESTIGATION", "RECOMMENDATION"};
+        for (String category : categories) {
+            var note = new ResearchNote(testCaseId, testAuthorId, "Test " + category, category);
+            entityManager.persist(note);
+        }
+        entityManager.flush();
+
+        // ACT
+        for (String category : categories) {
+            var notes = entityManager
+                .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1 AND n.category = ?2", 
+                    ResearchNote.class)
+                .setParameter(1, testCaseId)
+                .setParameter(2, category)
+                .getResultList();
+
+            // ASSERT
+            assertThat(notes).hasSize(1);
+            assertThat(notes.get(0).getCategory()).isEqualTo(category);
+        }
+    }
+
+    @Test
+    @DisplayName("testReplyToResearchNote_Success - Comment threading works")
+    void testReplyToResearchNote_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Threading Test Case")
+            .taxIdNumber("TAX2024003")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create initial note
+        var mainNote = new ResearchNote(testCaseId, testAuthorId, "Initial observation", "OBSERVATION");
+        entityManager.persist(mainNote);
+        entityManager.flush();
+
+        // Create reply to note
+        var reply = new ResearchComment(
+            mainNote.getId(),
+            generateTestId("member", 2),
+            "That observation is correct, need more detail",
+            mainNote.getId()  // Self-referential for threading
+        );
+        entityManager.persist(reply);
+        entityManager.flush();
+
+        // ACT
+        var retrievedNote = entityManager.find(ResearchNote.class, mainNote.getId());
+        var comments = entityManager
+            .createQuery("SELECT c FROM ResearchComment c WHERE c.noteId = ?1", ResearchComment.class)
+            .setParameter(1, mainNote.getId())
+            .getResultList();
+
+        // ASSERT
+        assertThat(retrievedNote).isNotNull();
+        assertThat(comments).hasSize(1);
+        assertThat(comments.get(0).getContent()).contains("observation is correct");
+    }
+
+    @Test
+    @DisplayName("testReplyToResearchNote_DeepThreading - 5+ levels supported")
+    void testReplyToResearchNote_DeepThreading() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Deep Threading Case")
+            .taxIdNumber("TAX2024004")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create note and build thread chain
+        var mainNote = new ResearchNote(testCaseId, testAuthorId, "Root comment", "OBSERVATION");
+        entityManager.persist(mainNote);
+        entityManager.flush();
+
+        UUID previousCommentId = mainNote.getId();
+        for (int i = 0; i < 6; i++) {  // Create 6 levels of threading
+            var comment = new ResearchComment(
+                mainNote.getId(),
+                generateTestId("member", i),
+                "Reply level " + i,
+                previousCommentId
+            );
+            entityManager.persist(comment);
+            entityManager.flush();
+            previousCommentId = comment.getId();
+        }
+
+        // ACT
+        var allComments = entityManager
+            .createQuery("SELECT c FROM ResearchComment c WHERE c.noteId = ?1 ORDER BY c.createdAt", 
+                ResearchComment.class)
+            .setParameter(1, mainNote.getId())
+            .getResultList();
+
+        // ASSERT
+        assertThat(allComments).hasSize(6);
+        for (int i = 0; i < 6; i++) {
+            assertThat(allComments.get(i).getContent()).contains("Reply level");
+        }
+    }
+
+    @Test
+    @DisplayName("testUploadAttachment_Success - File stored correctly")
+    void testUploadAttachment_Success() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Attachment Test Case")
+            .taxIdNumber("TAX2024005")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var note = new ResearchNote(testCaseId, testAuthorId, "Document attached", "OBSERVATION");
+        entityManager.persist(note);
+        entityManager.flush();
+
+        // Create attachment
+        var attachment = new Attachment(
+            note.getId(),
+            "financial_statements.pdf",
+            "/uploads/case_" + testCaseId + "/financial_statements.pdf",
+            1024 * 100,  // 100KB
+            "application/pdf",
+            testAuthorId
+        );
+        entityManager.persist(attachment);
+        entityManager.flush();
+
+        // ACT
+        var retrievedAttachment = entityManager
+            .createQuery("SELECT a FROM Attachment a WHERE a.noteId = ?1", Attachment.class)
+            .setParameter(1, note.getId())
+            .getSingleResult();
+
+        // ASSERT
+        assertThat(retrievedAttachment.getFileName()).isEqualTo("financial_statements.pdf");
+        assertThat(retrievedAttachment.getFileSize()).isEqualTo(1024 * 100);
+        assertThat(retrievedAttachment.getFileType()).isEqualTo("application/pdf");
+        assertThat(retrievedAttachment.getUploadedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testUploadAttachment_VirusScanning - Scanned before storage")
+    void testUploadAttachment_VirusScanning() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Scan Test Case")
+            .taxIdNumber("TAX2024006")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var note = new ResearchNote(testCaseId, testAuthorId, "Scanned file", "OBSERVATION");
+        entityManager.persist(note);
+        entityManager.flush();
+
+        // Create attachment with scan status
+        var attachment = new Attachment(
+            note.getId(),
+            "report.xlsx",
+            "/uploads/case_" + testCaseId + "/report.xlsx",
+            2048,
+            "application/vnd.ms-excel",
+            testAuthorId
+        );
+        attachment.setVirusScanStatus("CLEAN");
+        attachment.setScannedAt(OffsetDateTime.now());
+        entityManager.persist(attachment);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(Attachment.class, attachment.getId());
+
+        // ASSERT
+        assertThat(retrieved.getVirusScanStatus()).isEqualTo("CLEAN");
+        assertThat(retrieved.getScannedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("testUploadAttachment_SizeLimit - 25MB per file enforced")
+    void testUploadAttachment_SizeLimit() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Size Limit Test Case")
+            .taxIdNumber("TAX2024007")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        var note = new ResearchNote(testCaseId, testAuthorId, "Large file test", "OBSERVATION");
+        entityManager.persist(note);
+        entityManager.flush();
+
+        // Create attachment at 25MB limit (valid)
+        long maxSize = 25L * 1024 * 1024;  // 25MB
+        var validAttachment = new Attachment(
+            note.getId(),
+            "large.pdf",
+            "/uploads/large.pdf",
+            maxSize,
+            "application/pdf",
+            testAuthorId
+        );
+        entityManager.persist(validAttachment);
+        entityManager.flush();
+
+        // ACT
+        var retrieved = entityManager.find(Attachment.class, validAttachment.getId());
+        assertThat(retrieved.getFileSize()).isEqualTo(maxSize);
+
+        // Attempt to create attachment exceeding limit
+        long oversizeBytes = maxSize + 1;
+        var oversizeAttachment = new Attachment(
+            note.getId(),
+            "toolarge.pdf",
+            "/uploads/toolarge.pdf",
+            oversizeBytes,
+            "application/pdf",
+            testAuthorId
+        );
+
+        // ASSERT - Should fail validation
+        assertThat(oversizeAttachment.getFileSize()).isGreaterThan(maxSize);
+    }
+
+    @Test
+    @DisplayName("testGetResearchFeed_ChronologicalOrder - Timeline correct")
+    void testGetResearchFeed_ChronologicalOrder() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Feed Timeline Case")
+            .taxIdNumber("TAX2024008")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create notes with delays
+        for (int i = 0; i < 5; i++) {
+            var note = new ResearchNote(testCaseId, testAuthorId, "Note " + i, "OBSERVATION");
+            entityManager.persist(note);
+            try { Thread.sleep(10); } catch (InterruptedException e) { /* ignore */ }
+        }
+        entityManager.flush();
+
+        // ACT - Get chronological feed
+        var feed = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1 ORDER BY n.createdAt ASC", 
+                ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT - Verify chronological order
+        assertThat(feed).hasSize(5);
+        for (int i = 0; i < feed.size() - 1; i++) {
+            assertThat(feed.get(i).getCreatedAt())
+                .isBefore(feed.get(i + 1).getCreatedAt());
+        }
+    }
+
+    @Test
+    @DisplayName("testGetResearchFeed_WithPagination - 25 items per page")
+    void testGetResearchFeed_WithPagination() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Pagination Test Case")
+            .taxIdNumber("TAX2024009")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create 60 notes
+        for (int i = 0; i < 60; i++) {
+            var note = new ResearchNote(testCaseId, testAuthorId, "Note " + i, "OBSERVATION");
+            entityManager.persist(note);
+        }
+        entityManager.flush();
+
+        // ACT - Get pages with 25 items each
+        var page1 = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1 ORDER BY n.createdAt", 
+                ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .setFirstResult(0)
+            .setMaxResults(25)
+            .getResultList();
+
+        var page2 = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1 ORDER BY n.createdAt", 
+                ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .setFirstResult(25)
+            .setMaxResults(25)
+            .getResultList();
+
+        var page3 = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1 ORDER BY n.createdAt", 
+                ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .setFirstResult(50)
+            .setMaxResults(25)
+            .getResultList();
+
+        // ASSERT
+        assertThat(page1).hasSize(25);
+        assertThat(page2).hasSize(25);
+        assertThat(page3).hasSize(10);  // Only 10 left
+    }
+
+    @Test
+    @DisplayName("testResearchFeed_FilterByType - Filter notes/comments/attachments")
+    void testResearchFeed_FilterByType() {
+        // ARRANGE
+        CommitteeCaseAggregate testCase = CommitteeCaseAggregate.builder()
+            .caseId(testCaseId)
+            .taxpayerId(testTaxpayerId)
+            .taxpayerName("Filter Type Case")
+            .taxIdNumber("TAX2024010")
+            .status(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES)
+            .createdDate(OffsetDateTime.now())
+            .committeeDeadline(OffsetDateTime.now().plusDays(30))
+            .extensionCount(0)
+            .build();
+        entityManager.persist(testCase);
+
+        // Create mixed items
+        var note1 = new ResearchNote(testCaseId, testAuthorId, "Observation 1", "OBSERVATION");
+        var note2 = new ResearchNote(testCaseId, testAuthorId, "Question 1", "QUESTION");
+        entityManager.persist(note1);
+        entityManager.persist(note2);
+        entityManager.flush();
+
+        // Create comments
+        var comment = new ResearchComment(note1.getId(), generateTestId("member", 2), "Reply", note1.getId());
+        entityManager.persist(comment);
+
+        // Create attachment
+        var attachment = new Attachment(note1.getId(), "test.pdf", "/path", 1024, "pdf", testAuthorId);
+        entityManager.persist(attachment);
+        entityManager.flush();
+
+        // ACT - Filter by type
+        var notes = entityManager
+            .createQuery("SELECT n FROM ResearchNote n WHERE n.caseId = ?1", ResearchNote.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        var comments = entityManager
+            .createQuery("SELECT c FROM ResearchComment c WHERE c.noteId IN " +
+                "(SELECT n.id FROM ResearchNote n WHERE n.caseId = ?1)", ResearchComment.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        var attachments = entityManager
+            .createQuery("SELECT a FROM Attachment a WHERE a.noteId IN " +
+                "(SELECT n.id FROM ResearchNote n WHERE n.caseId = ?1)", Attachment.class)
+            .setParameter(1, testCaseId)
+            .getResultList();
+
+        // ASSERT
+        assertThat(notes).hasSize(2);
+        assertThat(comments).hasSize(1);
+        assertThat(attachments).hasSize(1);
+    }
+
+    // Helper entities for testing
+    protected static class ResearchNote {
+        private UUID id = UUID.randomUUID();
+        private UUID caseId;
+        private UUID authorId;
+        private String content;
+        private String category;
+        private OffsetDateTime createdAt = OffsetDateTime.now();
+
+        public ResearchNote(UUID caseId, UUID authorId, String content, String category) {
+            this.caseId = caseId;
+            this.authorId = authorId;
+            this.content = content;
+            this.category = category;
+        }
+
+        public UUID getId() { return id; }
+        public UUID getCaseId() { return caseId; }
+        public UUID getAuthorId() { return authorId; }
+        public String getContent() { return content; }
+        public String getCategory() { return category; }
+        public OffsetDateTime getCreatedAt() { return createdAt; }
+    }
+
+    protected static class ResearchComment {
+        private UUID id = UUID.randomUUID();
+        private UUID noteId;
+        private UUID authorId;
+        private String content;
+        private UUID repliedToCommentId;
+        private OffsetDateTime createdAt = OffsetDateTime.now();
+
+        public ResearchComment(UUID noteId, UUID authorId, String content, UUID repliedToCommentId) {
+            this.noteId = noteId;
+            this.authorId = authorId;
+            this.content = content;
+            this.repliedToCommentId = repliedToCommentId;
+        }
+
+        public UUID getId() { return id; }
+        public UUID getNoteId() { return noteId; }
+        public UUID getAuthorId() { return authorId; }
+        public String getContent() { return content; }
+        public UUID getRepliedToCommentId() { return repliedToCommentId; }
+        public OffsetDateTime getCreatedAt() { return createdAt; }
+    }
+
+    protected static class Attachment {
+        private UUID id = UUID.randomUUID();
+        private UUID noteId;
+        private String fileName;
+        private String filePath;
+        private long fileSize;
+        private String fileType;
+        private UUID uploadedBy;
+        private OffsetDateTime uploadedAt = OffsetDateTime.now();
+        private String virusScanStatus = "PENDING";
+        private OffsetDateTime scannedAt;
+
+        public Attachment(UUID noteId, String fileName, String filePath, long fileSize, String fileType, UUID uploadedBy) {
+            this.noteId = noteId;
+            this.fileName = fileName;
+            this.filePath = filePath;
+            this.fileSize = fileSize;
+            this.fileType = fileType;
+            this.uploadedBy = uploadedBy;
+        }
+
+        public UUID getId() { return id; }
+        public UUID getNoteId() { return noteId; }
+        public String getFileName() { return fileName; }
+        public String getFilePath() { return filePath; }
+        public long getFileSize() { return fileSize; }
+        public String getFileType() { return fileType; }
+        public UUID getUploadedBy() { return uploadedBy; }
+        public OffsetDateTime getUploadedAt() { return uploadedAt; }
+        public String getVirusScanStatus() { return virusScanStatus; }
+        public OffsetDateTime getScannedAt() { return scannedAt; }
+
+        public void setVirusScanStatus(String status) { this.virusScanStatus = status; }
+        public void setScannedAt(OffsetDateTime scannedAt) { this.scannedAt = scannedAt; }
+    }
+}

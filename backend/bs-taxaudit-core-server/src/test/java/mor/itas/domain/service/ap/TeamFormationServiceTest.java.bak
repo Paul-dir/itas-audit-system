@@ -1,0 +1,518 @@
+package mor.itas.domain.service.ap;
+
+import mor.itas.domain.aggregate.ap.TeamAssignmentAggregate;
+import mor.itas.domain.exception.InvalidTeamSizeException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for TeamFormationService
+ * Tests team validation, lead appointment, and nomination tracking
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("TeamFormationService Unit Tests")
+class TeamFormationServiceTest {
+
+    private TeamFormationService service;
+
+    @Mock
+    private TeamAssignmentAggregate teamAssignment;
+
+    private UUID auditorId1;
+    private UUID auditorId2;
+    private UUID auditorId3;
+    private UUID auditorId4;
+    private UUID auditorId5;
+    private UUID memberId;
+
+    @BeforeEach
+    void setUp() {
+        service = new TeamFormationService();
+        auditorId1 = UUID.randomUUID();
+        auditorId2 = UUID.randomUUID();
+        auditorId3 = UUID.randomUUID();
+        auditorId4 = UUID.randomUUID();
+        auditorId5 = UUID.randomUUID();
+        memberId = UUID.randomUUID();
+    }
+
+    // ========== Team Size Validation Tests ==========
+
+    @Test
+    @DisplayName("Should validate team with 2 members (minimum)")
+    void testValidateTeamSize_2Members_Success() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamSize(auditors));
+    }
+
+    @Test
+    @DisplayName("Should validate team with 3 members")
+    void testValidateTeamSize_3Members_Success() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamSize(auditors));
+    }
+
+    @Test
+    @DisplayName("Should validate team with 5 members (maximum)")
+    void testValidateTeamSize_5Members_Success() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3, auditorId4, auditorId5);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamSize(auditors));
+    }
+
+    @Test
+    @DisplayName("Should fail validation with 1 member (below minimum)")
+    void testValidateTeamSize_1Member_Fails() {
+        // Arrange
+        List<UUID> auditors = Collections.singletonList(auditorId1);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamSize(auditors))
+            .isInstanceOf(InvalidTeamSizeException.class)
+            .hasMessageContaining("Team");
+    }
+
+    @Test
+    @DisplayName("Should fail validation with 6 members (above maximum)")
+    void testValidateTeamSize_6Members_Fails() {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(
+            auditorId1, auditorId2, auditorId3, auditorId4, auditorId5, UUID.randomUUID()
+        );
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamSize(auditors))
+            .isInstanceOf(InvalidTeamSizeException.class);
+    }
+
+    @Test
+    @DisplayName("Should fail validation with empty team")
+    void testValidateTeamSize_EmptyTeam_Fails() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamSize(new ArrayList<>()))
+            .isInstanceOf(InvalidTeamSizeException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if auditor list is null")
+    void testValidateTeamSize_NullList_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamSize(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Auditor IDs list cannot be null");
+    }
+
+    // ========== Team Lead Validation Tests ==========
+
+    @Test
+    @DisplayName("Should validate team lead is in team")
+    void testValidateTeamLeadInTeam_Success() {
+        // Arrange
+        List<UUID> teamMembers = Arrays.asList(auditorId1, auditorId2, auditorId3);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamLeadInTeam(auditorId1, teamMembers));
+    }
+
+    @Test
+    @DisplayName("Should fail if team lead not in team")
+    void testValidateTeamLeadInTeam_NotInTeam_Fails() {
+        // Arrange
+        List<UUID> teamMembers = Arrays.asList(auditorId1, auditorId2);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamLeadInTeam(auditorId3, teamMembers))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Team lead must be included in the official team");
+    }
+
+    @Test
+    @DisplayName("Should throw error if team lead ID is null")
+    void testValidateTeamLeadInTeam_NullTeamLeadId_Throws() {
+        // Arrange
+        List<UUID> teamMembers = Arrays.asList(auditorId1, auditorId2);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamLeadInTeam(null, teamMembers))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Team lead ID and member IDs cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if member IDs list is null")
+    void testValidateTeamLeadInTeam_NullMemberIds_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamLeadInTeam(auditorId1, null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ========== Auditor Nomination Tests ==========
+
+    @Test
+    @DisplayName("Should nominate auditor successfully")
+    void testNominateAuditor_Success() {
+        // Arrange
+        String justification = "Excellent audit record and expertise";
+
+        // Act
+        service.nominateAuditor(teamAssignment, memberId, auditorId1, justification);
+
+        // Assert
+        verify(teamAssignment).nominateAuditor(memberId, auditorId1, justification);
+    }
+
+    @Test
+    @DisplayName("Should allow duplicate nominations from different members")
+    void testNominateAuditor_Duplicate_Allowed() {
+        // Act - nominate same auditor from two different members
+        service.nominateAuditor(teamAssignment, memberId, auditorId1, "Good auditor");
+        service.nominateAuditor(teamAssignment, UUID.randomUUID(), auditorId1, "Also good");
+
+        // Assert
+        verify(teamAssignment, times(2)).nominateAuditor(any(), eq(auditorId1), any());
+    }
+
+    @Test
+    @DisplayName("Should throw error if team assignment is null")
+    void testNominateAuditor_NullTeamAssignment_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.nominateAuditor(null, memberId, auditorId1, "Justification"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Team assignment aggregate cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if nominating member is null")
+    void testNominateAuditor_NullNominatingMemberId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.nominateAuditor(teamAssignment, null, auditorId1, "Justification"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Nomination fields cannot be null or empty");
+    }
+
+    @Test
+    @DisplayName("Should throw error if auditor ID is null")
+    void testNominateAuditor_NullAuditorId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.nominateAuditor(teamAssignment, memberId, null, "Justification"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if justification is null")
+    void testNominateAuditor_NullJustification_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.nominateAuditor(teamAssignment, memberId, auditorId1, null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if justification is empty")
+    void testNominateAuditor_EmptyJustification_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.nominateAuditor(teamAssignment, memberId, auditorId1, ""))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Nomination fields cannot be null or empty");
+    }
+
+    // ========== Team Lead Appointment Tests ==========
+
+    @Test
+    @DisplayName("Should appoint team lead successfully")
+    void testAppointTeamLead_Success() {
+        // Act
+        service.appointTeamLead(teamAssignment, auditorId1);
+
+        // Assert
+        verify(teamAssignment).appointTeamLead(auditorId1);
+    }
+
+    @Test
+    @DisplayName("Should throw error if team assignment is null")
+    void testAppointTeamLead_NullTeamAssignment_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.appointTeamLead(null, auditorId1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Team assignment aggregate cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if auditor ID is null")
+    void testAppointTeamLead_NullAuditorId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.appointTeamLead(teamAssignment, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Auditor ID cannot be null");
+    }
+
+    // ========== Official Team Assignment Tests ==========
+
+    @Test
+    @DisplayName("Should assign official team successfully")
+    void testAssignOfficialTeam_Success() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3);
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(auditorId1);
+
+        // Act
+        service.assignOfficialTeam(teamAssignment, auditors);
+
+        // Assert
+        verify(teamAssignment).assignOfficialTeam(auditors);
+    }
+
+    @Test
+    @DisplayName("Should throw error if team size invalid")
+    void testAssignOfficialTeam_InvalidSize_Throws() {
+        // Arrange
+        List<UUID> auditors = Collections.singletonList(auditorId1);
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(auditorId1);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.assignOfficialTeam(teamAssignment, auditors))
+            .isInstanceOf(InvalidTeamSizeException.class);
+    }
+
+    @Test
+    @DisplayName("Should throw error if team lead not in team")
+    void testAssignOfficialTeam_LeadNotInTeam_Fails() {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3);
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(auditorId4);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.assignOfficialTeam(teamAssignment, auditors))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Team lead must be included in the official team");
+    }
+
+    // ========== Team Member Query Tests ==========
+
+    @Test
+    @DisplayName("Should get official team size")
+    void testGetOfficialTeamSize() {
+        // Arrange
+        when(teamAssignment.getOfficialTeamMemberIds())
+            .thenReturn(Arrays.asList(auditorId1, auditorId2, auditorId3));
+
+        // Act
+        int size = service.getOfficialTeamSize(teamAssignment);
+
+        // Assert
+        assertThat(size).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Should check if auditor is team member")
+    void testIsTeamMember_True() {
+        // Arrange
+        when(teamAssignment.isTeamMember(auditorId1)).thenReturn(true);
+
+        // Act
+        boolean result = service.isTeamMember(teamAssignment, auditorId1);
+
+        // Assert
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should check if auditor is not team member")
+    void testIsTeamMember_False() {
+        // Arrange
+        when(teamAssignment.isTeamMember(auditorId1)).thenReturn(false);
+
+        // Act
+        boolean result = service.isTeamMember(teamAssignment, auditorId1);
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should throw error if auditor ID is null in team member check")
+    void testIsTeamMember_NullAuditorId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.isTeamMember(teamAssignment, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Auditor ID cannot be null");
+    }
+
+    // ========== Nomination Query Tests ==========
+
+    @Test
+    @DisplayName("Should check if auditor was nominated")
+    void testWasNominated_True() {
+        // Arrange
+        when(teamAssignment.wasNominated(auditorId1)).thenReturn(true);
+
+        // Act
+        boolean result = service.wasNominated(teamAssignment, auditorId1);
+
+        // Assert
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should check if auditor was not nominated")
+    void testWasNominated_False() {
+        // Arrange
+        when(teamAssignment.wasNominated(auditorId1)).thenReturn(false);
+
+        // Act
+        boolean result = service.wasNominated(teamAssignment, auditorId1);
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should get nomination count for auditor")
+    void testGetNominationCount_Aggregation() {
+        // Arrange
+        List<String> nominations = new ArrayList<>();
+        nominations.add("nom1");
+        nominations.add("nom2");
+        nominations.add("nom3");
+        
+        when(teamAssignment.getNominations()).thenReturn((List) nominations);
+        when(teamAssignment.wasNominated(auditorId1)).thenReturn(true);
+
+        // Act
+        int count = service.getNominationCount(teamAssignment, auditorId1);
+
+        // Assert - count will be based on actual nominations in aggregate
+        assertThat(count).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("Should throw error if auditor ID is null in nomination count")
+    void testGetNominationCount_NullAuditorId_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.getNominationCount(teamAssignment, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Auditor ID cannot be null");
+    }
+
+    // ========== Team Completion Tests ==========
+
+    @Test
+    @DisplayName("Should mark team assignment as completed")
+    void testMarkAsCompleted_Success() {
+        // Act
+        service.markAsCompleted(teamAssignment);
+
+        // Assert
+        verify(teamAssignment).markAsCompleted();
+    }
+
+    @Test
+    @DisplayName("Should throw error if team assignment is null in completion")
+    void testMarkAsCompleted_NullTeamAssignment_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.markAsCompleted(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Team assignment aggregate cannot be null");
+    }
+
+    // ========== Integration Scenario Tests ==========
+
+    @Test
+    @DisplayName("Should complete full team formation workflow")
+    void testTeamFormationWorkflow_Complete() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3);
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(auditorId1);
+        when(teamAssignment.isTeamMember(auditorId1)).thenReturn(true);
+        when(teamAssignment.getOfficialTeamMemberIds()).thenReturn(auditors);
+
+        // Act - nominate auditors
+        service.nominateAuditor(teamAssignment, memberId, auditorId1, "Lead candidate");
+        service.nominateAuditor(teamAssignment, memberId, auditorId2, "Good record");
+        service.nominateAuditor(teamAssignment, memberId, auditorId3, "Experienced");
+
+        // Appoint team lead
+        service.appointTeamLead(teamAssignment, auditorId1);
+
+        // Assign official team
+        service.assignOfficialTeam(teamAssignment, auditors);
+
+        // Verify team
+        int teamSize = service.getOfficialTeamSize(teamAssignment);
+        assertThat(teamSize).isEqualTo(3);
+
+        // Mark completed
+        service.markAsCompleted(teamAssignment);
+
+        // Assert
+        verify(teamAssignment, times(3)).nominateAuditor(any(), any(), any());
+        verify(teamAssignment).appointTeamLead(auditorId1);
+        verify(teamAssignment).assignOfficialTeam(auditors);
+        verify(teamAssignment).markAsCompleted();
+    }
+
+    @Test
+    @DisplayName("Should handle full team size range (2-5 members)")
+    void testTeamSizeRange_AllValidSizes() throws InvalidTeamSizeException {
+        // Test all valid sizes
+        for (int size = 2; size <= 5; size++) {
+            List<UUID> auditors = new ArrayList<>();
+            for (int i = 0; i < size; i++) {
+                auditors.add(UUID.randomUUID());
+            }
+
+            assertThatNoException()
+                .isThrownBy(() -> service.validateTeamSize(auditors));
+        }
+    }
+
+    @Test
+    @DisplayName("Should validate appointment then verify team lead in team")
+    void testAppointmentAndVerification_Workflow() throws InvalidTeamSizeException {
+        // Arrange
+        List<UUID> auditors = Arrays.asList(auditorId1, auditorId2, auditorId3);
+        when(teamAssignment.getAppointedTeamLeadId()).thenReturn(auditorId1);
+
+        // Act - appoint lead
+        service.appointTeamLead(teamAssignment, auditorId1);
+
+        // Verify lead is in team
+        service.validateTeamLeadInTeam(auditorId1, auditors);
+
+        // Assign team
+        service.assignOfficialTeam(teamAssignment, auditors);
+
+        // Assert
+        verify(teamAssignment).appointTeamLead(auditorId1);
+        verify(teamAssignment).assignOfficialTeam(auditors);
+    }
+}

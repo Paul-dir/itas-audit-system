@@ -1,0 +1,298 @@
+package mor.itas.persistence.repository.ap;
+
+import mor.itas.persistence.jpa.entity.ap.CommitteeCaseEntity;
+import mor.itas.persistence.jpa.repository.ap.CommitteeCaseRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.PostgreSQLContainer;
+
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * CommitteeCaseRepositoryIntegrationTest - @DataJpaTest with TestContainers PostgreSQL
+ * Tests committee case persistence, queries, filtering, and status management
+ */
+@DataJpaTest
+@Testcontainers
+@ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@DisplayName("Committee Case Repository Integration Tests")
+public class CommitteeCaseRepositoryIntegrationTest {
+
+    @Container
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+        .withReuse(true);
+
+    @Autowired
+    private CommitteeCaseRepository repository;
+
+    private CommitteeCaseEntity testCase;
+    private UUID taxpayerId;
+
+    @BeforeEach
+    void setUp() {
+        taxpayerId = UUID.randomUUID();
+
+        // Create test case
+        testCase = new CommitteeCaseEntity();
+        testCase.setCaseId(UUID.randomUUID());
+        testCase.setOriginalCaseId(UUID.randomUUID());
+        testCase.setTaxpayerId(taxpayerId);
+        testCase.setTaxpayerName("ABC Corporation");
+        testCase.setTaxIdentificationNumber("TIN123456");
+        testCase.setSegment("LTO");
+        testCase.setIndustry("Manufacturing");
+        testCase.setRiskScore(75);
+        testCase.setRiskPriority("High");
+        testCase.setStatus("PENDING_VOTES");
+        testCase.setCreatedDate(OffsetDateTime.now());
+        testCase.setCommitteeDeadline(OffsetDateTime.now().plusDays(7));
+    }
+
+    // ============= SAVE & RETRIEVE Tests =============
+
+    @Test
+    @DisplayName("Test 1: Save case and retrieve - persists correctly")
+    void test_saveCaseAndRetrieve_PersistsCorrectly() {
+        // Arrange & Act
+        CommitteeCaseEntity saved = repository.save(testCase);
+
+        // Assert
+        assertThat(saved).isNotNull();
+        assertThat(saved.getCaseId()).isNotNull();
+        assertThat(saved.getTaxpayerName()).isEqualTo("ABC Corporation");
+        assertThat(saved.getStatus()).isEqualTo("PENDING_VOTES");
+
+        // Verify retrieval
+        Optional<CommitteeCaseEntity> retrieved = repository.findById(saved.getCaseId());
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().getTaxIdentificationNumber()).isEqualTo("TIN123456");
+    }
+
+    // ============= FIND BY STATUS Tests =============
+
+    @Test
+    @DisplayName("Test 2: Find by status returns matching cases")
+    void test_findByStatus_ReturnsMatchingCases() {
+        // Arrange
+        CommitteeCaseEntity case1 = new CommitteeCaseEntity();
+        case1.setCaseId(UUID.randomUUID());
+        case1.setOriginalCaseId(UUID.randomUUID());
+        case1.setTaxpayerId(UUID.randomUUID());
+        case1.setTaxpayerName("Company A");
+        case1.setStatus("PENDING_VOTES");
+        case1.setCreatedDate(OffsetDateTime.now());
+        case1.setCommitteeDeadline(OffsetDateTime.now().plusDays(5));
+
+        CommitteeCaseEntity case2 = new CommitteeCaseEntity();
+        case2.setCaseId(UUID.randomUUID());
+        case2.setOriginalCaseId(UUID.randomUUID());
+        case2.setTaxpayerId(UUID.randomUUID());
+        case2.setTaxpayerName("Company B");
+        case2.setStatus("APPROVED");
+        case2.setCreatedDate(OffsetDateTime.now());
+        case2.setCommitteeDeadline(OffsetDateTime.now().plusDays(10));
+
+        repository.saveAll(Arrays.asList(case1, case2));
+
+        // Act
+        List<CommitteeCaseEntity> pendingVotesCases = repository.findByStatus("PENDING_VOTES");
+
+        // Assert
+        assertThat(pendingVotesCases).hasSize(1);
+        assertThat(pendingVotesCases.get(0).getStatus()).isEqualTo("PENDING_VOTES");
+    }
+
+    // ============= FIND BY DEADLINE RANGE Tests =============
+
+    @Test
+    @DisplayName("Test 3: Find cases by deadline within SLA range")
+    void test_findByDeadlineWithinRange_ReturnsSLACases() {
+        // Arrange
+        OffsetDateTime startDate = OffsetDateTime.now();
+        OffsetDateTime endDate = OffsetDateTime.now().plusDays(14);
+
+        CommitteeCaseEntity withinRange = new CommitteeCaseEntity();
+        withinRange.setCaseId(UUID.randomUUID());
+        withinRange.setOriginalCaseId(UUID.randomUUID());
+        withinRange.setTaxpayerId(UUID.randomUUID());
+        withinRange.setTaxpayerName("Within Range");
+        withinRange.setStatus("PENDING_VOTES");
+        withinRange.setCreatedDate(OffsetDateTime.now());
+        withinRange.setCommitteeDeadline(OffsetDateTime.now().plusDays(7));
+
+        CommitteeCaseEntity outsideRange = new CommitteeCaseEntity();
+        outsideRange.setCaseId(UUID.randomUUID());
+        outsideRange.setOriginalCaseId(UUID.randomUUID());
+        outsideRange.setTaxpayerId(UUID.randomUUID());
+        outsideRange.setTaxpayerName("Outside Range");
+        outsideRange.setStatus("PENDING_VOTES");
+        outsideRange.setCreatedDate(OffsetDateTime.now());
+        outsideRange.setCommitteeDeadline(OffsetDateTime.now().plusDays(30));
+
+        repository.saveAll(Arrays.asList(withinRange, outsideRange));
+
+        // Act
+        List<CommitteeCaseEntity> casesInRange = repository.findByCommitteeCaseDeadlineBetween(startDate, endDate);
+
+        // Assert
+        assertThat(casesInRange.size()).isGreaterThanOrEqualTo(1);
+        assertThat(casesInRange).anySatisfy(c -> assertThat(c.getTaxpayerName()).isEqualTo("Within Range"));
+    }
+
+    // ============= FIND BY TAXPAYER ID Tests =============
+
+    @Test
+    @DisplayName("Test 4: Find by taxpayer ID returns all cases for taxpayer")
+    void test_findByTaxpayerId_ReturnsAllCasesForTaxpayer() {
+        // Arrange
+        CommitteeCaseEntity case1 = new CommitteeCaseEntity();
+        case1.setCaseId(UUID.randomUUID());
+        case1.setOriginalCaseId(UUID.randomUUID());
+        case1.setTaxpayerId(taxpayerId);
+        case1.setTaxpayerName("ABC Corp - Case 1");
+        case1.setStatus("PENDING_VOTES");
+        case1.setCreatedDate(OffsetDateTime.now());
+        case1.setCommitteeDeadline(OffsetDateTime.now().plusDays(5));
+
+        CommitteeCaseEntity case2 = new CommitteeCaseEntity();
+        case2.setCaseId(UUID.randomUUID());
+        case2.setOriginalCaseId(UUID.randomUUID());
+        case2.setTaxpayerId(taxpayerId);
+        case2.setTaxpayerName("ABC Corp - Case 2");
+        case2.setStatus("APPROVED");
+        case2.setCreatedDate(OffsetDateTime.now().minusDays(1));
+        case2.setCommitteeDeadline(OffsetDateTime.now().plusDays(10));
+
+        repository.saveAll(Arrays.asList(case1, case2));
+
+        // Act
+        List<CommitteeCaseEntity> taxpayerCases = repository.findByTaxpayerId(taxpayerId);
+
+        // Assert
+        assertThat(taxpayerCases.size()).isGreaterThanOrEqualTo(2);
+        assertThat(taxpayerCases).allSatisfy(c -> assertThat(c.getTaxpayerId()).isEqualTo(taxpayerId));
+    }
+
+    // ============= UPDATE STATUS & AUDIT TRAIL Tests =============
+
+    @Test
+    @DisplayName("Test 5: Update case status and audit trail is recorded")
+    void test_updateCaseStatus_AuditTrailRecorded() {
+        // Arrange
+        CommitteeCaseEntity saved = repository.save(testCase);
+        String originalStatus = saved.getStatus();
+
+        // Act
+        saved.setStatus("PENDING_VIABILITY");
+        CommitteeCaseEntity updated = repository.save(saved);
+
+        // Assert
+        assertThat(updated.getStatus()).isEqualTo("PENDING_VIABILITY");
+        assertThat(updated.getStatus()).isNotEqualTo(originalStatus);
+
+        // Verify the update persisted
+        Optional<CommitteeCaseEntity> retrieved = repository.findById(updated.getCaseId());
+        assertThat(retrieved.get().getStatus()).isEqualTo("PENDING_VIABILITY");
+    }
+
+    // ============= COMBINED FILTERS Tests =============
+
+    @Test
+    @DisplayName("Test 6: Find with combined filters - status AND risk priority")
+    void test_findWithFilters_CombinedStatusAndDeadline() {
+        // Arrange
+        CommitteeCaseEntity highRiskPending = new CommitteeCaseEntity();
+        highRiskPending.setCaseId(UUID.randomUUID());
+        highRiskPending.setOriginalCaseId(UUID.randomUUID());
+        highRiskPending.setTaxpayerId(UUID.randomUUID());
+        highRiskPending.setTaxpayerName("High Risk Pending");
+        highRiskPending.setRiskPriority("High");
+        highRiskPending.setStatus("PENDING_VOTES");
+        highRiskPending.setCreatedDate(OffsetDateTime.now());
+        highRiskPending.setCommitteeDeadline(OffsetDateTime.now().plusDays(3));
+
+        CommitteeCaseEntity mediumRiskPending = new CommitteeCaseEntity();
+        mediumRiskPending.setCaseId(UUID.randomUUID());
+        mediumRiskPending.setOriginalCaseId(UUID.randomUUID());
+        mediumRiskPending.setTaxpayerId(UUID.randomUUID());
+        mediumRiskPending.setTaxpayerName("Medium Risk Pending");
+        mediumRiskPending.setRiskPriority("Medium");
+        mediumRiskPending.setStatus("PENDING_VOTES");
+        mediumRiskPending.setCreatedDate(OffsetDateTime.now());
+        mediumRiskPending.setCommitteeDeadline(OffsetDateTime.now().plusDays(4));
+
+        repository.saveAll(Arrays.asList(highRiskPending, mediumRiskPending));
+
+        // Act
+        Page<CommitteeCaseEntity> highRiskCases = repository.findByStatusAndRiskPriority(
+            "PENDING_VOTES", "High", PageRequest.of(0, 10)
+        );
+
+        // Assert
+        assertThat(highRiskCases.getContent()).allSatisfy(c -> 
+            assertThat(c.getRiskPriority()).isEqualTo("High")
+        );
+    }
+
+    // ============= PAGINATION Tests =============
+
+    @Test
+    @DisplayName("Test 7: Pagination returns correct page")
+    void test_pagination_ReturnsCorrectPage() {
+        // Arrange - create 25 cases
+        for (int i = 0; i < 25; i++) {
+            CommitteeCaseEntity caseEntity = new CommitteeCaseEntity();
+            caseEntity.setCaseId(UUID.randomUUID());
+            caseEntity.setOriginalCaseId(UUID.randomUUID());
+            caseEntity.setTaxpayerId(UUID.randomUUID());
+            caseEntity.setTaxpayerName("Case " + i);
+            caseEntity.setStatus("PENDING_VOTES");
+            caseEntity.setCreatedDate(OffsetDateTime.now());
+            caseEntity.setCommitteeDeadline(OffsetDateTime.now().plusDays(5));
+            repository.save(caseEntity);
+        }
+
+        // Act
+        Page<CommitteeCaseEntity> page0 = repository.findByStatus("PENDING_VOTES", PageRequest.of(0, 10));
+        Page<CommitteeCaseEntity> page1 = repository.findByStatus("PENDING_VOTES", PageRequest.of(1, 10));
+
+        // Assert
+        assertThat(page0.getNumber()).isEqualTo(0);
+        assertThat(page0.getSize()).isEqualTo(10);
+        assertThat(page1.getNumber()).isEqualTo(1);
+        assertThat(page0.getContent()).isNotEqualTo(page1.getContent());
+    }
+
+    // ============= OPTIMISTIC LOCKING Tests =============
+
+    @Test
+    @DisplayName("Test 8: Optimistic locking - version increments on update")
+    void test_optimisticLocking_VersionIncrements() {
+        // Arrange
+        CommitteeCaseEntity saved = repository.save(testCase);
+        Long initialVersion = saved.getVersion();
+
+        // Act
+        saved.setStatus("APPROVED");
+        CommitteeCaseEntity updated = repository.save(saved);
+
+        // Assert
+        assertThat(updated.getVersion()).isGreaterThan(initialVersion);
+    }
+}

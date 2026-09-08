@@ -1,0 +1,554 @@
+package mor.itas.domain.service.ap;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import mor.itas.domain.exception.SLAExtensionLimitExceededException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for SLAManagementService
+ * Tests deadline calculation, extensions, and escalation
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("SLAManagementService Unit Tests")
+class SLAManagementServiceTest {
+
+    private SLAManagementService service;
+
+    @Mock
+    private CommitteeCaseAggregate committeeCase;
+
+    private UUID approverUserId;
+
+    @BeforeEach
+    void setUp() {
+        service = new SLAManagementService();
+        approverUserId = UUID.randomUUID();
+    }
+
+    // ========== Initial Deadline Tests ==========
+
+    @Test
+    @DisplayName("Should set initial deadline with business days")
+    void testSetInitialDeadline_CalculationCorrect() {
+        // Act
+        OffsetDateTime deadline = service.setInitialDeadline(committeeCase, 30);
+
+        // Assert
+        verify(committeeCase).setCommitteeDeadline(any(OffsetDateTime.class));
+        verify(committeeCase).setExtensionCount(0);
+        
+        assertThat(deadline).isNotNull();
+        
+        // Check deadline is approximately 30 days from now
+        long daysBetween = ChronoUnit.DAYS.between(OffsetDateTime.now(), deadline);
+        assertThat(daysBetween).isBetween(29L, 30L);
+    }
+
+    @Test
+    @DisplayName("Should use default 30 business days if not specified")
+    void testSetInitialDeadline_DefaultDays() {
+        // Act
+        OffsetDateTime deadline = service.setInitialDeadline(committeeCase, null);
+
+        // Assert
+        verify(committeeCase).setCommitteeDeadline(any(OffsetDateTime.class));
+        long daysBetween = ChronoUnit.DAYS.between(OffsetDateTime.now(), deadline);
+        assertThat(daysBetween).isBetween(29L, 30L);
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null")
+    void testSetInitialDeadline_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.setInitialDeadline(null, 30))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should throw error if business days is zero or negative")
+    void testSetInitialDeadline_InvalidDays_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.setInitialDeadline(committeeCase, 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Business days must be greater than 0");
+
+        assertThatThrownBy(() -> service.setInitialDeadline(committeeCase, -5))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ========== Deadline Extension Tests ==========
+
+    @Test
+    @DisplayName("Should extend deadline successfully")
+    void testExtendDeadline_Success() throws SLAExtensionLimitExceededException {
+        // Arrange
+        OffsetDateTime deadline = OffsetDateTime.now().plusDays(30);
+        when(committeeCase.getExtensionCount()).thenReturn(0);
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(deadline);
+
+        // Act
+        OffsetDateTime result = service.extendDeadline(
+            committeeCase, 10, "Additional research needed", approverUserId
+        );
+
+        // Assert
+        verify(committeeCase).setExtendedDeadline(any(OffsetDateTime.class));
+        verify(committeeCase).setExtensionCount(1);
+        
+        assertThat(result).isNotNull();
+        // New deadline should be ~40 days from now (30 + 10)
+        long daysBetween = ChronoUnit.DAYS.between(OffsetDateTime.now(), result);
+        assertThat(daysBetween).isBetween(39L, 40L);
+    }
+
+    @Test
+    @DisplayName("Should allow maximum 2 extensions")
+    void testExtendDeadline_LimitExceeded_Throws() {
+        // Arrange - case already has 2 extensions
+        when(committeeCase.getExtensionCount()).thenReturn(2);
+
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.extendDeadline(committeeCase, 10, "Reason", approverUserId))
+            .isInstanceOf(SLAExtensionLimitExceededException.class);
+    }
+
+    @Test
+    @DisplayName("Should count extension attempts")
+    void testExtendDeadline_CountIncrements() throws SLAExtensionLimitExceededException {
+        // Arrange
+        OffsetDateTime deadline = OffsetDateTime.now().plusDays(30);
+        when(committeeCase.getExtensionCount()).thenReturn(0);
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(deadline);
+
+        // Act - first extension
+        service.extendDeadline(committeeCase, 10, "First extension", approverUserId);
+
+        // Assert
+        verify(committeeCase).setExtensionCount(1);
+    }
+
+    @Test
+    @DisplayName("Should throw error if extension days is zero or negative")
+    void testExtendDeadline_InvalidDays_Throws() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(0);
+
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.extendDeadline(committeeCase, 0, "Reason", approverUserId))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Extension days must be greater than 0");
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null in extend")
+    void testExtendDeadline_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(
+            () -> service.extendDeadline(null, 10, "Reason", approverUserId))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    // ========== Effective Deadline Tests ==========
+
+    @Test
+    @DisplayName("Should return extended deadline if available")
+    void testGetEffectiveDeadline_WithExtension() {
+        // Arrange
+        OffsetDateTime original = OffsetDateTime.now().plusDays(10);
+        OffsetDateTime extended = OffsetDateTime.now().plusDays(20);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(extended);
+
+        // Act
+        OffsetDateTime result = service.getEffectiveDeadline(committeeCase);
+
+        // Assert
+        assertThat(result).isEqualTo(extended);
+    }
+
+    @Test
+    @DisplayName("Should return original deadline if no extension")
+    void testGetEffectiveDeadline_NoExtension() {
+        // Arrange
+        OffsetDateTime original = OffsetDateTime.now().plusDays(10);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(original);
+
+        // Act
+        OffsetDateTime result = service.getEffectiveDeadline(committeeCase);
+
+        // Assert
+        assertThat(result).isEqualTo(original);
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null in effective deadline")
+    void testGetEffectiveDeadline_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.getEffectiveDeadline(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    // ========== Overdue Detection Tests ==========
+
+    @Test
+    @DisplayName("Should detect case is overdue")
+    void testIsOverdue_TrueWhenPast() {
+        // Arrange
+        OffsetDateTime pastDeadline = OffsetDateTime.now().minusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(pastDeadline);
+
+        // Act
+        boolean overdue = service.isOverdue(committeeCase);
+
+        // Assert
+        assertThat(overdue).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should detect case is not overdue when deadline in future")
+    void testIsOverdue_FalseWhenFuture() {
+        // Arrange
+        OffsetDateTime futureDeadline = OffsetDateTime.now().plusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(futureDeadline);
+
+        // Act
+        boolean overdue = service.isOverdue(committeeCase);
+
+        // Assert
+        assertThat(overdue).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should throw error if case is null in overdue check")
+    void testIsOverdue_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.isOverdue(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    // ========== Days Remaining Tests ==========
+
+    @Test
+    @DisplayName("Should calculate days remaining with accuracy")
+    void testGetDaysRemaining_Accuracy() {
+        // Arrange
+        OffsetDateTime deadline = OffsetDateTime.now().plusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(deadline);
+
+        // Act
+        long daysRemaining = service.getDaysRemaining(committeeCase);
+
+        // Assert - should be approximately 5 days
+        assertThat(daysRemaining).isBetween(4L, 5L);
+    }
+
+    @Test
+    @DisplayName("Should return negative days when overdue")
+    void testGetDaysRemaining_Overdue_Negative() {
+        // Arrange
+        OffsetDateTime pastDeadline = OffsetDateTime.now().minusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(pastDeadline);
+
+        // Act
+        long daysRemaining = service.getDaysRemaining(committeeCase);
+
+        // Assert
+        assertThat(daysRemaining).isNegative();
+    }
+
+    @Test
+    @DisplayName("Should return zero days when deadline is null")
+    void testGetDaysRemaining_NullDeadline_Zero() {
+        // Arrange
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(null);
+
+        // Act
+        long daysRemaining = service.getDaysRemaining(committeeCase);
+
+        // Assert
+        assertThat(daysRemaining).isZero();
+    }
+
+    // ========== Hours Remaining Tests ==========
+
+    @Test
+    @DisplayName("Should calculate hours remaining")
+    void testGetHoursRemaining() {
+        // Arrange
+        OffsetDateTime deadline = OffsetDateTime.now().plusHours(12);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(deadline);
+
+        // Act
+        long hoursRemaining = service.getHoursRemaining(committeeCase);
+
+        // Assert
+        assertThat(hoursRemaining).isBetween(11L, 12L);
+    }
+
+    @Test
+    @DisplayName("Should return zero hours when deadline is null")
+    void testGetHoursRemaining_NullDeadline_Zero() {
+        // Arrange
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(null);
+
+        // Act
+        long hoursRemaining = service.getHoursRemaining(committeeCase);
+
+        // Assert
+        assertThat(hoursRemaining).isZero();
+    }
+
+    // ========== SLA Escalation Tests ==========
+
+    @Test
+    @DisplayName("Should escalate when less than 24 hours remaining")
+    void testShouldEscalate_Within24Hours() {
+        // Arrange
+        OffsetDateTime soonDeadline = OffsetDateTime.now().plusHours(12);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(soonDeadline);
+
+        // Act
+        boolean shouldEscalate = service.shouldEscalate(committeeCase);
+
+        // Assert
+        assertThat(shouldEscalate).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should not escalate when more than 24 hours remaining")
+    void testShouldEscalate_Beyond24Hours_False() {
+        // Arrange
+        OffsetDateTime distantDeadline = OffsetDateTime.now().plusDays(2);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(distantDeadline);
+
+        // Act
+        boolean shouldEscalate = service.shouldEscalate(committeeCase);
+
+        // Assert
+        assertThat(shouldEscalate).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should not escalate when overdue")
+    void testShouldEscalate_Overdue_False() {
+        // Arrange
+        OffsetDateTime pastDeadline = OffsetDateTime.now().minusDays(1);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(pastDeadline);
+
+        // Act
+        boolean shouldEscalate = service.shouldEscalate(committeeCase);
+
+        // Assert
+        assertThat(shouldEscalate).isFalse();
+    }
+
+    // ========== Extension Management Tests ==========
+
+    @Test
+    @DisplayName("Should get remaining extensions count")
+    void testGetRemainingExtensions() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(1);
+
+        // Act
+        int remaining = service.getRemainingExtensions(committeeCase);
+
+        // Assert
+        assertThat(remaining).isEqualTo(1);  // 2 - 1
+    }
+
+    @Test
+    @DisplayName("Should return zero remaining extensions when max reached")
+    void testGetRemainingExtensions_MaxReached() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(2);
+
+        // Act
+        int remaining = service.getRemainingExtensions(committeeCase);
+
+        // Assert
+        assertThat(remaining).isZero();
+    }
+
+    @Test
+    @DisplayName("Should handle null extension count")
+    void testGetRemainingExtensions_NullCount() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(null);
+
+        // Act
+        int remaining = service.getRemainingExtensions(committeeCase);
+
+        // Assert
+        assertThat(remaining).isEqualTo(2);  // 2 - 0
+    }
+
+    @Test
+    @DisplayName("Should check if case can be extended")
+    void testCanExtend_True() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(0);
+
+        // Act
+        boolean canExtend = service.canExtend(committeeCase);
+
+        // Assert
+        assertThat(canExtend).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should check if case cannot be extended")
+    void testCanExtend_False() {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(2);
+
+        // Act
+        boolean canExtend = service.canExtend(committeeCase);
+
+        // Assert
+        assertThat(canExtend).isFalse();
+    }
+
+    // ========== Deadline Formatting Tests ==========
+
+    @Test
+    @DisplayName("Should format deadline when not overdue")
+    void testFormatDeadline_NotOverdue() {
+        // Arrange
+        OffsetDateTime futureDeadline = OffsetDateTime.now().plusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(futureDeadline);
+
+        // Act
+        String formatted = service.formatDeadline(committeeCase);
+
+        // Assert
+        assertThat(formatted).contains("days remaining");
+    }
+
+    @Test
+    @DisplayName("Should format deadline when overdue")
+    void testFormatDeadline_Overdue() {
+        // Arrange
+        OffsetDateTime pastDeadline = OffsetDateTime.now().minusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(pastDeadline);
+
+        // Act
+        String formatted = service.formatDeadline(committeeCase);
+
+        // Assert
+        assertThat(formatted).contains("OVERDUE");
+    }
+
+    @Test
+    @DisplayName("Should format deadline when not set")
+    void testFormatDeadline_NotSet() {
+        // Arrange
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(null);
+
+        // Act
+        String formatted = service.formatDeadline(committeeCase);
+
+        // Assert
+        assertThat(formatted).isEqualTo("Not set");
+    }
+
+    // ========== Integration Scenario Tests ==========
+
+    @Test
+    @DisplayName("Should complete full SLA management workflow")
+    void testSLAManagementWorkflow_Complete() throws SLAExtensionLimitExceededException {
+        // Arrange
+        when(committeeCase.getExtensionCount()).thenReturn(null);
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+
+        // Act - set initial deadline
+        OffsetDateTime initialDeadline = service.setInitialDeadline(committeeCase, 30);
+        verify(committeeCase).setCommitteeDeadline(any(OffsetDateTime.class));
+
+        // Check days remaining
+        when(committeeCase.getCommitteeDeadline()).thenReturn(initialDeadline);
+        long initialDaysRemaining = service.getDaysRemaining(committeeCase);
+        assertThat(initialDaysRemaining).isGreaterThan(0);
+
+        // Extend deadline once
+        when(committeeCase.getExtensionCount()).thenReturn(1);
+        OffsetDateTime newDeadline = service.extendDeadline(
+            committeeCase, 15, "Additional research", approverUserId
+        );
+        verify(committeeCase).setExtensionCount(1);
+
+        // Check remaining extensions
+        when(committeeCase.getExtensionCount()).thenReturn(1);
+        int remainingExtensions = service.getRemainingExtensions(committeeCase);
+        assertThat(remainingExtensions).isEqualTo(1);
+
+        // Check can extend
+        boolean canExtend = service.canExtend(committeeCase);
+        assertThat(canExtend).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should handle escalation workflow")
+    void testSLAEscalationWorkflow() {
+        // Arrange - deadline in 12 hours
+        OffsetDateTime soonDeadline = OffsetDateTime.now().plusHours(12);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(soonDeadline);
+
+        // Act
+        boolean shouldEscalate = service.shouldEscalate(committeeCase);
+        long hoursRemaining = service.getHoursRemaining(committeeCase);
+        String formatted = service.formatDeadline(committeeCase);
+
+        // Assert
+        assertThat(shouldEscalate).isTrue();
+        assertThat(hoursRemaining).isBetween(11L, 12L);
+        assertThat(formatted).contains("days remaining");
+    }
+}
