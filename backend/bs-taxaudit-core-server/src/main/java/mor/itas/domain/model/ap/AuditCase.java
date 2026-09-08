@@ -9,15 +9,25 @@ import java.util.UUID;
  */
 public class AuditCase {
     private UUID id;
+    private UUID committeeCaseId;
+    private String taxIdNumber;
     private UUID planId;
     private UUID allocationId;
     private String caseNumber;
     private String taxpayerId;
+    private String taxpayerName;
     private String auditType;
+    private String riskPriority;
     private Integer riskScore;
+    private String segment;
     private String status;  // PENDING_ASSIGNMENT, ASSIGNED, IN_PROGRESS, COMPLETED
     private String assignedTeamLeaderId;
     private String assignedAuditorId;
+    private java.time.OffsetDateTime handoffAt;
+    private String handoffBy;
+    private String handoffComment;
+    private java.time.OffsetDateTime assignedAt;
+    private String assignedBy;
     private String createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime startedAt;
@@ -49,7 +59,8 @@ public class AuditCase {
     }
 
     public AuditCase(UUID id, UUID planId, UUID allocationId, String caseNumber, String taxpayerId,
-                    String auditType, Integer riskScore, String status, String assignedTeamLeaderId,
+                    String taxpayerName, String auditType, String riskPriority, Integer riskScore,
+                    String segment, String status, String assignedTeamLeaderId,
                     String assignedAuditorId, String createdBy, OffsetDateTime createdAt,
                     OffsetDateTime startedAt, OffsetDateTime completedAt, OffsetDateTime updatedAt) {
         this.id = id;
@@ -57,8 +68,11 @@ public class AuditCase {
         this.allocationId = allocationId;
         this.caseNumber = caseNumber;
         this.taxpayerId = taxpayerId;
+        this.taxpayerName = taxpayerName;
         this.auditType = auditType;
+        this.riskPriority = riskPriority;
         this.riskScore = riskScore;
+        this.segment = segment;
         this.status = status;
         this.assignedTeamLeaderId = assignedTeamLeaderId;
         this.assignedAuditorId = assignedAuditorId;
@@ -116,12 +130,17 @@ public class AuditCase {
 
     // Getters
     public UUID getId() { return id; }
+    public UUID getCommitteeCaseId() { return committeeCaseId; }
     public UUID getPlanId() { return planId; }
     public UUID getAllocationId() { return allocationId; }
     public String getCaseNumber() { return caseNumber; }
     public String getTaxpayerId() { return taxpayerId; }
+    public String getTaxIdNumber() { return taxIdNumber; }
+    public String getTaxpayerName() { return taxpayerName; }
     public String getAuditType() { return auditType; }
+    public String getRiskPriority() { return riskPriority; }
     public Integer getRiskScore() { return riskScore; }
+    public String getSegment() { return segment; }
     public String getStatus() { return status; }
     public String getAssignedTeamLeaderId() { return assignedTeamLeaderId; }
     public String getAssignedAuditorId() { return assignedAuditorId; }
@@ -130,18 +149,33 @@ public class AuditCase {
     public OffsetDateTime getStartedAt() { return startedAt; }
     public OffsetDateTime getCompletedAt() { return completedAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public OffsetDateTime getHandoffAt() { return handoffAt; }
+    public String getHandoffBy() { return handoffBy; }
+    public String getHandoffComment() { return handoffComment; }
+    public OffsetDateTime getAssignedAt() { return assignedAt; }
+    public String getAssignedBy() { return assignedBy; }
 
     // Setters
     public void setId(UUID id) { this.id = id; }
+    public void setCommitteeCaseId(UUID committeeCaseId) { this.committeeCaseId = committeeCaseId; }
     public void setPlanId(UUID planId) { this.planId = planId; }
     public void setAllocationId(UUID allocationId) { this.allocationId = allocationId; }
     public void setCaseNumber(String caseNumber) { this.caseNumber = caseNumber; }
     public void setTaxpayerId(String taxpayerId) { this.taxpayerId = taxpayerId; }
+    public void setTaxIdNumber(String taxIdNumber) { this.taxIdNumber = taxIdNumber; }
+    public void setTaxpayerName(String taxpayerName) { this.taxpayerName = taxpayerName; }
     public void setAuditType(String auditType) { this.auditType = auditType; }
+    public void setRiskPriority(String riskPriority) { this.riskPriority = riskPriority; }
     public void setRiskScore(Integer riskScore) { this.riskScore = riskScore; }
+    public void setSegment(String segment) { this.segment = segment; }
     public void setStatus(String status) { this.status = status; }
     public void setAssignedTeamLeaderId(String assignedTeamLeaderId) { this.assignedTeamLeaderId = assignedTeamLeaderId; }
     public void setAssignedAuditorId(String assignedAuditorId) { this.assignedAuditorId = assignedAuditorId; }
+    public void setHandoffAt(OffsetDateTime handoffAt) { this.handoffAt = handoffAt; }
+    public void setHandoffBy(String handoffBy) { this.handoffBy = handoffBy; }
+    public void setHandoffComment(String handoffComment) { this.handoffComment = handoffComment; }
+    public void setAssignedAt(OffsetDateTime assignedAt) { this.assignedAt = assignedAt; }
+    public void setAssignedBy(String assignedBy) { this.assignedBy = assignedBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public void setStartedAt(OffsetDateTime startedAt) { this.startedAt = startedAt; }
