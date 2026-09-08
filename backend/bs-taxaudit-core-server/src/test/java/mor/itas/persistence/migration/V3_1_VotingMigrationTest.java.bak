@@ -1,0 +1,702 @@
+package mor.itas.persistence.migration;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration test for V3_1__jac_voting.sql migration.
+ * 
+ * Validates:
+ * 1. Migration file syntax is valid PostgreSQL
+ * 2. t_advisory_voting table created with correct structure
+ * 3. t_committee_vote table created with correct structure
+ * 4. t_voting_tally table created with correct structure
+ * 5. Unique constraint on (case_id, member_id) enforced at database level
+ * 6. Foreign keys reference existing tables correctly
+ * 7. Indexes created successfully
+ * 8. Duplicate vote attempts fail with unique constraint violation
+ * 9. Vote insertion succeeds for valid votes
+ * 10. ON DELETE CASCADE works correctly
+ * 
+ * Uses TestContainers to test against a real PostgreSQL 14+ instance.
+ * This is a VALIDATION TEST for Task 2 (jac-db-002): Test duplicate vote prevention.
+ */
+@Testcontainers
+@SpringBootTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+public class V3_1_VotingMigrationTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:14-alpine")
+            .withDatabaseName("test_jac_voting_db")
+            .withUsername("testuser")
+            .withPassword("testpass");
+
+    @DynamicPropertySource
+    static void configureTestDatabase(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQL14Dialect");
+        registry.add("spring.flyway.enabled", () -> "true");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+    }
+
+    private final DataSource dataSource;
+
+    public V3_1_VotingMigrationTest(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    // ===========================
+    // Table Existence Tests
+    // ===========================
+
+    @Test
+    public void testAdvisoryVotingTableExists() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet tables = meta.getTables(null, "public", "t_advisory_voting", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_advisory_voting table should exist after migration");
+        }
+    }
+
+    @Test
+    public void testCommitteeVoteTableExists() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet tables = meta.getTables(null, "public", "t_committee_vote", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_committee_vote table should exist after migration");
+        }
+    }
+
+    @Test
+    public void testVotingTallyTableExists() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet tables = meta.getTables(null, "public", "t_voting_tally", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_voting_tally table should exist after migration");
+        }
+    }
+
+    // ===========================
+    // Table Structure Tests
+    // ===========================
+
+    @Test
+    public void testAdvisoryVotingTableStructure() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify primary key
+            ResultSet primaryKeys = meta.getPrimaryKeys(null, "public", "t_advisory_voting");
+            assertTrue(primaryKeys.next(), "voting_id should be primary key");
+            assertEquals("voting_id", primaryKeys.getString("COLUMN_NAME"));
+            
+            // Verify columns
+            ResultSet columns = meta.getColumns(null, "public", "t_advisory_voting", null);
+            Set<String> columnNames = new HashSet<>();
+            while (columns.next()) {
+                columnNames.add(columns.getString("COLUMN_NAME"));
+            }
+            
+            assertTrue(columnNames.contains("voting_id"), "voting_id column should exist");
+            assertTrue(columnNames.contains("case_id"), "case_id column should exist");
+            assertTrue(columnNames.contains("status"), "status column should exist");
+            assertTrue(columnNames.contains("consensus_threshold"), "consensus_threshold column should exist");
+            assertTrue(columnNames.contains("voting_started_at"), "voting_started_at column should exist");
+            assertTrue(columnNames.contains("voting_closed_at"), "voting_closed_at column should exist");
+            assertTrue(columnNames.contains("created_at"), "created_at column should exist");
+        }
+    }
+
+    @Test
+    public void testCommitteeVoteTableStructure() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify primary key
+            ResultSet primaryKeys = meta.getPrimaryKeys(null, "public", "t_committee_vote");
+            assertTrue(primaryKeys.next(), "vote_id should be primary key");
+            assertEquals("vote_id", primaryKeys.getString("COLUMN_NAME"));
+            
+            // Verify columns
+            ResultSet columns = meta.getColumns(null, "public", "t_committee_vote", null);
+            Set<String> columnNames = new HashSet<>();
+            while (columns.next()) {
+                columnNames.add(columns.getString("COLUMN_NAME"));
+            }
+            
+            assertTrue(columnNames.contains("vote_id"), "vote_id column should exist");
+            assertTrue(columnNames.contains("voting_id"), "voting_id column should exist");
+            assertTrue(columnNames.contains("case_id"), "case_id column should exist");
+            assertTrue(columnNames.contains("member_id"), "member_id column should exist");
+            assertTrue(columnNames.contains("vote_option"), "vote_option column should exist");
+            assertTrue(columnNames.contains("reasoning"), "reasoning column should exist");
+            assertTrue(columnNames.contains("voted_at"), "voted_at column should exist");
+        }
+    }
+
+    @Test
+    public void testVotingTallyTableStructure() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify primary key
+            ResultSet primaryKeys = meta.getPrimaryKeys(null, "public", "t_voting_tally");
+            assertTrue(primaryKeys.next(), "tally_id should be primary key");
+            assertEquals("tally_id", primaryKeys.getString("COLUMN_NAME"));
+            
+            // Verify columns
+            ResultSet columns = meta.getColumns(null, "public", "t_voting_tally", null);
+            Set<String> columnNames = new HashSet<>();
+            while (columns.next()) {
+                columnNames.add(columns.getString("COLUMN_NAME"));
+            }
+            
+            assertTrue(columnNames.contains("tally_id"), "tally_id column should exist");
+            assertTrue(columnNames.contains("voting_id"), "voting_id column should exist");
+            assertTrue(columnNames.contains("approve_count"), "approve_count column should exist");
+            assertTrue(columnNames.contains("reject_count"), "reject_count column should exist");
+            assertTrue(columnNames.contains("more_info_count"), "more_info_count column should exist");
+            assertTrue(columnNames.contains("total_votes_cast"), "total_votes_cast column should exist");
+            assertTrue(columnNames.contains("consensus_percentage"), "consensus_percentage column should exist");
+            assertTrue(columnNames.contains("voting_outcome"), "voting_outcome column should exist");
+            assertTrue(columnNames.contains("calculated_at"), "calculated_at column should exist");
+        }
+    }
+
+    // ===========================
+    // Foreign Key Tests
+    // ===========================
+
+    @Test
+    public void testAdvisoryVotingForeignKeyToCommitteeCase() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify foreign key from t_advisory_voting.case_id to t_committee_case.case_id
+            ResultSet foreignKeys = meta.getImportedKeys(null, "public", "t_advisory_voting");
+            assertTrue(foreignKeys.next(), "Foreign key should exist from t_advisory_voting to t_committee_case");
+            assertEquals("t_committee_case", foreignKeys.getString("PKTABLE_NAME"));
+            assertEquals("case_id", foreignKeys.getString("PKCOLUMN_NAME"));
+        }
+    }
+
+    @Test
+    public void testCommitteeVoteForeignKeyToAdvisoryVoting() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify foreign key from t_committee_vote.voting_id to t_advisory_voting.voting_id
+            ResultSet foreignKeys = meta.getImportedKeys(null, "public", "t_committee_vote");
+            int votingFkCount = 0;
+            while (foreignKeys.next()) {
+                if ("voting_id".equals(foreignKeys.getString("FKCOLUMN_NAME"))) {
+                    assertEquals("t_advisory_voting", foreignKeys.getString("PKTABLE_NAME"));
+                    votingFkCount++;
+                }
+            }
+            assertTrue(votingFkCount > 0, "Foreign key from t_committee_vote to t_advisory_voting should exist");
+        }
+    }
+
+    @Test
+    public void testCommitteeVoteForeignKeyToCommitteeCase() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify foreign key from t_committee_vote.case_id to t_committee_case.case_id
+            ResultSet foreignKeys = meta.getImportedKeys(null, "public", "t_committee_vote");
+            int caseFkCount = 0;
+            while (foreignKeys.next()) {
+                if ("case_id".equals(foreignKeys.getString("FKCOLUMN_NAME"))) {
+                    assertEquals("t_committee_case", foreignKeys.getString("PKTABLE_NAME"));
+                    caseFkCount++;
+                }
+            }
+            assertTrue(caseFkCount > 0, "Foreign key from t_committee_vote to t_committee_case should exist");
+        }
+    }
+
+    @Test
+    public void testVotingTallyForeignKeyToAdvisoryVoting() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify foreign key from t_voting_tally.voting_id to t_advisory_voting.voting_id
+            ResultSet foreignKeys = meta.getImportedKeys(null, "public", "t_voting_tally");
+            assertTrue(foreignKeys.next(), "Foreign key should exist from t_voting_tally to t_advisory_voting");
+            assertEquals("t_advisory_voting", foreignKeys.getString("PKTABLE_NAME"));
+            assertEquals("voting_id", foreignKeys.getString("PKCOLUMN_NAME"));
+        }
+    }
+
+    // ===========================
+    // Index Tests
+    // ===========================
+
+    @Test
+    public void testIndexesCreated() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Check for indexes on t_committee_vote
+            ResultSet indexes = meta.getIndexInfo(null, "public", "t_committee_vote", false, false);
+            Set<String> indexNames = new HashSet<>();
+            while (indexes.next()) {
+                String indexName = indexes.getString("INDEX_NAME");
+                if (indexName != null) {
+                    indexNames.add(indexName);
+                }
+            }
+            
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("voting")), 
+                      "Index on voting_id column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("member")), 
+                      "Index on member_id column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("case")), 
+                      "Index on case_id column should exist");
+        }
+    }
+
+    // ===========================
+    // CRITICAL TEST: Duplicate Vote Prevention
+    // This validates the unique constraint on (case_id, member_id)
+    // ===========================
+
+    @Test
+    public void testValidVoteInsertion() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // First, insert a committee case (prerequisite for voting)
+            String caseId = "550e8400-e29b-41d4-a716-446655440100";
+            String votingId = "660e8400-e29b-41d4-a716-446655440100";
+            String memberId = "770e8400-e29b-41d4-a716-446655440100";
+            
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440101', " +
+                        "'550e8400-e29b-41d4-a716-446655440102', 'Test Taxpayer', 'TIN12345', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440103')");
+            
+            // Create advisory voting record
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Insert first vote (should succeed)
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440100', " +
+                        "'" + votingId + "', '" + caseId + "', '" + memberId + "', " +
+                        "'APPROVE', 'This case looks viable for joint audit')");
+            
+            // Verify insertion
+            ResultSet rs = stmt.executeQuery("SELECT * FROM t_committee_vote " +
+                                            "WHERE case_id = '" + caseId + "' AND member_id = '" + memberId + "'");
+            assertTrue(rs.next(), "Valid vote should be inserted successfully");
+            assertEquals("APPROVE", rs.getString("vote_option"));
+            assertEquals("This case looks viable for joint audit", rs.getString("reasoning"));
+        }
+    }
+
+    /**
+     * MAIN ACCEPTANCE TEST: Duplicate Vote Prevention
+     * 
+     * Validates that the unique constraint on (case_id, member_id) prevents
+     * the same member from voting twice on the same case.
+     * 
+     * Test Scenario:
+     * 1. Insert a valid vote (member M voting on case C with option APPROVE)
+     * 2. Attempt to insert a duplicate vote (same member M voting on case C again)
+     * 3. Verify the duplicate vote attempt fails with unique constraint violation
+     * 4. Confirm error message indicates "duplicate key" violation
+     * 
+     * Business Rule: "Only one vote per member per case allowed" (BR-JAC-001)
+     * Database Enforcement: Unique constraint on (case_id, member_id)
+     */
+    @Test
+    public void testDuplicateVotePreventionAtDatabaseLevel() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440200";
+            String votingId = "660e8400-e29b-41d4-a716-446655440200";
+            String memberId = "770e8400-e29b-41d4-a716-446655440200";
+            
+            // Setup: Insert committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440201', " +
+                        "'550e8400-e29b-41d4-a716-446655440202', 'Test Taxpayer 2', 'TIN12346', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440203')");
+            
+            // Setup: Create advisory voting record
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Step 1: Insert first valid vote
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440200', " +
+                        "'" + votingId + "', '" + caseId + "', '" + memberId + "', " +
+                        "'APPROVE', 'Case is viable')");
+            
+            // Verify first vote was inserted
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote " +
+                                            "WHERE case_id = '" + caseId + "' AND member_id = '" + memberId + "'");
+            rs.next();
+            assertEquals(1, rs.getInt("count"), "First vote should be inserted successfully");
+            
+            // Step 2: Attempt to insert duplicate vote (same member, same case, different option)
+            SQLException duplicateVoteException = null;
+            try {
+                stmt.execute("INSERT INTO t_committee_vote " +
+                            "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                            "VALUES ('880e8400-e29b-41d4-a716-446655440201', " +
+                            "'" + votingId + "', '" + caseId + "', '" + memberId + "', " +
+                            "'REJECT', 'Actually, I changed my mind')");
+                fail("CRITICAL FAILURE: Duplicate vote should have been rejected by unique constraint");
+            } catch (SQLException e) {
+                duplicateVoteException = e;
+                // Expected: Unique constraint violation
+            }
+            
+            // Step 3 & 4: Verify the error is indeed a duplicate key violation
+            assertNotNull(duplicateVoteException, "SQLException should be thrown for duplicate vote");
+            String errorMessage = duplicateVoteException.getMessage().toLowerCase();
+            assertTrue(
+                errorMessage.contains("unique") || 
+                errorMessage.contains("duplicate") ||
+                errorMessage.contains("constraint") ||
+                duplicateVoteException.getSQLState().startsWith("23"),  // Integrity constraint violation
+                "Error should indicate unique constraint violation. Error was: " + duplicateVoteException.getMessage()
+            );
+            
+            // Verify vote count is still 1 (duplicate was rejected)
+            rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote " +
+                                  "WHERE case_id = '" + caseId + "' AND member_id = '" + memberId + "'");
+            rs.next();
+            assertEquals(1, rs.getInt("count"), 
+                        "Vote count should remain 1 after duplicate attempt was rejected");
+            
+            // Verify original vote is still intact (APPROVE)
+            rs = stmt.executeQuery("SELECT vote_option FROM t_committee_vote " +
+                                  "WHERE case_id = '" + caseId + "' AND member_id = '" + memberId + "'");
+            rs.next();
+            assertEquals("APPROVE", rs.getString("vote_option"), 
+                        "Original vote option should remain unchanged");
+        }
+    }
+
+    /**
+     * Additional Test: Different Members Can Vote on Same Case
+     * 
+     * Validates that the unique constraint only prevents duplicates for the SAME member,
+     * and allows different members to vote on the same case.
+     */
+    @Test
+    public void testDifferentMembersCanVoteOnSameCase() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440300";
+            String votingId = "660e8400-e29b-41d4-a716-446655440300";
+            String member1Id = "770e8400-e29b-41d4-a716-446655440300";
+            String member2Id = "770e8400-e29b-41d4-a716-446655440301";
+            String member3Id = "770e8400-e29b-41d4-a716-446655440302";
+            
+            // Setup: Insert committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440301', " +
+                        "'550e8400-e29b-41d4-a716-446655440302', 'Test Taxpayer 3', 'TIN12347', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440303')");
+            
+            // Setup: Create advisory voting record
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Member 1 votes APPROVE
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440300', " +
+                        "'" + votingId + "', '" + caseId + "', '" + member1Id + "', 'APPROVE', 'Reason 1')");
+            
+            // Member 2 votes REJECT (different member, same case)
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440301', " +
+                        "'" + votingId + "', '" + caseId + "', '" + member2Id + "', 'REJECT', 'Reason 2')");
+            
+            // Member 3 votes MORE_INFO (third different member, same case)
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440302', " +
+                        "'" + votingId + "', '" + caseId + "', '" + member3Id + "', 'MORE_INFO', 'Reason 3')");
+            
+            // Verify all three votes were inserted successfully
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote " +
+                                            "WHERE case_id = '" + caseId + "'");
+            rs.next();
+            assertEquals(3, rs.getInt("count"), 
+                        "All three different members should be able to vote on the same case");
+            
+            // Verify vote counts
+            rs = stmt.executeQuery("SELECT vote_option, COUNT(*) as count FROM t_committee_vote " +
+                                  "WHERE case_id = '" + caseId + "' GROUP BY vote_option");
+            Set<String> voteOptions = new HashSet<>();
+            while (rs.next()) {
+                voteOptions.add(rs.getString("vote_option"));
+            }
+            
+            assertTrue(voteOptions.contains("APPROVE"), "APPROVE vote should exist");
+            assertTrue(voteOptions.contains("REJECT"), "REJECT vote should exist");
+            assertTrue(voteOptions.contains("MORE_INFO"), "MORE_INFO vote should exist");
+        }
+    }
+
+    /**
+     * Additional Test: Same Member Cannot Vote on Same Case with Different Options
+     * 
+     * Validates that changing the vote option doesn't bypass the unique constraint.
+     */
+    @Test
+    public void testSameMemberCannotChangeVoteOption() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440400";
+            String votingId = "660e8400-e29b-41d4-a716-446655440400";
+            String memberId = "770e8400-e29b-41d4-a716-446655440400";
+            
+            // Setup: Insert committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440401', " +
+                        "'550e8400-e29b-41d4-a716-446655440402', 'Test Taxpayer 4', 'TIN12348', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440403')");
+            
+            // Setup: Create advisory voting record
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Insert initial vote
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440400', " +
+                        "'" + votingId + "', '" + caseId + "', '" + memberId + "', 'APPROVE', 'Initial vote')");
+            
+            // Attempt to insert another vote with different option (should fail)
+            SQLException duplicateException = null;
+            try {
+                stmt.execute("INSERT INTO t_committee_vote " +
+                            "(vote_id, voting_id, case_id, member_id, vote_option, reasoning) " +
+                            "VALUES ('880e8400-e29b-41d4-a716-446655440401', " +
+                            "'" + votingId + "', '" + caseId + "', '" + memberId + "', 'REJECT', 'Changed mind')");
+                fail("Member should not be able to change their vote");
+            } catch (SQLException e) {
+                duplicateException = e;
+            }
+            
+            assertNotNull(duplicateException, "SQLException should be thrown when same member votes twice");
+            assertTrue(
+                duplicateException.getMessage().toLowerCase().contains("unique") ||
+                duplicateException.getMessage().toLowerCase().contains("duplicate") ||
+                duplicateException.getSQLState().startsWith("23"),
+                "Error should indicate unique constraint violation"
+            );
+        }
+    }
+
+    // ===========================
+    // ON DELETE CASCADE Tests
+    // ===========================
+
+    @Test
+    public void testOnDeleteCascade_VotesDeletedWhenVotingDeleted() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440500";
+            String votingId = "660e8400-e29b-41d4-a716-446655440500";
+            
+            // Setup: Insert committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440501', " +
+                        "'550e8400-e29b-41d4-a716-446655440502', 'Test Taxpayer 5', 'TIN12349', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440503')");
+            
+            // Insert advisory voting
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Insert votes
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440500', " +
+                        "'" + votingId + "', '" + caseId + "', '770e8400-e29b-41d4-a716-446655440500', 'APPROVE')");
+            
+            // Verify vote exists
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote WHERE voting_id = '" + votingId + "'");
+            rs.next();
+            assertEquals(1, rs.getInt("count"), "Vote should exist");
+            
+            // Delete the voting record
+            stmt.execute("DELETE FROM t_advisory_voting WHERE voting_id = '" + votingId + "'");
+            
+            // Verify votes were cascade deleted
+            rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote WHERE voting_id = '" + votingId + "'");
+            rs.next();
+            assertEquals(0, rs.getInt("count"), "Votes should be cascade deleted when voting is deleted");
+        }
+    }
+
+    @Test
+    public void testOnDeleteCascade_VotesDeletedWhenCaseDeleted() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440600";
+            String votingId = "660e8400-e29b-41d4-a716-446655440600";
+            
+            // Setup: Insert committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440601', " +
+                        "'550e8400-e29b-41d4-a716-446655440602', 'Test Taxpayer 6', 'TIN12350', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440603')");
+            
+            // Insert advisory voting
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Insert vote
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440600', " +
+                        "'" + votingId + "', '" + caseId + "', '770e8400-e29b-41d4-a716-446655440600', 'APPROVE')");
+            
+            // Delete the case
+            stmt.execute("DELETE FROM t_committee_case WHERE case_id = '" + caseId + "'");
+            
+            // Verify vote was cascade deleted
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_committee_vote WHERE case_id = '" + caseId + "'");
+            rs.next();
+            assertEquals(0, rs.getInt("count"), "Votes should be cascade deleted when case is deleted");
+        }
+    }
+
+    // ===========================
+    // Default Values Tests
+    // ===========================
+
+    @Test
+    public void testAdvisoryVotingDefaultValues() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440700";
+            String votingId = "660e8400-e29b-41d4-a716-446655440700";
+            
+            // Insert case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440701', " +
+                        "'550e8400-e29b-41d4-a716-446655440702', 'Test Taxpayer 7', 'TIN12351', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440703')");
+            
+            // Insert voting without specifying defaults
+            stmt.execute("INSERT INTO t_advisory_voting (voting_id, case_id) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "')");
+            
+            ResultSet rs = stmt.executeQuery("SELECT status, consensus_threshold FROM t_advisory_voting WHERE voting_id = '" + votingId + "'");
+            assertTrue(rs.next(), "Voting record should be inserted");
+            assertEquals("OPEN", rs.getString("status"), "Default status should be OPEN");
+            assertEquals(60, rs.getInt("consensus_threshold"), "Default consensus_threshold should be 60");
+        }
+    }
+
+    @Test
+    public void testCommitteeVoteDefaultTimestamp() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            String caseId = "550e8400-e29b-41d4-a716-446655440800";
+            String votingId = "660e8400-e29b-41d4-a716-446655440800";
+            
+            // Setup
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440801', " +
+                        "'550e8400-e29b-41d4-a716-446655440802', 'Test Taxpayer 8', 'TIN12352', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440803')");
+            
+            stmt.execute("INSERT INTO t_advisory_voting " +
+                        "(voting_id, case_id, status, consensus_threshold, voting_started_at) " +
+                        "VALUES ('" + votingId + "', '" + caseId + "', 'OPEN', 60, NOW())");
+            
+            // Insert vote without specifying timestamp
+            stmt.execute("INSERT INTO t_committee_vote " +
+                        "(vote_id, voting_id, case_id, member_id, vote_option) " +
+                        "VALUES ('880e8400-e29b-41d4-a716-446655440800', " +
+                        "'" + votingId + "', '" + caseId + "', '770e8400-e29b-41d4-a716-446655440800', 'APPROVE')");
+            
+            // Verify timestamp was set
+            ResultSet rs = stmt.executeQuery("SELECT voted_at FROM t_committee_vote WHERE vote_id = '880e8400-e29b-41d4-a716-446655440800'");
+            assertTrue(rs.next(), "Vote should be inserted");
+            assertNotNull(rs.getTimestamp("voted_at"), "voted_at should have default timestamp");
+        }
+    }
+}

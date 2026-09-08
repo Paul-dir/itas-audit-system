@@ -45,14 +45,11 @@ export function getRegionalFeedback(plan, userRegion) {
 
 export function normalizeRegion(region) {
   if (!region) return '';
-  const norm = region.toLowerCase().replace(/\s+/g, '_').trim();
-  if (norm === 'fed' || norm === 'federal' || norm === 'federal_level' || norm === 'federal level') return 'federal_level';
-  return norm;
+  return region.toLowerCase().replace(/\s+/g, '_').trim();
 }
 
 export function getRegionName(regionId) {
   const regionNames = {
-    'federal_level': 'Federal Level (LTO)',
     'addis_ababa': 'Addis Ababa',
     'amhara': 'Amhara',
     'oromia': 'Oromia',

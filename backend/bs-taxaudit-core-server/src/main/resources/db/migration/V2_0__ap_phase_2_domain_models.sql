@@ -1,17 +1,33 @@
 -- Phase II: AP Cluster - Domain Models Implementation
 -- Creates tables for Annual Audit Plan workflow with regional-level allocations
+-- 
+-- ALLOCATION STRUCTURE (REGIONAL-LEVEL):
+-- 1. Regional Allocations: Planning Team creates (proposedCount from Risk Engine)
+--    tax_center_code IS NULL, region_code is set
+-- 2. Director: Routes/approves regional allocations (NO modifications)
+-- 3. Regional Director: Divides regional allocations into tax center allocations
+--    Creates new allocations with tax_center_code and same region_code
+-- 4. Tax Center Manager: Provides feedback on their tax center allocation
 
--- Drop old V1 tables if they exist (from old schema)
-DROP TABLE IF EXISTS ap_plan_allocations CASCADE;
-DROP TABLE IF EXISTS ap_annual_audit_plans CASCADE;
+-- Enum type for plan status (custom PostgreSQL ENUM)
 DROP TYPE IF EXISTS ap_plan_status;
+CREATE TYPE ap_plan_status AS ENUM (
+    'DRAFT',
+    'SUBMITTED_TO_DIRECTOR',
+    'DIRECTOR_APPROVED',
+    'SUBMITTED_TO_REGIONAL',
+    'REGIONAL_APPROVED',
+    'SENT_TO_TAX_CENTERS',
+    'TC_FEEDBACK_SUBMITTED',
+    'FINALIZED'
+);
 
 -- Annual Audit Plans Table - Main aggregate root
 CREATE TABLE IF NOT EXISTS ap_annual_audit_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_year INTEGER NOT NULL,
     plan_name VARCHAR(256) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',  -- Store as VARCHAR for JPA compatibility
+    status ap_plan_status NOT NULL DEFAULT 'DRAFT',
     
     -- Planning Team Phase
     created_by VARCHAR(64) NOT NULL,
@@ -33,14 +49,6 @@ CREATE TABLE IF NOT EXISTS ap_annual_audit_plans (
     
     -- Tax Center Phase
     sent_to_tax_center_at TIMESTAMPTZ,
-    
-    -- Distribution Data (JSON storage for frontend)
-    distribution_json JSONB,
-    
-    -- Regions routing
-    sent_to_regions_at TIMESTAMPTZ,
-    sent_to_regions_by VARCHAR(64),
-    regions_received_count INTEGER DEFAULT 0,
     
     -- Metadata
     updated_at TIMESTAMPTZ,
@@ -83,6 +91,89 @@ CREATE TABLE IF NOT EXISTS ap_plan_allocations (
     -- Constraints: One regional allocation per region per plan, one tax center allocation per tax center per plan
     CONSTRAINT uk_ap_allocation_regional UNIQUE(plan_id, region_code, tax_center_code)
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'annual_plan_id'
+    ) THEN
+        ALTER TABLE ap_plan_allocations RENAME COLUMN annual_plan_id TO plan_id;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'region_code'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN region_code VARCHAR(10);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'regional_divided_count'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN regional_divided_count INTEGER;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'regional_division_reason'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN regional_division_reason TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'tc_adjusted_count'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN tc_adjusted_count INTEGER;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'tc_justification'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN tc_justification TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'tc_feedback_submitted'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN tc_feedback_submitted BOOLEAN DEFAULT FALSE;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ap_plan_allocations'
+          AND column_name = 'tc_feedback_submitted_at'
+    ) THEN
+        ALTER TABLE ap_plan_allocations ADD COLUMN tc_feedback_submitted_at TIMESTAMPTZ;
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_ap_allocations_plan ON ap_plan_allocations(plan_id);
 CREATE INDEX IF NOT EXISTS idx_ap_allocations_region ON ap_plan_allocations(region_code);

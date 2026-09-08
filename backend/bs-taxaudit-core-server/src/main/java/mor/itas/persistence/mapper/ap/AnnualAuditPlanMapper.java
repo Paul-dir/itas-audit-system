@@ -36,26 +36,19 @@ public class AnnualAuditPlanMapper {
             entity.setDistribution(domain.getDistribution());
         }
 
-        entity.setEstimatedRevenue(domain.getEstimatedRevenue());
-        entity.setEstimatedRevenueDistribution(domain.getEstimatedRevenueDistribution());
-
         List<PlanAllocationEntity> allocationEntities = domain.getAllocations().stream().map(a -> {
             PlanAllocationEntity ae = new PlanAllocationEntity();
             ae.setId(a.getId());
             ae.setAnnualPlan(entity);
             ae.setTaxCenterCode(a.getTaxCenterCode());
-            ae.setRegionCode(a.getRegionCode());  // ✅ CRITICAL: Must set region code!
             ae.setProposedCount(a.getProposedCount());
             ae.setTcAdjustedCount(a.getTcAdjustedCount());
             ae.setTcJustification(a.getTcJustification());
             ae.setTcFeedbackSubmitted(a.getTcFeedbackSubmitted());
-            ae.setEstimatedRevenue(a.getEstimatedRevenue());
-            ae.setRevenueByAuditType(a.getRevenueByAuditType());
             ae.setCreatedAt(a.getCreatedAt().toInstant().atOffset(java.time.ZoneOffset.UTC));
             return ae;
         }).collect(Collectors.toList());
 
-        entity.setAmendmentComment(domain.getAmendmentComment());
         entity.setAllocations(allocationEntities);
         return entity;
     }
@@ -74,8 +67,6 @@ public class AnnualAuditPlanMapper {
             allocation.setTcAdjustedCount(ae.getTcAdjustedCount());
             allocation.setTcJustification(ae.getTcJustification());
             allocation.setTcFeedbackSubmitted(ae.getTcFeedbackSubmitted());
-            allocation.setEstimatedRevenue(ae.getEstimatedRevenue());
-            allocation.setRevenueByAuditType(ae.getRevenueByAuditType());
             allocation.setCreatedAt(ae.getCreatedAt());
             return allocation;
         }).collect(Collectors.toList());
@@ -83,16 +74,12 @@ public class AnnualAuditPlanMapper {
         AnnualAuditPlan plan = new AnnualAuditPlan(entity.getId(), entity.getYear(), entity.getName(), 
             entity.getCreatedBy());
         plan.setStatus(mor.itas.domain.model.ap.PlanStatus.valueOf(entity.getStatus().name()));
-        plan.setAmendmentComment(entity.getAmendmentComment());
         
         // Assign distribution from entity (Hibernate handles JSON deserialization)
         if (entity.getDistribution() != null) {
             plan.setDistribution(entity.getDistribution());
         }
         
-        plan.setEstimatedRevenue(entity.getEstimatedRevenue());
-        plan.setEstimatedRevenueDistribution(entity.getEstimatedRevenueDistribution());
-
         // Add each allocation to the plan
         for (PlanAllocation allocation : allocations) {
             plan.addAllocation(allocation);

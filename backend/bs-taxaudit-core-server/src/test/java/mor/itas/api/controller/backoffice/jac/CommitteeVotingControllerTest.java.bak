@@ -1,0 +1,375 @@
+package mor.itas.api.controller.backoffice.jac;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mor.itas.api.dto.request.ap.jac.CastVoteRequest;
+import mor.itas.api.dto.response.ap.jac.*;
+import mor.itas.application.usecase.ap.CastAdvisoryVoteUseCase;
+import mor.itas.application.usecase.ap.GetVoteTallyUseCase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * CommitteeVotingControllerTest - MockMvc tests for Advisory Voting Operations
+ * Tests vote casting (with duplicate prevention), tally calculation, and vote history
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles({"test", "mock"})
+@DisplayName("Committee Voting Controller Tests")
+public class CommitteeVotingControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private CastAdvisoryVoteUseCase castAdvisoryVoteUseCase;
+
+    @MockBean
+    private GetVoteTallyUseCase getVoteTallyUseCase;
+
+    private UUID caseId;
+    private UUID votingId;
+    private UUID memberId;
+    private VotingTallyResponse votingTally;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        votingId = UUID.randomUUID();
+        memberId = UUID.randomUUID();
+
+        votingTally = new VotingTallyResponse(
+            votingId,       // votingId
+            15,             // approveCount
+            3,              // rejectCount
+            2,              // moreInfoCount
+            20,             // totalVotesCast
+            75.0,           // consensusPercentage
+            "PASSED",       // outcome
+            OffsetDateTime.now()  // votingStartedAt
+        );
+    }
+
+    // ============= VOTE CASTING Tests =============
+
+    @Test
+    @DisplayName("Test 1: POST /cases/{caseId}/votes casts vote successfully (201 CREATED)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_Success() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", "Strong case for joint audit");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenReturn(votingTally);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        VotingTallyResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            VotingTallyResponse.class
+        );
+
+        assertThat(response.getOutcome()).isEqualTo("PASSED");
+        verify(castAdvisoryVoteUseCase).execute(caseId, request);
+    }
+
+    @Test
+    @DisplayName("Test 2: POST /cases/{caseId}/votes with valid REJECT option")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_RejectOption() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("REJECT", "Insufficient evidence");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenReturn(votingTally);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 3: POST /cases/{caseId}/votes with MORE_INFO option")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_MoreInfoOption() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("MORE_INFO", "Need additional documentation");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenReturn(votingTally);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 4: POST /cases/{caseId}/votes without reasoning (optional field)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_WithoutReasoning() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", null);
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenReturn(votingTally);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 5: POST /cases/{caseId}/votes returns 409 on duplicate vote")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_DuplicatePrevention() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", "My vote");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Member has already voted on this case"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Test 6: POST /cases/{caseId}/votes returns 400 with invalid vote option")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_InvalidOption() throws Exception {
+        // Arrange
+        String invalidRequest = "{\"voteOption\": \"INVALID_OPTION\", \"reasoning\": \"test\"}";
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(invalidRequest))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 7: POST /cases/{caseId}/votes returns 422 when case not in voting phase")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_InvalidCaseState() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", "test");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Case not in PENDING_VOTES state"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isUnprocessableEntity());
+    }
+
+    // ============= VOTE TALLY Tests =============
+
+    @Test
+    @DisplayName("Test 8: GET /cases/{caseId}/vote-tally returns current tally (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteTally_Success() throws Exception {
+        // Arrange
+        when(getVoteTallyUseCase.execute(caseId))
+            .thenReturn(votingTally);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-tally", caseId))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        VotingTallyResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            VotingTallyResponse.class
+        );
+
+        assertThat(response.getApproveCount()).isEqualTo(15);
+        assertThat(response.getRejectCount()).isEqualTo(3);
+        assertThat(response.getMoreInfoCount()).isEqualTo(2);
+        assertThat(response.getConsensusPercentage()).isEqualTo(75.0);
+        assertThat(response.getOutcome()).isEqualTo("PASSED");
+    }
+
+    @Test
+    @DisplayName("Test 9: GET /cases/{caseId}/vote-tally returns 404 for invalid case")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteTally_NotFound() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        when(getVoteTallyUseCase.execute(invalidId))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-tally", invalidId))
+            .andExpect(status().isNotFound());
+    }
+
+    // ============= VOTE HISTORY Tests =============
+
+    @Test
+    @DisplayName("Test 10: GET /cases/{caseId}/vote-history returns paginated votes (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteHistory_Success() throws Exception {
+        // Arrange
+        VoteHistoryResponse voteHistory = new VoteHistoryResponse(
+            UUID.randomUUID(), // voteId
+            UUID.randomUUID(), // memberId
+            "Member A",
+            "APPROVE",
+            "Good case",
+            OffsetDateTime.now()
+        );
+
+        Page<VoteHistoryResponse> historyPage = new PageImpl<>(
+            Collections.singletonList(voteHistory),
+            PageRequest.of(0, 25),
+            15
+        );
+
+        when(getVoteTallyUseCase.getVoteHistory(eq(caseId), any()))
+            .thenReturn(historyPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-history?page=0&size=25", caseId))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+
+        verify(getVoteTallyUseCase).getVoteHistory(eq(caseId), any());
+    }
+
+    @Test
+    @DisplayName("Test 11: GET /cases/{caseId}/vote-history pagination works")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteHistory_Pagination() throws Exception {
+        // Arrange
+        List<VoteHistoryResponse> votes = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            votes.add(new VoteHistoryResponse(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Member " + i,
+                "APPROVE",
+                "Vote " + i,
+                OffsetDateTime.now()
+            ));
+        }
+
+        Page<VoteHistoryResponse> historyPage = new PageImpl<>(
+            votes,
+            PageRequest.of(1, 10),
+            50
+        );
+
+        when(getVoteTallyUseCase.getVoteHistory(eq(caseId), any()))
+            .thenReturn(historyPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-history?page=1&size=10", caseId))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 12: GET /cases/{caseId}/vote-history returns 404 for invalid case")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteHistory_NotFound() throws Exception {
+        // Arrange
+        UUID invalidId = UUID.randomUUID();
+        when(getVoteTallyUseCase.getVoteHistory(eq(invalidId), any()))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-history", invalidId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 13: GET /cases/{caseId}/vote-history returns empty page when no votes")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getVoteHistory_Empty() throws Exception {
+        // Arrange
+        Page<VoteHistoryResponse> emptyPage = new PageImpl<>(
+            Collections.emptyList(),
+            PageRequest.of(0, 25),
+            0
+        );
+
+        when(getVoteTallyUseCase.getVoteHistory(eq(caseId), any()))
+            .thenReturn(emptyPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/vote-history", caseId))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 14: POST /cases/{caseId}/votes returns 500 on service error")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_castVote_ServiceError() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", "test");
+
+        when(castAdvisoryVoteUseCase.execute(caseId, request))
+            .thenThrow(new RuntimeException("Database error"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("Test 15: POST /cases/{caseId}/votes requires COMMITTEE_MEMBER role")
+    @WithMockUser(roles = "OTHER_ROLE")
+    void test_castVote_UnauthorizedRole() throws Exception {
+        // Arrange
+        CastVoteRequest request = new CastVoteRequest("APPROVE", "test");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/votes", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isForbidden());
+    }
+}

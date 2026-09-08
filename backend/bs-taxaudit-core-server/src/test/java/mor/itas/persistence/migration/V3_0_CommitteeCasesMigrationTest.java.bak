@@ -1,0 +1,407 @@
+package mor.itas.persistence.migration;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration test for V3_0__jac_committee_cases.sql migration.
+ * 
+ * Validates:
+ * 1. Migration file syntax is valid PostgreSQL
+ * 2. CREATE TABLE statements are idempotent (use CREATE TABLE IF NOT EXISTS)
+ * 3. Foreign keys reference existing tables
+ * 4. Indexes created successfully
+ * 5. Comments applied without errors
+ * 6. Rollback script removes all objects in correct order
+ * 
+ * Uses TestContainers to test against a real PostgreSQL 14+ instance.
+ */
+@Testcontainers
+@SpringBootTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+public class V3_0_CommitteeCasesMigrationTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:14-alpine")
+            .withDatabaseName("test_jac_db")
+            .withUsername("testuser")
+            .withPassword("testpass");
+
+    @DynamicPropertySource
+    static void configureTestDatabase(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQL14Dialect");
+        registry.add("spring.flyway.enabled", () -> "true");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+    }
+
+    private DataSource dataSource;
+
+    public V3_0_CommitteeCasesMigrationTest(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Test
+    public void testMigrationUp_CommitteeCaseTableExists() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet tables = meta.getTables(null, "public", "t_committee_case", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_committee_case table should exist after migration");
+        }
+    }
+
+    @Test
+    public void testMigrationUp_StatusHistoryTableExists() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet tables = meta.getTables(null, "public", "t_case_status_history", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_case_status_history table should exist after migration");
+        }
+    }
+
+    @Test
+    public void testCommitteeCaseTableStructure() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify primary key exists
+            ResultSet primaryKeys = meta.getPrimaryKeys(null, "public", "t_committee_case");
+            assertTrue(primaryKeys.next(), "case_id should be primary key");
+            assertEquals("case_id", primaryKeys.getString("COLUMN_NAME"));
+            
+            // Verify required columns exist
+            ResultSet columns = meta.getColumns(null, "public", "t_committee_case", null);
+            Set<String> columnNames = new HashSet<>();
+            while (columns.next()) {
+                columnNames.add(columns.getString("COLUMN_NAME"));
+            }
+            
+            // Verify core columns exist
+            assertTrue(columnNames.contains("case_id"), "case_id column should exist");
+            assertTrue(columnNames.contains("original_case_id"), "original_case_id column should exist");
+            assertTrue(columnNames.contains("case_code"), "case_code column should exist");
+            assertTrue(columnNames.contains("taxpayer_id"), "taxpayer_id column should exist");
+            assertTrue(columnNames.contains("taxpayer_name"), "taxpayer_name column should exist");
+            assertTrue(columnNames.contains("tax_id_number"), "tax_id_number column should exist");
+            assertTrue(columnNames.contains("status"), "status column should exist");
+            assertTrue(columnNames.contains("committee_deadline"), "committee_deadline column should exist");
+            assertTrue(columnNames.contains("current_owner_id"), "current_owner_id column should exist");
+            assertTrue(columnNames.contains("decision"), "decision column should exist");
+            assertTrue(columnNames.contains("chairperson_id"), "chairperson_id column should exist");
+            assertTrue(columnNames.contains("version"), "version column should exist");
+        }
+    }
+
+    @Test
+    public void testStatusHistoryTableStructure() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify primary key exists
+            ResultSet primaryKeys = meta.getPrimaryKeys(null, "public", "t_case_status_history");
+            assertTrue(primaryKeys.next(), "history_id should be primary key");
+            assertEquals("history_id", primaryKeys.getString("COLUMN_NAME"));
+            
+            // Verify columns exist
+            ResultSet columns = meta.getColumns(null, "public", "t_case_status_history", null);
+            Set<String> columnNames = new HashSet<>();
+            while (columns.next()) {
+                columnNames.add(columns.getString("COLUMN_NAME"));
+            }
+            
+            assertTrue(columnNames.contains("history_id"), "history_id column should exist");
+            assertTrue(columnNames.contains("case_id"), "case_id column should exist");
+            assertTrue(columnNames.contains("old_status"), "old_status column should exist");
+            assertTrue(columnNames.contains("new_status"), "new_status column should exist");
+            assertTrue(columnNames.contains("transitioned_by"), "transitioned_by column should exist");
+        }
+    }
+
+    @Test
+    public void testForeignKeyConstraint() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Verify foreign key from t_case_status_history to t_committee_case
+            ResultSet foreignKeys = meta.getImportedKeys(null, "public", "t_case_status_history");
+            assertTrue(foreignKeys.next(), "Foreign key should exist from t_case_status_history to t_committee_case");
+            assertEquals("t_committee_case", foreignKeys.getString("PKTABLE_NAME"));
+            assertEquals("case_id", foreignKeys.getString("PKCOLUMN_NAME"));
+        }
+    }
+
+    @Test
+    public void testIndexesCreated() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Check for indexes on t_committee_case
+            ResultSet indexes = meta.getIndexInfo(null, "public", "t_committee_case", false, false);
+            Set<String> indexNames = new HashSet<>();
+            while (indexes.next()) {
+                String indexName = indexes.getString("INDEX_NAME");
+                if (indexName != null) {
+                    indexNames.add(indexName);
+                }
+            }
+            
+            // Verify key indexes exist
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("status")), 
+                      "Index on status column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("taxpayer")), 
+                      "Index on taxpayer_id column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("deadline")), 
+                      "Index on committee_deadline column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("owner")), 
+                      "Index on current_owner_id column should exist");
+            
+            // Check for indexes on t_case_status_history
+            indexes = meta.getIndexInfo(null, "public", "t_case_status_history", false, false);
+            indexNames.clear();
+            while (indexes.next()) {
+                String indexName = indexes.getString("INDEX_NAME");
+                if (indexName != null) {
+                    indexNames.add(indexName);
+                }
+            }
+            
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("case")), 
+                      "Index on case_id column should exist");
+            assertTrue(indexNames.stream().anyMatch(i -> i.contains("time")), 
+                      "Index on transitioned_at column should exist");
+        }
+    }
+
+    @Test
+    public void testUniqueConstraints() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Check for unique constraints
+            ResultSet indexes = meta.getIndexInfo(null, "public", "t_committee_case", true, false);
+            Set<String> uniqueIndexes = new HashSet<>();
+            while (indexes.next()) {
+                String indexName = indexes.getString("INDEX_NAME");
+                if (indexName != null) {
+                    uniqueIndexes.add(indexName);
+                }
+            }
+            
+            // Verify at least one unique index exists (original_case_id, case_code combination)
+            assertTrue(uniqueIndexes.size() > 0, "Unique constraints should exist");
+        }
+    }
+
+    @Test
+    public void testConstraintOnRiskScore() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // Try to insert invalid risk_score (should fail with CHECK constraint)
+            try {
+                stmt.execute("INSERT INTO t_committee_case " +
+                            "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                            "status, committee_deadline, created_by, risk_score) " +
+                            "VALUES ('550e8400-e29b-41d4-a716-446655440000', " +
+                            "'550e8400-e29b-41d4-a716-446655440001', " +
+                            "'550e8400-e29b-41d4-a716-446655440002', 'Test Corp', '12345', " +
+                            "'PENDING_VOTES', NOW() + interval '30 days', " +
+                            "'550e8400-e29b-41d4-a716-446655440003', 150)");
+                
+                fail("CHECK constraint on risk_score (0-100) should prevent invalid values");
+            } catch (SQLException e) {
+                // Expected: CHECK constraint violation
+                assertTrue(e.getMessage().contains("check") || e.getMessage().contains("CHECK"),
+                          "Should fail due to CHECK constraint on risk_score");
+            }
+        }
+    }
+
+    @Test
+    public void testCommitteeCaseDataInsertion() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // Insert valid test data
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by, risk_score) " +
+                        "VALUES ('550e8400-e29b-41d4-a716-446655440000', " +
+                        "'550e8400-e29b-41d4-a716-446655440001', " +
+                        "'550e8400-e29b-41d4-a716-446655440002', 'Test Corp', '12345', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440003', 75)");
+            
+            // Verify insertion
+            ResultSet rs = stmt.executeQuery("SELECT * FROM t_committee_case WHERE case_id = '550e8400-e29b-41d4-a716-446655440000'");
+            assertTrue(rs.next(), "Inserted record should be retrievable");
+            assertEquals("PENDING_VOTES", rs.getString("status"));
+            assertEquals("Test Corp", rs.getString("taxpayer_name"));
+            assertEquals(75, rs.getInt("risk_score"));
+        }
+    }
+
+    @Test
+    public void testStatusHistoryDataInsertion() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // First insert a committee case
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by, risk_score) " +
+                        "VALUES ('550e8400-e29b-41d4-a716-446655440004', " +
+                        "'550e8400-e29b-41d4-a716-446655440005', " +
+                        "'550e8400-e29b-41d4-a716-446655440006', 'Test Corp 2', '12346', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440007', 50)");
+            
+            // Insert status history record
+            stmt.execute("INSERT INTO t_case_status_history " +
+                        "(history_id, case_id, old_status, new_status, transitioned_by) " +
+                        "VALUES ('650e8400-e29b-41d4-a716-446655440000', " +
+                        "'550e8400-e29b-41d4-a716-446655440004', " +
+                        "NULL, 'PENDING_VOTES', '550e8400-e29b-41d4-a716-446655440007')");
+            
+            // Verify insertion
+            ResultSet rs = stmt.executeQuery("SELECT * FROM t_case_status_history WHERE history_id = '650e8400-e29b-41d4-a716-446655440000'");
+            assertTrue(rs.next(), "Status history record should be retrievable");
+            assertEquals("PENDING_VOTES", rs.getString("new_status"));
+        }
+    }
+
+    @Test
+    public void testOnDeleteCascade() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // Insert test data
+            String caseId = "550e8400-e29b-41d4-a716-446655440008";
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by, risk_score) " +
+                        "VALUES ('" + caseId + "', " +
+                        "'550e8400-e29b-41d4-a716-446655440009', " +
+                        "'550e8400-e29b-41d4-a716-446655440010', 'Test Corp 3', '12347', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440011', 60)");
+            
+            stmt.execute("INSERT INTO t_case_status_history " +
+                        "(history_id, case_id, old_status, new_status, transitioned_by) " +
+                        "VALUES ('650e8400-e29b-41d4-a716-446655440001', " +
+                        "'" + caseId + "', " +
+                        "NULL, 'PENDING_VOTES', '550e8400-e29b-41d4-a716-446655440011')");
+            
+            // Delete the parent case
+            stmt.execute("DELETE FROM t_committee_case WHERE case_id = '" + caseId + "'");
+            
+            // Verify cascade delete worked
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM t_case_status_history WHERE case_id = '" + caseId + "'");
+            rs.next();
+            assertEquals(0, rs.getInt("count"), "Status history should be deleted when parent case is deleted");
+        }
+    }
+
+    @Test
+    public void testDefaultValues() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // Insert without specifying defaults
+            stmt.execute("INSERT INTO t_committee_case " +
+                        "(case_id, original_case_id, taxpayer_id, taxpayer_name, tax_id_number, " +
+                        "status, committee_deadline, created_by) " +
+                        "VALUES ('550e8400-e29b-41d4-a716-446655440012', " +
+                        "'550e8400-e29b-41d4-a716-446655440013', " +
+                        "'550e8400-e29b-41d4-a716-446655440014', 'Test Corp 4', '12348', " +
+                        "'PENDING_VOTES', NOW() + interval '30 days', " +
+                        "'550e8400-e29b-41d4-a716-446655440015')");
+            
+            ResultSet rs = stmt.executeQuery("SELECT status, extension_count, version FROM t_committee_case WHERE case_id = '550e8400-e29b-41d4-a716-446655440012'");
+            assertTrue(rs.next());
+            assertEquals("PENDING_VOTES", rs.getString("status"));
+            assertEquals(0, rs.getInt("extension_count"));
+            assertEquals(0, rs.getLong("version"));
+        }
+    }
+
+    @Test
+    public void testMigrationRollbackScript() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            // Before rollback, tables should exist
+            ResultSet tables = meta.getTables(null, "public", "t_committee_case", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_committee_case should exist before rollback");
+            
+            // Execute rollback script
+            String rollbackScript = 
+                "DROP INDEX IF EXISTS idx_case_status_history_time; " +
+                "DROP INDEX IF EXISTS idx_case_status_history_case; " +
+                "DROP TABLE IF EXISTS t_case_status_history; " +
+                "DROP INDEX IF EXISTS idx_committee_case_created; " +
+                "DROP INDEX IF EXISTS idx_committee_case_chairperson; " +
+                "DROP INDEX IF EXISTS idx_committee_case_owner; " +
+                "DROP INDEX IF EXISTS idx_committee_case_deadline; " +
+                "DROP INDEX IF EXISTS idx_committee_case_taxpayer; " +
+                "DROP INDEX IF EXISTS idx_committee_case_status; " +
+                "DROP TABLE IF EXISTS t_committee_case;";
+            
+            Statement stmt = conn.createStatement();
+            for (String sql : rollbackScript.split("; ")) {
+                if (!sql.trim().isEmpty()) {
+                    stmt.execute(sql.trim());
+                }
+            }
+            
+            // Verify tables are removed
+            tables = meta.getTables(null, "public", "t_committee_case", new String[]{"TABLE"});
+            assertFalse(tables.next(), "t_committee_case should not exist after rollback");
+            
+            tables = meta.getTables(null, "public", "t_case_status_history", new String[]{"TABLE"});
+            assertFalse(tables.next(), "t_case_status_history should not exist after rollback");
+        }
+    }
+
+    @Test
+    public void testMigrationIdempotency() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            Statement stmt = conn.createStatement();
+            
+            // Migration should already be applied by Spring Flyway
+            // Just verify tables exist and have correct structure
+            DatabaseMetaData meta = conn.getMetaData();
+            
+            ResultSet tables = meta.getTables(null, "public", "t_committee_case", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_committee_case should exist");
+            
+            tables = meta.getTables(null, "public", "t_case_status_history", new String[]{"TABLE"});
+            assertTrue(tables.next(), "t_case_status_history should exist");
+        }
+    }
+}

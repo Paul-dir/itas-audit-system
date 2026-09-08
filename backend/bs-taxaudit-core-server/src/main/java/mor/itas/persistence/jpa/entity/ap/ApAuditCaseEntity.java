@@ -1,18 +1,13 @@
 package mor.itas.persistence.jpa.entity.ap;
 
 import jakarta.persistence.*;
-import mor.itas.persistence.jpa.entity.tp.*;
+import lombok.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
  * ApAuditCaseEntity - JPA Entity for ap_audit_cases table
- * Represents audit cases generated from finalized annual audit plans.
- *
- * Status lifecycle:
- *   PENDING_ASSIGNMENT → ASSIGNED_TO_TEAM_LEADER (or ASSIGNED_TO_COMMITTEE for Joint/TP)
- *   ASSIGNED_TO_TEAM_LEADER → IN_PROGRESS (after team leader allocates to auditor)
- *   IN_PROGRESS → COMPLETED
+ * Represents audit cases generated from finalized annual audit plans
  */
 @Entity
 @Table(name = "ap_audit_cases", indexes = {
@@ -20,28 +15,17 @@ import java.util.UUID;
     @Index(name = "idx_ap_audit_cases_status", columnList = "status"),
     @Index(name = "idx_ap_audit_cases_auditor", columnList = "assigned_auditor_id"),
     @Index(name = "idx_ap_audit_cases_team_leader", columnList = "assigned_team_leader_id"),
-    @Index(name = "idx_ap_audit_cases_case_number", columnList = "case_number"),
-    @Index(name = "idx_ap_audit_cases_tax_center", columnList = "tax_center_code"),
-    @Index(name = "idx_ap_audit_cases_region", columnList = "region_code"),
-    @Index(name = "idx_ap_audit_cases_audit_type", columnList = "audit_type"),
-    @Index(name = "idx_ap_audit_cases_tc_status", columnList = "tax_center_code, status"),
-    @Index(name = "idx_ap_audit_cases_tl_status", columnList = "assigned_team_leader_id, status")
+    @Index(name = "idx_ap_audit_cases_case_number", columnList = "case_number")
 })
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ApAuditCaseEntity {
 
-    // ── Status constants ──────────────────────────────────────────────────────
-    /** Newly created — not yet assigned to anyone */
-    public static final String STATUS_PENDING_ASSIGNMENT      = "PENDING_ASSIGNMENT";
-    /** Assigned to a desk / comprehensive / issue team leader */
-    public static final String STATUS_ASSIGNED_TO_TEAM_LEADER = "ASSIGNED_TO_TEAM_LEADER";
-    /** Assigned to joint-audit or transfer-pricing committee */
-    public static final String STATUS_ASSIGNED_TO_COMMITTEE   = "ASSIGNED_TO_COMMITTEE";
-    /** Team leader has further allocated to a specific auditor */
-    public static final String STATUS_IN_PROGRESS             = "IN_PROGRESS";
-    /** Audit execution finished */
-    public static final String STATUS_COMPLETED               = "COMPLETED";
-
     @Id
+    @Builder.Default
     private UUID id = UUID.randomUUID();
 
     @Column(nullable = false, name = "plan_id")
@@ -50,52 +34,51 @@ public class ApAuditCaseEntity {
     @Column(name = "allocation_id")
     private UUID allocationId;
 
-    /** Direct denormalized reference — avoids join via allocation table */
-    @Column(length = 64, name = "tax_center_code")
-    private String taxCenterCode;
-
-    @Column(length = 10, name = "region_code")
-    private String regionCode;
-
     @Column(nullable = false, length = 32, name = "case_number", unique = true)
     private String caseNumber;
 
-    /** TIN / taxpayer registration number */
     @Column(nullable = false, length = 64, name = "taxpayer_id")
     private String taxpayerId;
 
-    /** Human-readable taxpayer name for display (denormalized from taxpayer service) */
-    @Column(length = 256, name = "taxpayer_name")
+    @Column(length = 128, name = "taxpayer_name")
     private String taxpayerName;
-
-    /** Business sector (denormalized) */
-    @Column(length = 128, name = "sector")
-    private String sector;
 
     @Column(length = 32, name = "audit_type")
     private String auditType;
 
+    @Column(length = 16, name = "risk_priority")
+    private String riskPriority;
+
     @Column(name = "risk_score")
     private Integer riskScore;
 
-    @Column(name = "estimated_revenue")
-    private Long estimatedRevenue;
+    @Column(length = 32, name = "segment")
+    private String segment;
 
     @Column(nullable = false, length = 32, name = "status")
-    private String status = STATUS_PENDING_ASSIGNMENT;
+    @Builder.Default
+    private String status = "PENDING_ASSIGNMENT";
 
-    /**
-     * For DESK / COMPREHENSIVE / ISSUE: holds the team leader's userId.
-     * For JOINT_AUDIT / TRANSFER_PRICING: holds the committee member's userId.
-     */
     @Column(length = 64, name = "assigned_team_leader_id")
     private String assignedTeamLeaderId;
 
-    @Column(name = "committee_id", columnDefinition = "UUID")
-    private UUID committeeId;
-
     @Column(length = 64, name = "assigned_auditor_id")
     private String assignedAuditorId;
+
+    @Column(name = "handoff_at")
+    private OffsetDateTime handoffAt;
+
+    @Column(length = 64, name = "handoff_by")
+    private String handoffBy;
+
+    @Column(name = "handoff_comment", columnDefinition = "TEXT")
+    private String handoffComment;
+
+    @Column(name = "assigned_at")
+    private OffsetDateTime assignedAt;
+
+    @Column(length = 64, name = "assigned_by")
+    private String assignedBy;
 
     @Column(nullable = false, length = 64, name = "created_by")
     private String createdBy;
@@ -112,152 +95,4 @@ public class ApAuditCaseEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
-    // ── TP-Specific Child Entities (Changed to OneToMany to avoid N+1 issue) ──
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpRiskAssessmentEntity> tpRiskAssessments = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpWorkingHypothesisEntity> tpWorkingHypotheses = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpAuditPlanEntity> tpAuditPlans = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpPlanningMeetingEntity> tpPlanningMeetings = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpFieldWorkDataEntity> tpFieldWorkDatas = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpAnalysisDataEntity> tpAnalysisDatas = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpAuditReportEntity> tpAuditReports = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpAuditNoticeEntity> tpAuditNotices = new java.util.ArrayList<>();
-
-    @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<TpObjectionEntity> tpObjections = new java.util.ArrayList<>();
-
-    /** Current workflow phase for TP cases (e.g. DETAILED_RISK_ASSESSMENT, PLANNING, FIELD_WORK…) */
-    @Column(name = "tp_current_phase", length = 64)
-    private String tpCurrentPhase;
-
-    // ── Constructors ──────────────────────────────────────────────────────────
-    public ApAuditCaseEntity() {
-    }
-
-    public ApAuditCaseEntity(UUID planId, String caseNumber, String taxpayerId, String auditType,
-                             Integer riskScore, String createdBy) {
-        this.planId = planId;
-        this.caseNumber = caseNumber;
-        this.taxpayerId = taxpayerId;
-        this.auditType = auditType;
-        this.riskScore = riskScore;
-        this.status = STATUS_PENDING_ASSIGNMENT;
-        this.createdBy = createdBy;
-        this.createdAt = OffsetDateTime.now();
-    }
-
-    // ── Helper: is this a committee-type case? ────────────────────────────────
-    public boolean isCommitteeCase() {
-        return STATUS_ASSIGNED_TO_COMMITTEE.equals(this.status) ||
-               "JOINT_AUDIT".equals(this.auditType) ||
-               "TRANSFER_PRICING".equals(this.auditType);
-    }
-
-    // ── Getters and Setters ───────────────────────────────────────────────────
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
-
-    public UUID getPlanId() { return planId; }
-    public void setPlanId(UUID planId) { this.planId = planId; }
-
-    public UUID getAllocationId() { return allocationId; }
-    public void setAllocationId(UUID allocationId) { this.allocationId = allocationId; }
-
-    public String getTaxCenterCode() { return taxCenterCode; }
-    public void setTaxCenterCode(String taxCenterCode) { this.taxCenterCode = taxCenterCode; }
-
-    public String getRegionCode() { return regionCode; }
-    public void setRegionCode(String regionCode) { this.regionCode = regionCode; }
-
-    public String getCaseNumber() { return caseNumber; }
-    public void setCaseNumber(String caseNumber) { this.caseNumber = caseNumber; }
-
-    public String getTaxpayerId() { return taxpayerId; }
-    public void setTaxpayerId(String taxpayerId) { this.taxpayerId = taxpayerId; }
-
-    public String getTaxpayerName() { return taxpayerName; }
-    public void setTaxpayerName(String taxpayerName) { this.taxpayerName = taxpayerName; }
-
-    public String getSector() { return sector; }
-    public void setSector(String sector) { this.sector = sector; }
-
-    public String getAuditType() { return auditType; }
-    public void setAuditType(String auditType) { this.auditType = auditType; }
-
-    public Integer getRiskScore() { return riskScore; }
-    public void setRiskScore(Integer riskScore) { this.riskScore = riskScore; }
-
-    public Long getEstimatedRevenue() { return estimatedRevenue; }
-    public void setEstimatedRevenue(Long estimatedRevenue) { this.estimatedRevenue = estimatedRevenue; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public String getAssignedTeamLeaderId() { return assignedTeamLeaderId; }
-    public void setAssignedTeamLeaderId(String assignedTeamLeaderId) { this.assignedTeamLeaderId = assignedTeamLeaderId; }
-
-    public UUID getCommitteeId() { return committeeId; }
-    public void setCommitteeId(UUID committeeId) { this.committeeId = committeeId; }
-
-    public String getAssignedAuditorId() { return assignedAuditorId; }
-    public void setAssignedAuditorId(String assignedAuditorId) { this.assignedAuditorId = assignedAuditorId; }
-
-    public String getCreatedBy() { return createdBy; }
-    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
-
-    public OffsetDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
-
-    public OffsetDateTime getStartedAt() { return startedAt; }
-    public void setStartedAt(OffsetDateTime startedAt) { this.startedAt = startedAt; }
-
-    public OffsetDateTime getCompletedAt() { return completedAt; }
-    public void setCompletedAt(OffsetDateTime completedAt) { this.completedAt = completedAt; }
-
-    public OffsetDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
-
-    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessments.isEmpty() ? null : tpRiskAssessments.get(0); }
-    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessments.clear(); if (tpRiskAssessment != null) this.tpRiskAssessments.add(tpRiskAssessment); }
-
-    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypotheses.isEmpty() ? null : tpWorkingHypotheses.get(0); }
-    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypotheses.clear(); if (tpWorkingHypothesis != null) this.tpWorkingHypotheses.add(tpWorkingHypothesis); }
-
-    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlans.isEmpty() ? null : tpAuditPlans.get(0); }
-    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlans.clear(); if (tpAuditPlan != null) this.tpAuditPlans.add(tpAuditPlan); }
-
-    public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeetings.isEmpty() ? null : tpPlanningMeetings.get(0); }
-    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeetings.clear(); if (tpPlanningMeeting != null) this.tpPlanningMeetings.add(tpPlanningMeeting); }
-
-    public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkDatas.isEmpty() ? null : tpFieldWorkDatas.get(0); }
-    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkDatas.clear(); if (tpFieldWorkData != null) this.tpFieldWorkDatas.add(tpFieldWorkData); }
-
-    public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisDatas.isEmpty() ? null : tpAnalysisDatas.get(0); }
-    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisDatas.clear(); if (tpAnalysisData != null) this.tpAnalysisDatas.add(tpAnalysisData); }
-
-    public java.util.List<TpAuditReportEntity> getTpAuditReports() { return tpAuditReports; }
-    public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) { this.tpAuditReports = tpAuditReports; }
-
-    public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotices.isEmpty() ? null : tpAuditNotices.get(0); }
-    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotices.clear(); if (tpAuditNotice != null) this.tpAuditNotices.add(tpAuditNotice); }
-
-    public java.util.List<TpObjectionEntity> getTpObjections() { return tpObjections; }
-    public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) { this.tpObjections = tpObjections; }
-
-    public String getTpCurrentPhase() { return tpCurrentPhase; }
-    public void setTpCurrentPhase(String tpCurrentPhase) { this.tpCurrentPhase = tpCurrentPhase; }
 }

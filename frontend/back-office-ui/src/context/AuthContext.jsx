@@ -1,213 +1,85 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { storage, STORE_KEYS } from '../features/ap/services/storage.js';
 import { SEED_USERS } from '../features/ap/data/seed.js';
-import { buildCompleteUserProfile, synthesizeUserFromPattern, mapBackendUserToProfile } from '../features/ap/data/userResolver.js';
 
-/**
- * Auth Context
- * 
- * Manages user authentication, complete session state, and organizational context.
- * Supports login via Username (e.g. u-pt-01, u-tcm-federal-lto1) or Email (e.g. tsega.mulugeta@mor.gov.et).
- * Synchronized with the backend user directory (/api/v1/backoffice/ap/users).
- */
-const AuthContext = createContext({
-  user: null,
-  authContext: null,
-  isAuthenticated: false,
-  loading: true,
-  login: () => false,
-  logout: () => {},
-  getUserInfo: () => null,
-  hasPermission: () => false
-});
+const AuthContext = createContext({ user: null, login: () => false, logout: () => {}, loading: true });
 
-async function fetchBackendDirectoryUsers() {
-  try {
-    const res = await fetch('/api/v1/backoffice/ap/users');
-    if (res.ok) {
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : (data.data || []);
-      return list.map(mapBackendUserToProfile).filter(Boolean);
-    }
-  } catch (err) {
-    console.warn('Could not fetch backend users for auth:', err);
-  }
-  return [];
-}
-
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const directoryUsersRef = useRef([]);
 
-  // Restore session on mount & sync backend directory
   useEffect(() => {
-    let isMounted = true;
-    async function initAuth() {
-      try {
-        const saved = storage.get('session');
-        const cachedRaw = storage.get(STORE_KEYS.USERS, []);
-        const cached = (Array.isArray(cachedRaw) ? cachedRaw : []).map(buildCompleteUserProfile);
-        const seedList = SEED_USERS.map(buildCompleteUserProfile);
-        let pool = [...cached, ...seedList];
-        directoryUsersRef.current = pool;
-
-        let currentUser = null;
-        if (saved && (saved.id || saved.email || saved.username)) {
-          const targetId = (saved.id || saved.email || saved.username).toLowerCase();
-          currentUser = pool.find(u => 
-            (u.id && u.id.toLowerCase() === targetId) ||
-            (u.username && u.username.toLowerCase() === targetId) ||
-            (u.email && u.email.toLowerCase() === targetId)
-          );
-          if (!currentUser && saved.user) {
-            currentUser = buildCompleteUserProfile(saved.user);
-          }
-          if (!currentUser) {
-            currentUser = synthesizeUserFromPattern(saved.id);
-          }
-          if (currentUser && isMounted) {
-            setUser(currentUser);
-          }
-        }
-
-        // Fetch full directory of system accounts from backend
-        const backendUsers = await fetchBackendDirectoryUsers();
-        if (backendUsers && backendUsers.length > 0) {
-          directoryUsersRef.current = backendUsers;
-          storage.set(STORE_KEYS.USERS, backendUsers);
-
-          // Re-resolve active session with authoritative backend profile
-          if (saved && (saved.id || saved.email || saved.username)) {
-            const targetId = (saved.id || saved.email || saved.username).toLowerCase();
-            const matched = backendUsers.find(u =>
-              (u.id && u.id.toLowerCase() === targetId) ||
-              (u.username && u.username.toLowerCase() === targetId) ||
-              (u.email && u.email.toLowerCase() === targetId)
-            );
-            if (matched && isMounted) {
-              setUser(matched);
-              storage.set('session', { id: matched.id, role: matched.role, user: matched });
-              sessionStorage.setItem('userId', matched.id);
-              sessionStorage.setItem('userRole', matched.role);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to restore session:', err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+    // Restore session
+    const saved = storage.get('session');
+    if (saved) {
+      const users = storage.get(STORE_KEYS.USERS, SEED_USERS);
+      const found = users.find(u => u.id === saved.id);
+      if (found) setUser(found);
     }
-
-    initAuth();
-    return () => { isMounted = false; };
+    setLoading(false);
   }, []);
 
-  // Login user - supports User Object, Username, or Email
-  const login = useCallback(async (emailOrUsernameOrObj, password) => {
-    setLoading(true);
-    try {
-      if (!emailOrUsernameOrObj) {
-        throw new Error('Username or email is required');
+  const login = (emailOrId, password) => {
+    // Always check SEED_USERS first (fresh data), then fall back to cached
+    const seedUsers = SEED_USERS;
+    const cachedUsers = storage.get(STORE_KEYS.USERS, SEED_USERS);
+    
+    // Merge seed users with cached (seed takes priority for updates)
+    const allUsers = [
+      ...seedUsers,
+      ...cachedUsers.filter(cu => !seedUsers.find(su => su.id === cu.id))
+    ];
+    
+    // Find user by email or ID
+    const found = allUsers.find(u => u.email === emailOrId || u.id === emailOrId);
+    
+    if (found) {
+      // Demo mode: Accept common password for all users
+      const DEMO_PASSWORD = 'password123';
+      const acceptedPasswords = [found.password, DEMO_PASSWORD];
+      
+      // Check password if provided
+      if (password && !acceptedPasswords.includes(password)) {
+        throw new Error('Invalid password');
       }
-
-      // If already a complete user object
-      if (typeof emailOrUsernameOrObj === 'object' && emailOrUsernameOrObj !== null) {
-        const completeUser = mapBackendUserToProfile(emailOrUsernameOrObj);
-        setUser(completeUser);
-        storage.set('session', { id: completeUser.id, role: completeUser.role, user: completeUser });
-        sessionStorage.setItem('userId', completeUser.id);
-        sessionStorage.setItem('userRole', completeUser.role);
-        return completeUser;
-      }
-
-      const input = String(emailOrUsernameOrObj).trim();
-      if (!input) {
-        throw new Error('Username or email is required');
-      }
-      const inputLower = input.toLowerCase();
-      const inputBase = inputLower.replace(/@mor\.gov\.et$/, '');
-
-      // Check current in-memory directory
-      let allUsers = directoryUsersRef.current || [];
-      if (allUsers.length === 0) {
-        const cachedRaw = storage.get(STORE_KEYS.USERS, []);
-        allUsers = (Array.isArray(cachedRaw) ? cachedRaw : []).map(buildCompleteUserProfile);
-      }
-      if (allUsers.length === 0) {
-        allUsers = SEED_USERS.map(buildCompleteUserProfile);
-      }
-
-      // Search directory
-      let found = allUsers.find(u => 
-        (u.id && u.id.toLowerCase() === inputLower) ||
-        (u.username && u.username.toLowerCase() === inputLower) ||
-        (u.username && u.username.toLowerCase() === inputBase) ||
-        (u.email && u.email.toLowerCase() === inputLower) ||
-        (u.name && u.name.toLowerCase() === inputLower) ||
-        (u.userId && u.userId.toLowerCase() === inputLower)
-      );
-
-      // If still not found, fetch fresh from backend API
-      if (!found) {
-        const freshUsers = await fetchBackendDirectoryUsers();
-        if (freshUsers && freshUsers.length > 0) {
-          directoryUsersRef.current = freshUsers;
-          storage.set(STORE_KEYS.USERS, freshUsers);
-          found = freshUsers.find(u => 
-            (u.id && u.id.toLowerCase() === inputLower) ||
-            (u.username && u.username.toLowerCase() === inputLower) ||
-            (u.username && u.username.toLowerCase() === inputBase) ||
-            (u.email && u.email.toLowerCase() === inputLower) ||
-            (u.name && u.name.toLowerCase() === inputLower) ||
-            (u.userId && u.userId.toLowerCase() === inputLower)
-          );
-        }
-      }
-
-      // If not in database/directory, synthesize based on standard naming pattern
-      if (!found) {
-        found = synthesizeUserFromPattern(input);
-      }
-
-      if (!found) {
-        throw new Error(`User "${input}" not found in system.`);
-      }
-
-      const completeUser = buildCompleteUserProfile(found);
-
-      // Store in session and local storage
-      setUser(completeUser);
-      storage.set('session', { id: completeUser.id, role: completeUser.role, user: completeUser });
-      sessionStorage.setItem('userId', completeUser.id);
-      sessionStorage.setItem('userRole', completeUser.role);
-
-      return completeUser;
-    } catch (err) {
-      setUser(null);
-      storage.remove('session');
-      throw err;
-    } finally {
-      setLoading(false);
+      setUser(found);
+      storage.set('session', { id: found.id });
+      return true;
     }
-  }, []);
 
-  const logout = useCallback(() => {
+    // Non-seed user — allow login but assign a generic role that triggers empty dashboard
+    if (password && password !== 'password123') {
+      throw new Error('Invalid password');
+    }
+    const genericUser = {
+      id: 'generic-' + Date.now(),
+      name: emailOrId.split('@')[0],
+      email: emailOrId,
+      role: 'restricted',
+      region: null,
+      taxCenter: null,
+      password: 'password123',
+    };
+    setUser(genericUser);
+    storage.set('session', { id: genericUser.id });
+    return true;
+  };
+
+  const logout = () => {
     setUser(null);
     storage.remove('session');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('userRole');
-  }, []);
+  };
 
-  const getUserInfo = useCallback(() => user || null, [user]);
+  // Helper function to get user info
+  const getUserInfo = () => user || null;
 
-  const hasPermission = useCallback((permission) => {
+  // Helper function to check permissions
+  const hasPermission = (permission) => {
     if (!user) return false;
     return (user.permissions || []).includes(permission);
-  }, [user]);
+  };
 
-  // Backward compatibility authContext object
+  // Build authContext object for backward compatibility
   const authContext = user ? {
     user,
     userId: user.id,
@@ -216,7 +88,6 @@ export const AuthProvider = ({ children }) => {
     fullName: user.name,
     region: user.region,
     taxCenter: user.taxCenter,
-    auditType: user.auditType,
     permissions: user.permissions || [],
     org_context: {
       assignedRegion: user.region,
@@ -226,27 +97,18 @@ export const AuthProvider = ({ children }) => {
   } : null;
 
   return (
-    <AuthContext.Provider value={{
-      user,
+    <AuthContext.Provider value={{ 
+      user, 
       authContext,
-      isAuthenticated: !!user,
+      login, 
+      logout, 
       loading,
-      login,
-      logout,
       getUserInfo,
       hasPermission
     }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
-
-export default AuthContext;
+export const useAuth = () => useContext(AuthContext);

@@ -3,22 +3,22 @@ import { STAGE_STATUS } from '../../config/planningProcess';
 
 const STATUS_STYLES = {
   [STAGE_STATUS.COMPLETE]: {
-    node: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400',
-    badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    node: 'border-emerald-500/60 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    badge: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30',
     label: 'Complete',
-    line: 'bg-emerald-500/40',
+    line: 'bg-emerald-400 dark:bg-emerald-500/40',
   },
   [STAGE_STATUS.IN_PROGRESS]: {
-    node: 'border-amber-500 bg-amber-500/15 text-amber-400 ring-2 ring-amber-500/30 scale-110',
-    badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    node: 'border-amber-500 bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-2 ring-amber-300 dark:ring-amber-500/30 scale-110',
+    badge: 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500/30',
     label: 'In progress',
-    line: 'bg-amber-500/40',
+    line: 'bg-amber-400 dark:bg-amber-500/40',
   },
   [STAGE_STATUS.PENDING]: {
-    node: 'border-slate-700 bg-slate-800/50 text-slate-500',
-    badge: 'bg-slate-800 text-slate-500 border-slate-700',
+    node: 'border-gray-300 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 text-gray-500 dark:text-slate-500',
+    badge: 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 border-gray-300 dark:border-slate-700',
     label: 'Pending',
-    line: 'bg-slate-700',
+    line: 'bg-gray-300 dark:bg-slate-700',
   },
 };
 
@@ -31,19 +31,19 @@ function ProcessTimeline({ title = 'Annual planning process', stages = [], activ
   const totalStages = stages.length;
 
   return (
-    <div className="rounded-xl border border-slate-800/80 bg-[#161f28] p-6 transition-all duration-200">
+    <div className="rounded-xl border border-gray-200 dark:border-slate-800/80 bg-white dark:bg-[#161f28] p-6 transition-all duration-200">
       <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="font-serif text-lg font-semibold text-slate-100">{title}</h3>
-        <p className="text-sm text-slate-500">
+        <h3 className="font-serif text-lg font-semibold text-gray-900 dark:text-slate-100">{title}</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-500">
           Currently at{' '}
-          <span className="font-medium text-amber-400">{activeStageTitle}</span>
+          <span className="font-medium text-amber-600 dark:text-amber-400">{activeStageTitle}</span>
           {' '}— stage {currentStage} of {totalStages}
         </p>
       </div>
 
       <div className="relative">
         {/* Connecting line */}
-        <div className="absolute left-0 right-0 top-7 hidden h-px bg-slate-700 lg:block" aria-hidden="true" />
+        <div className="absolute left-0 right-0 top-7 hidden h-px bg-gray-300 dark:bg-slate-700 lg:block" aria-hidden="true" />
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-6">
           {stages.map((stage, index) => {
@@ -59,8 +59,8 @@ function ProcessTimeline({ title = 'Annual planning process', stages = [], activ
                   <i className={`${iconClass} text-sm`} />
                 </div>
 
-                <h4 className="mb-1 text-sm font-semibold text-slate-200">{stage.title}</h4>
-                <p className="mb-3 min-h-[2.5rem] text-[11px] leading-relaxed text-slate-500">
+                <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-slate-200">{stage.title}</h4>
+                <p className="mb-3 min-h-[2.5rem] text-[11px] leading-relaxed text-gray-500 dark:text-slate-500">
                   {stage.description}
                 </p>
 

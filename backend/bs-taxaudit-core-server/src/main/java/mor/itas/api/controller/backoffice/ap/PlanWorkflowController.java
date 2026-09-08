@@ -28,16 +28,18 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 
-import mor.itas.application.usecase.workflow.WorkflowExecutionEngine;
-import mor.itas.infrastructure.security.ItasPrincipal;
-import java.util.Set;
-
 /**
  * PlanWorkflowController - REST API for Annual Audit Plan workflow
  * Implements 4-level approval workflow with regional allocations
+ * 
+ * Endpoints:
+ * 1. Planning Team: Create plan, submit to Director
+ * 2. Director: Approve, route forward, send to Tax Centers
+ * 3. Regional Director: Approve, divide regional into tax centers
+ * 4. Tax Center Manager: Submit feedback
  */
 @RestController
-@RequestMapping("/api/v1/backoffice/ap/plans/workflow")
+@RequestMapping("/api/v1/backoffice/ap/plans")
 public class PlanWorkflowController {
 
     @Autowired
@@ -48,12 +50,6 @@ public class PlanWorkflowController {
 
     @Autowired
     private RiskEnginePort riskEnginePort;
-
-    @Autowired
-    private WorkflowExecutionEngine workflowExecutionEngine;
-
-    @Autowired
-    private mor.itas.application.service.notification.NotificationService notificationService;
 
     // ============= LEVEL 1: Planning Team =============
 
@@ -74,7 +70,6 @@ public class PlanWorkflowController {
         // Build case distribution table
         List<Map<String, Object>> caseDistributionTable = new ArrayList<>();
         Map<String, String> regionNames = Map.of(
-            "FED", "Federal Level (LTO)",
             "AA", "Addis Ababa",
             "BA", "Amhara (Bahir Dar)",
             "BB", "Oromia",
@@ -85,18 +80,18 @@ public class PlanWorkflowController {
         
         int totalCases = 0;
         
-        for (String region : new String[]{"FED", "AA", "BA", "BB", "AB", "CA", "SO"}) {
+        for (String region : new String[]{"AA", "BA", "BB", "AB", "CA", "SO"}) {
             RiskDistribution risk = regionalRisks.get(region);
             if (risk != null) {
                 long regionalTotal = risk.critical() + risk.high() + risk.medium() + risk.low();
                 
-                // Calculate distribution by audit type based on testing target (~500-800 per region, 20-50 per type in TC)
-                int desk = (int)(regionalTotal * 0.35 * 0.02);
-                int field = (int)(regionalTotal * 0.25 * 0.02);
-                int joint = (int)(regionalTotal * 0.15 * 0.02);
-                int tprice = (int)(regionalTotal * 0.08 * 0.02);
-                int comp = (int)(regionalTotal * 0.12 * 0.02);
-                int issue = (int)(regionalTotal * 0.05 * 0.02);
+                // Calculate distribution by audit type based on percentages
+                int desk = (int)(regionalTotal * 0.35);
+                int field = (int)(regionalTotal * 0.25);
+                int joint = (int)(regionalTotal * 0.15);
+                int tprice = (int)(regionalTotal * 0.08);
+                int comp = (int)(regionalTotal * 0.12);
+                int issue = (int)(regionalTotal * 0.05);
                 int regionTotal = desk + field + joint + tprice + comp + issue;
                 
                 totalCases += regionTotal;
@@ -137,28 +132,28 @@ public class PlanWorkflowController {
     public ResponseEntity<Map<String, Object>> getRiskAnalysisDashboard(
             @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
         
-        // Get national risk distribution - SCALED FOR OPTIMAL TESTING PERFORMANCE (Total: 3,500 national cases)
+        // Get national risk distribution
         Map<String, Integer> nationalRiskCounts = new HashMap<>();
-        nationalRiskCounts.put("critical", 350);
-        nationalRiskCounts.put("high", 1050);
-        nationalRiskCounts.put("medium", 1225);
-        nationalRiskCounts.put("low", 875);
-        Long totalAudits = 350L + 1050L + 1225L + 875L; // 3,500 total
+        nationalRiskCounts.put("critical", 21_500);
+        nationalRiskCounts.put("high", 79_980);
+        nationalRiskCounts.put("medium", 149_640);
+        nationalRiskCounts.put("low", 178_880);
+        Long totalAudits = 21_500L + 79_980L + 149_640L + 178_880L;
         
         // Calculate percentages
-        Double criticalPct = (350.0 / totalAudits) * 100;
-        Double highPct = (1050.0 / totalAudits) * 100;
-        Double mediumPct = (1225.0 / totalAudits) * 100;
-        Double lowPct = (875.0 / totalAudits) * 100;
+        Double criticalPct = (21_500.0 / totalAudits) * 100;
+        Double highPct = (79_980.0 / totalAudits) * 100;
+        Double mediumPct = (149_640.0 / totalAudits) * 100;
+        Double lowPct = (178_880.0 / totalAudits) * 100;
         
         Map<String, Object> dashboard = new LinkedHashMap<>();
         
         // National Level
         Map<String, Object> national = new LinkedHashMap<>();
-        national.put("totalTaxpayers", 50_000L);
-        national.put("totalRiskyTaxpayers", 4_500L);
+        national.put("totalTaxpayers", 5_200_000L);
+        national.put("totalRiskyTaxpayers", 430_000L);
         national.put("totalAuditsRequired", totalAudits);
-        national.put("riskPercentage", String.format("%.2f%%", (4_500.0 / 50_000.0) * 100));
+        national.put("riskPercentage", String.format("%.2f%%", (430_000.0 / 5_200_000.0) * 100));
         national.put("riskLevelBreakdown", nationalRiskCounts);
         national.put("riskLevelPercentages", Map.of(
             "critical", String.format("%.2f%%", criticalPct),
@@ -168,77 +163,67 @@ public class PlanWorkflowController {
         ));
         dashboard.put("nationalAggregate", national);
         
-        // Regional Breakdown (Scaled to 500-800 per region)
+        // Regional Breakdown
         Map<String, Object> regional = new LinkedHashMap<>();
         
-        // Region FED (600 audits)
-        Map<String, Object> fed = new LinkedHashMap<>();
-        fed.put("regionCode", "FED");
-        fed.put("regionName", "Federal Level (LTO)");
-        fed.put("taxpayers", 2_000L);
-        fed.put("riskyTaxpayers", 800L);
-        fed.put("auditsRequired", 600);
-        fed.put("riskLevelBreakdown", Map.of("critical", 150, "high", 250, "medium", 150, "low", 50));
-        regional.put("FED", fed);
-
-        // Region AA (700 audits)
+        // Region AA
         Map<String, Object> aa = new LinkedHashMap<>();
         aa.put("regionCode", "AA");
         aa.put("regionName", "Addis Ababa");
-        aa.put("taxpayers", 15_000L);
-        aa.put("riskyTaxpayers", 900L);
-        aa.put("auditsRequired", 700);
-        aa.put("riskLevelBreakdown", Map.of("critical", 50, "high", 200, "medium", 270, "low", 180));
+        aa.put("taxpayers", 1_200_000L);
+        aa.put("riskyTaxpayers", 86_000L);
+        aa.put("auditsRequired", 4_300 + 15_996 + 29_928 + 35_776);
+        aa.put("riskLevelBreakdown", Map.of("critical", 4_300, "high", 15_996, "medium", 29_928, "low", 35_776));
         regional.put("AA", aa);
         
-        // Region BA (500 audits)
+        // Region BA
         Map<String, Object> ba = new LinkedHashMap<>();
         ba.put("regionCode", "BA");
         ba.put("regionName", "Amhara (Bahir Dar)");
-        ba.put("taxpayers", 10_000L);
-        ba.put("riskyTaxpayers", 650L);
-        ba.put("auditsRequired", 500);
-        ba.put("riskLevelBreakdown", Map.of("critical", 30, "high", 150, "medium", 170, "low", 150));
+        ba.put("taxpayers", 800_000L);
+        ba.put("riskyTaxpayers", 64_500L);
+        ba.put("auditsRequired", 3_225 + 11_997 + 22_446 + 26_832);
+        ba.put("riskLevelBreakdown", Map.of("critical", 3_225, "high", 11_997, "medium", 22_446, "low", 26_832));
         regional.put("BA", ba);
         
-        // Region BB (500 audits)
+        // Region BB
         Map<String, Object> bb = new LinkedHashMap<>();
         bb.put("regionCode", "BB");
         bb.put("regionName", "Oromia");
-        bb.put("taxpayers", 12_000L);
-        bb.put("riskyTaxpayers", 650L);
-        bb.put("auditsRequired", 500);
-        bb.put("riskLevelBreakdown", Map.of("critical", 30, "high", 150, "medium", 170, "low", 150));
+        bb.put("taxpayers", 1_000_000L);
+        bb.put("riskyTaxpayers", 64_500L);
+        bb.put("auditsRequired", 3_225 + 11_997 + 22_446 + 26_832);
+        bb.put("riskLevelBreakdown", Map.of("critical", 3_225, "high", 11_997, "medium", 22_446, "low", 26_832));
         regional.put("BB", bb);
         
-        // Region AB (400 audits)
+        // Region AB
         Map<String, Object> ab = new LinkedHashMap<>();
         ab.put("regionCode", "AB");
         ab.put("regionName", "Dire Dawa");
-        ab.put("taxpayers", 5_000L);
-        ab.put("riskyTaxpayers", 500L);
-        ab.put("auditsRequired", 400);
-        ab.put("riskLevelBreakdown", Map.of("critical", 30, "high", 100, "medium", 150, "low", 120));
+        ab.put("taxpayers", 400_000L);
+        ab.put("riskyTaxpayers", 19_350L);
+        ab.put("auditsRequired", 968 + 3_599 + 6_734 + 8_050);
+        ab.put("riskLevelBreakdown", Map.of("critical", 968, "high", 3_599, "medium", 6_734, "low", 8_050));
         regional.put("AB", ab);
         
-        // Region CA (400 audits)
+        // Region CA
         Map<String, Object> ca = new LinkedHashMap<>();
         ca.put("regionCode", "CA");
         ca.put("regionName", "SNNPR");
-        ca.put("taxpayers", 4_000L);
-        ca.put("riskyTaxpayers", 500L);
-        ca.put("auditsRequired", 400);
-        ca.put("riskLevelBreakdown", Map.of("critical", 30, "high", 100, "medium", 130, "low", 140));
+        ca.put("taxpayers", 500_000L);
+        ca.put("riskyTaxpayers", 21_520L);
+        ca.put("auditsRequired", 1_075 + 4_198 + 7_857 + 9_391);
+        ca.put("riskLevelBreakdown", Map.of("critical", 1_075, "high", 4_198, "medium", 7_857, "low", 9_391));
         regional.put("CA", ca);
         
-        // Region SO (400 audits)
+        // Region SO
         Map<String, Object> so = new LinkedHashMap<>();
         so.put("regionCode", "SO");
         so.put("regionName", "Somalia");
-        so.put("taxpayers", 4_000L);
-        so.put("riskyTaxpayers", 500L);
-        so.put("auditsRequired", 400);
-        so.put("riskLevelBreakdown", Map.of("critical", 30, "high", 100, "medium", 130, "low", 140));
+        so.put("taxpayers", 300_000L);
+        so.put("riskyTaxpayers", 21_520L);
+        so.put("auditsRequired", 1_075 + 4_198 + 7_857 + 9_391);
+        so.put("riskLevelBreakdown", Map.of("critical", 1_075, "high", 4_198, "medium", 7_857, "low", 9_391));
         regional.put("SO", so);
         
         dashboard.put("regionalBreakdown", regional);
@@ -255,10 +240,10 @@ public class PlanWorkflowController {
         
         // Risk Level Distribution
         Map<String, Object> riskDistribution = new LinkedHashMap<>();
-        riskDistribution.put("critical", Map.of("count", 350, "percentage", criticalPct));
-        riskDistribution.put("high", Map.of("count", 1050, "percentage", highPct));
-        riskDistribution.put("medium", Map.of("count", 1225, "percentage", mediumPct));
-        riskDistribution.put("low", Map.of("count", 875, "percentage", lowPct));
+        riskDistribution.put("critical", Map.of("count", 21_500, "percentage", criticalPct));
+        riskDistribution.put("high", Map.of("count", 79_980, "percentage", highPct));
+        riskDistribution.put("medium", Map.of("count", 149_640, "percentage", mediumPct));
+        riskDistribution.put("low", Map.of("count", 178_880, "percentage", lowPct));
         dashboard.put("riskLevelDistribution", riskDistribution);
         
         return ResponseEntity.ok(dashboard);
@@ -279,7 +264,6 @@ public class PlanWorkflowController {
             request.getPlanName(),
             regionalAllocations,
             request.getDistribution(),  // Pass distribution data
-            request.getEstimatedRevenue(), // Pass estimated revenue
             actorId
         );
 
@@ -297,45 +281,6 @@ public class PlanWorkflowController {
         @RequestHeader(value = "X-Actor-Id", required = true) String actorId) throws Exception {
 
         AnnualAuditPlan plan = planManagementUseCase.submitToDirector(planId, actorId);
-
-        // Wire into WorkflowExecutionEngine
-        try {
-            ItasPrincipal principal = new ItasPrincipal(
-                    actorId,
-                    actorId,
-                    "N/A",
-                    "Planning Officer",
-                    "FED",
-                    java.util.Set.of(
-                            new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_AUDITOR"),
-                            new org.springframework.security.core.authority.SimpleGrantedAuthority("PERM_AUDIT_PLAN_CREATE")
-                    )
-            );
-
-            workflowExecutionEngine.triggerWorkflow(
-                    planId,
-                    planId,
-                    "AUDIT_PLAN",
-                    "Annual Audit Plan Approval — FY " + plan.getPlanYear(),
-                    principal
-            );
-        } catch (Exception e) {
-            System.err.println("[AP-Workflow] Notice: Workflow task trigger log: " + e.getMessage());
-        }
-
-        try {
-            notificationService.sendNotification(
-                "u-dir-audit",
-                "WORKFLOW_TASK",
-                "Annual Audit Plan Submitted: FY " + plan.getPlanYear(),
-                "Planning Officer has submitted the FY " + plan.getPlanYear() + " Annual Audit Plan for Director review.",
-                null,
-                null,
-                "AUDIT_PLAN",
-                planId
-            );
-        } catch (Exception ignored) {}
-
         return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
@@ -356,19 +301,6 @@ public class PlanWorkflowController {
             actorId,
             request.getReason()
         );
-
-        try {
-            notificationService.sendNotification(
-                "u-pt-01",
-                "WORKFLOW_TASK",
-                "Annual Audit Plan Approved: FY " + plan.getPlanYear(),
-                "Director of Audit has approved the FY " + plan.getPlanYear() + " Annual Audit Plan.",
-                null,
-                null,
-                "AUDIT_PLAN",
-                planId
-            );
-        } catch (Exception ignored) {}
 
         return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
@@ -396,20 +328,6 @@ public class PlanWorkflowController {
         @RequestHeader(value = "X-Actor-Id", required = true) String actorId) throws Exception {
 
         AnnualAuditPlan plan = planManagementUseCase.sendToTaxCenters(planId, actorId);
-
-        try {
-            notificationService.sendNotification(
-                "u-mgr-federal-lto1",
-                "WORKFLOW_TASK",
-                "Annual Audit Plan Allocations Received",
-                "FY " + plan.getPlanYear() + " Annual Audit Plan allocations are available for tax center review.",
-                null,
-                null,
-                "AUDIT_PLAN",
-                planId
-            );
-        } catch (Exception ignored) {}
-
         return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
@@ -481,19 +399,6 @@ public class PlanWorkflowController {
             actorId
         );
 
-        try {
-            notificationService.sendNotification(
-                "u-pt-01",
-                "WORKFLOW_TASK",
-                "Tax Center Feedback: " + taxCenterCode,
-                "Tax center " + taxCenterCode + " has submitted allocation adjustment feedback for plan FY " + plan.getPlanYear() + ".",
-                null,
-                null,
-                "AUDIT_PLAN",
-                planId
-            );
-        } catch (Exception ignored) {}
-
         return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 
@@ -522,20 +427,6 @@ public class PlanWorkflowController {
         @RequestHeader(value = "X-Actor-Id", required = true) String actorId) {
 
         AnnualAuditPlan plan = planManagementUseCase.finalizePlan(planId, actorId);
-
-        try {
-            notificationService.sendNotification(
-                "u-mgr-federal-lto1",
-                "WORKFLOW_TASK",
-                "Annual Audit Plan Finalized: FY " + plan.getPlanYear(),
-                "The Annual Audit Plan FY " + plan.getPlanYear() + " has been finalized and cases are ready for assignment.",
-                null,
-                null,
-                "AUDIT_PLAN",
-                planId
-            );
-        } catch (Exception ignored) {}
-
         return ResponseEntity.ok(responseMapper.toPlanResponse(plan));
     }
 

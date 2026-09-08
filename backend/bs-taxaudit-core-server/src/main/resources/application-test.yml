@@ -1,0 +1,22 @@
+# Test Profile - Connects to Docker test PostgreSQL database
+# Used for integration and E2E testing
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5434/itas_audit_test
+    username: itas_test
+    password: test_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

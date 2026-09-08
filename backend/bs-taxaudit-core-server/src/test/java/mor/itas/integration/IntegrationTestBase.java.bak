@@ -1,0 +1,73 @@
+package mor.itas.integration;
+
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.junit.jupiter.api.BeforeAll;
+import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.persistence.EntityManager;
+import java.util.UUID;
+
+/**
+ * Base class for integration tests using TestContainers with PostgreSQL.
+ * Provides real database transactions and full Spring Boot context.
+ * 
+ * All integration tests should extend this class to inherit:
+ * - PostgreSQL TestContainers setup
+ * - Spring Boot test context (@SpringBootTest)
+ * - MockMvc for REST endpoint testing
+ * - Automatic transaction rollback between tests
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "spring.jpa.hibernate.ddl-auto=validate",
+    "spring.flyway.enabled=true"
+})
+public abstract class IntegrationTestBase {
+
+    @Container
+    public static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+        .withDatabaseName("itas_audit_test")
+        .withUsername("test_user")
+        .withPassword("test_password")
+        .withReuse(true);
+
+    @BeforeAll
+    static void initializeProperties() {
+        System.setProperty("spring.datasource.url", postgres.getJdbcUrl());
+        System.setProperty("spring.datasource.username", postgres.getUsername());
+        System.setProperty("spring.datasource.password", postgres.getPassword());
+    }
+
+    @Autowired
+    protected MockMvc mockMvc;
+
+    /**
+     * Helper method to generate test UUIDs consistently
+     */
+    protected UUID generateUUID(String seed) {
+        return UUID.nameUUIDFromBytes(seed.getBytes());
+    }
+
+    /**
+     * Generate unique UUIDs for test data
+     */
+    protected UUID generateTestUUID() {
+        return UUID.randomUUID();
+    }
+
+    /**
+     * Generate predictable test data ID
+     */
+    protected UUID generateTestId(String prefix, int index) {
+        return generateUUID(prefix + "_" + index);
+    }
+}

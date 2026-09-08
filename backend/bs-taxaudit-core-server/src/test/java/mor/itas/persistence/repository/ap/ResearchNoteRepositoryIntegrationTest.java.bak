@@ -1,0 +1,323 @@
+package mor.itas.persistence.repository.ap;
+
+import mor.itas.persistence.jpa.entity.ap.ResearchNoteEntity;
+import mor.itas.persistence.jpa.entity.ap.ResearchCommentEntity;
+import mor.itas.persistence.jpa.repository.ap.ResearchNoteRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.PostgreSQLContainer;
+
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * ResearchNoteRepositoryIntegrationTest - @DataJpaTest with TestContainers PostgreSQL
+ * Tests research note persistence, comment threading, attachments, and feed queries
+ */
+@DataJpaTest
+@Testcontainers
+@ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@DisplayName("Research Note Repository Integration Tests")
+public class ResearchNoteRepositoryIntegrationTest {
+
+    @Container
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+        .withReuse(true);
+
+    @Autowired
+    private ResearchNoteRepository noteRepository;
+
+    private UUID caseId;
+    private UUID authorId;
+    private ResearchNoteEntity testNote;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        authorId = UUID.randomUUID();
+
+        // Create test note
+        testNote = new ResearchNoteEntity();
+        testNote.setNoteId(UUID.randomUUID());
+        testNote.setCaseId(caseId);
+        testNote.setAuthorId(authorId);
+        testNote.setCategory("OBSERVATION");
+        testNote.setContent("Initial observation about taxpayer compliance patterns");
+        testNote.setCreatedAt(OffsetDateTime.now());
+    }
+
+    // ============= SAVE & RETRIEVE Tests =============
+
+    @Test
+    @DisplayName("Test 1: Save note with comments - all entities persist")
+    void test_saveNoteWithComments_AllEntitiesPersist() {
+        // Arrange
+        ResearchCommentEntity comment = new ResearchCommentEntity();
+        comment.setCommentId(UUID.randomUUID());
+        comment.setNoteId(testNote.getNoteId());
+        comment.setAuthorId(UUID.randomUUID());
+        comment.setContent("Agreed with observation");
+        comment.setCreatedAt(OffsetDateTime.now());
+
+        List<ResearchCommentEntity> comments = new ArrayList<>();
+        comments.add(comment);
+        testNote.setComments(comments);
+
+        // Act
+        ResearchNoteEntity saved = noteRepository.save(testNote);
+
+        // Assert
+        assertThat(saved).isNotNull();
+        assertThat(saved.getNoteId()).isNotNull();
+        assertThat(saved.getComments()).hasSize(1);
+        assertThat(saved.getComments().get(0).getContent()).isEqualTo("Agreed with observation");
+    }
+
+    // ============= ATTACHMENT PERSISTENCE Tests =============
+
+    @Test
+    @DisplayName("Test 2: Save attachment linked to note")
+    void test_saveAttachment_LinkedToNote() {
+        // Arrange
+        ResearchNoteEntity saved = noteRepository.save(testNote);
+
+        // Act & Assert
+        Optional<ResearchNoteEntity> retrieved = noteRepository.findById(saved.getNoteId());
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().getNoteId()).isEqualTo(saved.getNoteId());
+    }
+
+    // ============= COMMENT THREADING Tests =============
+
+    @Test
+    @DisplayName("Test 3: Find comments by note ID - thread structure preserved")
+    void test_findCommentsByNoteId_ThreadStructurePreserved() {
+        // Arrange
+        ResearchNoteEntity note = noteRepository.save(testNote);
+
+        ResearchCommentEntity parentComment = new ResearchCommentEntity();
+        parentComment.setCommentId(UUID.randomUUID());
+        parentComment.setNoteId(note.getNoteId());
+        parentComment.setAuthorId(UUID.randomUUID());
+        parentComment.setContent("Parent comment");
+        parentComment.setCreatedAt(OffsetDateTime.now());
+
+        ResearchCommentEntity childComment = new ResearchCommentEntity();
+        childComment.setCommentId(UUID.randomUUID());
+        childComment.setNoteId(note.getNoteId());
+        childComment.setAuthorId(UUID.randomUUID());
+        childComment.setContent("Reply to parent");
+        childComment.setRepliedToCommentId(parentComment.getCommentId());
+        childComment.setCreatedAt(OffsetDateTime.now());
+
+        note.setComments(new ArrayList<>());
+        note.getComments().add(parentComment);
+        note.getComments().add(childComment);
+
+        noteRepository.save(note);
+
+        // Act
+        Optional<ResearchNoteEntity> retrieved = noteRepository.findById(note.getNoteId());
+
+        // Assert
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().getComments()).hasSize(2);
+        assertThat(retrieved.get().getComments()).anySatisfy(c ->
+            assertThat(c.getRepliedToCommentId()).isEqualTo(parentComment.getCommentId())
+        );
+    }
+
+    // ============= FEED ORDERING Tests =============
+
+    @Test
+    @DisplayName("Test 4: Get research feed ordered by created date")
+    void test_getResearchFeed_OrderedByCreatedDate() {
+        // Arrange
+        ResearchNoteEntity note1 = new ResearchNoteEntity();
+        note1.setNoteId(UUID.randomUUID());
+        note1.setCaseId(caseId);
+        note1.setAuthorId(authorId);
+        note1.setCategory("OBSERVATION");
+        note1.setContent("First observation");
+        note1.setCreatedAt(OffsetDateTime.now());
+
+        // Sleep briefly to ensure different timestamps
+        try { Thread.sleep(10); } catch (InterruptedException e) {}
+
+        ResearchNoteEntity note2 = new ResearchNoteEntity();
+        note2.setNoteId(UUID.randomUUID());
+        note2.setCaseId(caseId);
+        note2.setAuthorId(authorId);
+        note2.setCategory("QUESTION");
+        note2.setContent("Follow-up question");
+        note2.setCreatedAt(OffsetDateTime.now());
+
+        noteRepository.saveAll(java.util.Arrays.asList(note1, note2));
+
+        // Act
+        List<ResearchNoteEntity> notes = noteRepository.findByCaseIdOrderByCreatedAtDesc(caseId);
+
+        // Assert
+        assertThat(notes).hasSize(2);
+        assertThat(notes.get(0).getCreatedAt()).isGreaterThanOrEqualTo(notes.get(1).getCreatedAt());
+    }
+
+    // ============= PAGINATION Tests =============
+
+    @Test
+    @DisplayName("Test 5: Feed pagination returns 10 per page")
+    void test_pagination_FeedReturns10PerPage() {
+        // Arrange - create 25 notes
+        for (int i = 0; i < 25; i++) {
+            ResearchNoteEntity note = new ResearchNoteEntity();
+            note.setNoteId(UUID.randomUUID());
+            note.setCaseId(caseId);
+            note.setAuthorId(UUID.randomUUID());
+            note.setCategory(i % 4 == 0 ? "OBSERVATION" : i % 4 == 1 ? "QUESTION" : 
+                           i % 4 == 2 ? "INVESTIGATION" : "RECOMMENDATION");
+            note.setContent("Note " + i);
+            note.setCreatedAt(OffsetDateTime.now());
+            noteRepository.save(note);
+        }
+
+        // Act
+        Page<ResearchNoteEntity> page0 = noteRepository.findByCaseId(caseId, PageRequest.of(0, 10));
+        Page<ResearchNoteEntity> page1 = noteRepository.findByCaseId(caseId, PageRequest.of(1, 10));
+
+        // Assert
+        assertThat(page0.getNumber()).isEqualTo(0);
+        assertThat(page0.getSize()).isEqualTo(10);
+        assertThat(page1.getNumber()).isEqualTo(1);
+        assertThat(page0.getContent()).isNotEqualTo(page1.getContent());
+    }
+
+    // ============= DELETE COMMENT Tests =============
+
+    @Test
+    @DisplayName("Test 6: Delete comment updates thread count")
+    void test_deleteComment_UpdatesThreadCount() {
+        // Arrange
+        ResearchNoteEntity note = noteRepository.save(testNote);
+
+        ResearchCommentEntity comment1 = new ResearchCommentEntity();
+        comment1.setCommentId(UUID.randomUUID());
+        comment1.setNoteId(note.getNoteId());
+        comment1.setAuthorId(UUID.randomUUID());
+        comment1.setContent("Comment 1");
+        comment1.setCreatedAt(OffsetDateTime.now());
+
+        ResearchCommentEntity comment2 = new ResearchCommentEntity();
+        comment2.setCommentId(UUID.randomUUID());
+        comment2.setNoteId(note.getNoteId());
+        comment2.setAuthorId(UUID.randomUUID());
+        comment2.setContent("Comment 2");
+        comment2.setCreatedAt(OffsetDateTime.now());
+
+        note.setComments(new ArrayList<>());
+        note.getComments().addAll(java.util.Arrays.asList(comment1, comment2));
+        note = noteRepository.save(note);
+
+        int countBefore = note.getComments().size();
+
+        // Act
+        note.getComments().remove(0);
+        ResearchNoteEntity updated = noteRepository.save(note);
+
+        // Assert
+        assertThat(updated.getComments()).hasSize(countBefore - 1);
+    }
+
+    // ============= CATEGORY FILTERING Tests =============
+
+    @Test
+    @DisplayName("Test 7: Find notes by category")
+    void test_findByCategory_FiltersByCategory() {
+        // Arrange
+        ResearchNoteEntity obsNote = new ResearchNoteEntity();
+        obsNote.setNoteId(UUID.randomUUID());
+        obsNote.setCaseId(caseId);
+        obsNote.setAuthorId(authorId);
+        obsNote.setCategory("OBSERVATION");
+        obsNote.setContent("Observable finding");
+        obsNote.setCreatedAt(OffsetDateTime.now());
+
+        ResearchNoteEntity questionNote = new ResearchNoteEntity();
+        questionNote.setNoteId(UUID.randomUUID());
+        questionNote.setCaseId(caseId);
+        questionNote.setAuthorId(authorId);
+        questionNote.setCategory("QUESTION");
+        questionNote.setContent("Question about records");
+        questionNote.setCreatedAt(OffsetDateTime.now());
+
+        noteRepository.saveAll(java.util.Arrays.asList(obsNote, questionNote));
+
+        // Act
+        List<ResearchNoteEntity> observations = noteRepository.findByCaseIdAndCategory(caseId, "OBSERVATION");
+        List<ResearchNoteEntity> questions = noteRepository.findByCaseIdAndCategory(caseId, "QUESTION");
+
+        // Assert
+        assertThat(observations).allSatisfy(n -> assertThat(n.getCategory()).isEqualTo("OBSERVATION"));
+        assertThat(questions).allSatisfy(n -> assertThat(n.getCategory()).isEqualTo("QUESTION"));
+    }
+
+    // ============= AUTHOR FILTERING Tests =============
+
+    @Test
+    @DisplayName("Test 8: Find notes by author ID returns all author notes")
+    void test_findByAuthorId_ReturnsAllAuthorNotes() {
+        // Arrange
+        UUID author1 = UUID.randomUUID();
+        UUID author2 = UUID.randomUUID();
+
+        ResearchNoteEntity author1Note1 = new ResearchNoteEntity();
+        author1Note1.setNoteId(UUID.randomUUID());
+        author1Note1.setCaseId(caseId);
+        author1Note1.setAuthorId(author1);
+        author1Note1.setCategory("OBSERVATION");
+        author1Note1.setContent("Author 1 Note 1");
+        author1Note1.setCreatedAt(OffsetDateTime.now());
+
+        ResearchNoteEntity author1Note2 = new ResearchNoteEntity();
+        author1Note2.setNoteId(UUID.randomUUID());
+        author1Note2.setCaseId(caseId);
+        author1Note2.setAuthorId(author1);
+        author1Note2.setCategory("QUESTION");
+        author1Note2.setContent("Author 1 Note 2");
+        author1Note2.setCreatedAt(OffsetDateTime.now());
+
+        ResearchNoteEntity author2Note = new ResearchNoteEntity();
+        author2Note.setNoteId(UUID.randomUUID());
+        author2Note.setCaseId(caseId);
+        author2Note.setAuthorId(author2);
+        author2Note.setCategory("RECOMMENDATION");
+        author2Note.setContent("Author 2 Note");
+        author2Note.setCreatedAt(OffsetDateTime.now());
+
+        noteRepository.saveAll(java.util.Arrays.asList(author1Note1, author1Note2, author2Note));
+
+        // Act
+        List<ResearchNoteEntity> author1Notes = noteRepository.findByAuthorId(author1);
+        List<ResearchNoteEntity> author2Notes = noteRepository.findByAuthorId(author2);
+
+        // Assert
+        assertThat(author1Notes).hasSize(2);
+        assertThat(author1Notes).allSatisfy(n -> assertThat(n.getAuthorId()).isEqualTo(author1));
+        assertThat(author2Notes).hasSize(1);
+        assertThat(author2Notes.get(0).getAuthorId()).isEqualTo(author2);
+    }
+}

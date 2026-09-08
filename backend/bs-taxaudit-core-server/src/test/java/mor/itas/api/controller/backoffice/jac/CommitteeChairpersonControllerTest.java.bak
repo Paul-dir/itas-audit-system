@@ -1,0 +1,450 @@
+package mor.itas.api.controller.backoffice.jac;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mor.itas.api.dto.request.ap.jac.*;
+import mor.itas.api.dto.response.ap.jac.*;
+import mor.itas.application.usecase.ap.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * CommitteeChairpersonControllerTest - MockMvc tests for Chairperson-Exclusive Controls
+ * Tests appointment, viability finalization, team assignment, transfer, and SLA override
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles({"test", "mock"})
+@DisplayName("Committee Chairperson Controller Tests")
+public class CommitteeChairpersonControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private FinalizeViabilityUseCase finalizeViabilityUseCase;
+
+    @MockBean
+    private AssignOfficialTeamUseCase assignOfficialTeamUseCase;
+
+    @MockBean
+    private TransferToExecutionUseCase transferToExecutionUseCase;
+
+    @MockBean
+    private AppointTeamLeadUseCase appointTeamLeadUseCase;
+
+    @MockBean
+    private SLAOverrideUseCase slaOverrideUseCase;
+
+    private UUID caseId;
+    private UUID auditorId;
+    private UUID chairpersonId;
+    private CommitteeCaseResponse caseResponse;
+    private TeamAssignmentResponse teamAssignmentResponse;
+    private HandoffRecordResponse handoffResponse;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        auditorId = UUID.randomUUID();
+        chairpersonId = UUID.randomUUID();
+
+        // Setup case response for viability
+        caseResponse = CommitteeCaseResponse.builder()
+            .committeeCaseId(caseId)
+            .taxpayerName("Test Corporation")
+            .taxIdNumber("TIN123456")
+            .segment("LTO")
+            .riskScore(80)
+            .riskPriority("High")
+            .status("PENDING_VIABILITY")
+            .committeeDeadline(OffsetDateTime.now().plusDays(7))
+            .extensionCount(0)
+            .currentOwnerId(chairpersonId)
+            .decisionDate(OffsetDateTime.now())
+            .votingTally(new VotingTallyResponse(UUID.randomUUID(), 10, 2, 3, 15, 83.33, "PASSED", OffsetDateTime.now()))
+            .build();
+
+        // Setup team assignment response
+        teamAssignmentResponse = TeamAssignmentResponse.builder()
+            .teamAssignmentId(UUID.randomUUID())
+            .appointedTeamLeadId(auditorId)
+            .teamSize(2)
+            .build();
+
+        // Setup handoff response
+        handoffResponse = HandoffRecordResponse.builder()
+            .handoffRecordId(UUID.randomUUID())
+            .committeeCaseId(caseId)
+            .caseCode("JAC-2024-001")
+            .teamLeadId(auditorId)
+            .committeeSummary("Committee approved joint audit")
+            .keyFindings("Critical findings in tax compliance")
+            .handoffDate(OffsetDateTime.now())
+            .decision("APPROVED")
+            .build();
+    }
+
+    // ============= APPOINT TEAM LEAD Tests =============
+
+    @Test
+    @DisplayName("Test 1: POST /appoint-team-lead with valid member returns 200 OK")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_appointTeamLead_ValidMember_Returns200() throws Exception {
+        // Arrange
+        AppointTeamLeadRequest request = new AppointTeamLeadRequest(auditorId, "Best available auditor");
+        when(appointTeamLeadUseCase.execute(caseId, request))
+            .thenReturn(teamAssignmentResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/appoint-team-lead", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+
+        verify(appointTeamLeadUseCase).execute(caseId, request);
+    }
+
+    @Test
+    @DisplayName("Test 2: POST /appoint-team-lead by non-chairperson returns 403 FORBIDDEN")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_appointTeamLead_NonChairperson_Returns403() throws Exception {
+        // Arrange
+        AppointTeamLeadRequest request = new AppointTeamLeadRequest(auditorId, "Reason");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/appoint-team-lead", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Test 3: POST /appoint-team-lead with invalid member ID returns 404 NOT FOUND")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_appointTeamLead_InvalidMemberId_Returns404() throws Exception {
+        // Arrange
+        UUID invalidAuditorId = UUID.randomUUID();
+        AppointTeamLeadRequest request = new AppointTeamLeadRequest(invalidAuditorId, "Reason");
+        when(appointTeamLeadUseCase.execute(caseId, request))
+            .thenThrow(new IllegalArgumentException("Auditor not found"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/appoint-team-lead", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 4: POST /appoint-team-lead when already appointed returns 409 CONFLICT")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_appointTeamLead_AlreadyAppointedLead_Returns409() throws Exception {
+        // Arrange
+        AppointTeamLeadRequest request = new AppointTeamLeadRequest(auditorId, "Reason");
+        when(appointTeamLeadUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Team Lead already appointed for this case"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/appoint-team-lead", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    // ============= FINALIZE VIABILITY Tests =============
+
+    @Test
+    @DisplayName("Test 5: POST /finalize-viability with consensus reached returns 200 OK")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_finalizeViability_ConsensusReached_Returns200() throws Exception {
+        // Arrange
+        FinalizeViabilityRequest request = new FinalizeViabilityRequest(
+            "APPROVED",
+            "Strong consensus reached - proceed with audit",
+            "digital-signature-hash"
+        );
+        when(finalizeViabilityUseCase.execute(caseId, request))
+            .thenReturn(caseResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/finalize-viability", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk());
+
+        verify(finalizeViabilityUseCase).execute(caseId, request);
+    }
+
+    @Test
+    @DisplayName("Test 6: POST /finalize-viability with no consensus returns 409 CONFLICT")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_finalizeViability_NoConsensus_Returns409() throws Exception {
+        // Arrange
+        FinalizeViabilityRequest request = new FinalizeViabilityRequest(
+            "APPROVED",
+            "Attempting to approve without consensus",
+            "sig"
+        );
+        when(finalizeViabilityUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Consensus threshold not met"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/finalize-viability", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Test 7: POST /finalize-viability in invalid state returns 400 BAD REQUEST")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_finalizeViability_InvalidState_Returns400() throws Exception {
+        // Arrange
+        FinalizeViabilityRequest request = new FinalizeViabilityRequest("APPROVED", "Reason", "sig");
+        when(finalizeViabilityUseCase.execute(caseId, request))
+            .thenThrow(new IllegalArgumentException("Case not in PENDING_VIABILITY state"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/finalize-viability", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 8: POST /finalize-viability before deadline reached returns 409 CONFLICT")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_finalizeViability_DeadlineNotReached_Returns409() throws Exception {
+        // Arrange
+        FinalizeViabilityRequest request = new FinalizeViabilityRequest("APPROVED", "Too early", "sig");
+        when(finalizeViabilityUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Voting deadline not reached yet"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/finalize-viability", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    // ============= ASSIGN OFFICIAL TEAM Tests =============
+
+    @Test
+    @DisplayName("Test 9: POST /assign-team with valid 2-5 members returns 200 OK")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_assignOfficialTeam_Valid2To5Members_Returns200() throws Exception {
+        // Arrange
+        List<UUID> teamMemberIds = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
+        AssignOfficialTeamRequest request = new AssignOfficialTeamRequest(teamMemberIds, 0);
+        when(assignOfficialTeamUseCase.execute(caseId, request))
+            .thenReturn(teamAssignmentResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/assign-team", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk());
+
+        verify(assignOfficialTeamUseCase).execute(caseId, request);
+    }
+
+    @Test
+    @DisplayName("Test 10: POST /assign-team with too few members (1) returns 400 BAD REQUEST")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_assignOfficialTeam_TooFewMembers_Returns400() throws Exception {
+        // Arrange
+        List<UUID> singleMember = Collections.singletonList(UUID.randomUUID());
+        AssignOfficialTeamRequest request = new AssignOfficialTeamRequest(singleMember, 0);
+        when(assignOfficialTeamUseCase.execute(caseId, request))
+            .thenThrow(new IllegalArgumentException("Team must have 2-5 members"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/assign-team", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 11: POST /assign-team with too many members (6+) returns 400 BAD REQUEST")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_assignOfficialTeam_TooManyMembers_Returns400() throws Exception {
+        // Arrange
+        List<UUID> manyMembers = Arrays.asList(
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()
+        );
+        AssignOfficialTeamRequest request = new AssignOfficialTeamRequest(manyMembers, 0);
+        when(assignOfficialTeamUseCase.execute(caseId, request))
+            .thenThrow(new IllegalArgumentException("Team cannot exceed 5 members"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/assign-team", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Test 12: POST /assign-team with invalid member ID returns 404 NOT FOUND")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_assignOfficialTeam_InvalidMemberId_Returns404() throws Exception {
+        // Arrange
+        List<UUID> teamWithInvalid = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
+        AssignOfficialTeamRequest request = new AssignOfficialTeamRequest(teamWithInvalid, 0);
+        when(assignOfficialTeamUseCase.execute(caseId, request))
+            .thenThrow(new IllegalArgumentException("One or more team members not found"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/assign-team", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isNotFound());
+    }
+
+    // ============= TRANSFER TO EXECUTION Tests =============
+
+    @Test
+    @DisplayName("Test 13: POST /transfer-to-execution with valid case returns 200 OK with handoff")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_transferToExecution_ValidCase_Returns200WithHandoff() throws Exception {
+        // Arrange
+        TransferToExecutionRequest request = new TransferToExecutionRequest(
+            "Committee approved joint audit with consensus",
+            "Critical findings in tax compliance"
+        );
+        when(transferToExecutionUseCase.execute(caseId, request))
+            .thenReturn(handoffResponse);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/transfer-to-execution", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        HandoffRecordResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            HandoffRecordResponse.class
+        );
+
+        assertThat(response.getCaseCode()).isEqualTo("JAC-2024-001");
+        assertThat(response.getTeamLeadId()).isEqualTo(auditorId);
+    }
+
+    @Test
+    @DisplayName("Test 14: POST /transfer-to-execution already transferred returns 409 CONFLICT")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_transferToExecution_AlreadyTransferred_Returns409() throws Exception {
+        // Arrange
+        TransferToExecutionRequest request = new TransferToExecutionRequest(
+            "Committee approved joint audit with consensus",
+            "Critical findings in tax compliance"
+        );
+        when(transferToExecutionUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Case already transferred to execution"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/transfer-to-execution", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Test 15: POST /transfer-to-execution with SLA override returns 200 OK with override")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_transferToExecution_SLAOverride_Returns200WithOverride() throws Exception {
+        // Arrange
+        TransferToExecutionRequest request = new TransferToExecutionRequest(
+            "Committee approved joint audit with consensus",
+            "Critical findings in tax compliance"
+        );
+        when(transferToExecutionUseCase.execute(caseId, request))
+            .thenReturn(handoffResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/transfer-to-execution", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Test 16: POST /transfer-to-execution by non-chairperson returns 403 FORBIDDEN")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_transferToExecution_NonChairperson_Returns403() throws Exception {
+        // Arrange
+        TransferToExecutionRequest request = new TransferToExecutionRequest(
+            "Committee approved joint audit with consensus",
+            "Critical findings in tax compliance"
+        );
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/transfer-to-execution", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Test 17: POST /transfer-to-execution with unfinished viability returns 409 CONFLICT")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_transferToExecution_UnfinishedViability_Returns409() throws Exception {
+        // Arrange
+        TransferToExecutionRequest request = new TransferToExecutionRequest(
+            "Committee approved joint audit with consensus",
+            "Critical findings in tax compliance"
+        );
+        when(transferToExecutionUseCase.execute(caseId, request))
+            .thenThrow(new IllegalStateException("Case viability not finalized"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/transfer-to-execution", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+    }
+
+    // ============= SLA OVERRIDE Tests =============
+
+    @Test
+    @DisplayName("Test 18: POST /override-sla with valid extension returns 200 OK")
+    @WithMockUser(roles = "CHAIRPERSON")
+    void test_overrideSLA_ValidExtension_Returns200() throws Exception {
+        // Arrange
+        OverrideSLARequest request = new OverrideSLARequest(7, "Awaiting additional documentation");
+        when(slaOverrideUseCase.execute(caseId, request))
+            .thenReturn(caseResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/override-sla", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk());
+
+        verify(slaOverrideUseCase).execute(caseId, request);
+    }
+}

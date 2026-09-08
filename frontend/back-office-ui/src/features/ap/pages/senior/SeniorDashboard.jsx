@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Star, CheckCircle, XCircle, Eye, FileText, Clock, Award, BarChart3 } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
@@ -19,54 +19,27 @@ export default function SeniorDashboard({ view }) {
   const [viewTab, setViewTab] = useState('distribution');
   const [tab, setTab] = useState('pending');
 
-  const [localPlans, setLocalPlans] = useState([]);
+  const pending = state.plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT');
+  const approved = state.plans.filter(p => p.status === 'SENIOR_MGMT_APPROVED');
+  const finalized = state.plans.filter(p => p.status === 'FINALIZED');
+  const allPlans = state.plans;
 
-  // Load plans from backend on mount (state.plans may be stale)
-  useEffect(() => {
-    const loadPlans = async () => {
-      try {
-        const { default: planService } = await import('../../services/planService.js');
-        const plans = await planService.getPlans();
-        setLocalPlans(plans);
-        console.log('✅ Senior Dashboard loaded plans:', plans.length);
-      } catch (error) {
-        console.error('❌ Failed to load plans:', error);
-      }
-    };
-    loadPlans();
-  }, []);
+  const stats = selectors.getPlanStats();
 
-  // Merge backend plans with state.plans (deduplicate by id)
-  const allPlansMap = new Map();
-  [...state.plans, ...localPlans].forEach(p => allPlansMap.set(p.id, p));
-  const allPlans = Array.from(allPlansMap.values());
-
-  const pending = allPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT');
-  const approved = allPlans.filter(p => p.status === 'SENIOR_MGMT_APPROVED');
-  const finalized = allPlans.filter(p => p.status === 'FINALIZED');
-
-  const doAction = async () => {
+  const doAction = () => {
     if (!reviewPlan) return;
     setLoading(true);
-    try {
+    setTimeout(() => {
       if (action === 'approve') {
-        await actions.approveBySenior(reviewPlan.id, user.id, comment);
+        actions.approveBySenior(reviewPlan.id, user.id, comment);
       } else {
-        await actions.rejectBySenior(reviewPlan.id, user.id, comment);
+        actions.rejectBySenior(reviewPlan.id, user.id, comment);
       }
-      // Reload plans from backend to reflect the change
-      const { default: planService } = await import('../../services/planService.js');
-      const freshPlans = await planService.getPlans();
-      setLocalPlans(freshPlans);
-    } catch (error) {
-      console.error('❌ Failed:', error);
-      alert(`Error: ${error.message}`);
-    } finally {
       setLoading(false);
       setReviewPlan(null);
       setComment('');
       setAction(null);
-    }
+    }, 300);
   };
 
   const cols = [

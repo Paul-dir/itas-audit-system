@@ -1,0 +1,347 @@
+package mor.itas.api.controller.backoffice.jac;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mor.itas.api.dto.request.ap.jac.NominateAuditorRequest;
+import mor.itas.api.dto.response.ap.jac.AuditorNominationResponse;
+import mor.itas.api.dto.response.ap.jac.AuditorProfileResponse;
+import mor.itas.application.usecase.ap.TeamFormationUseCase;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * CommitteeAuditorControllerTest - MockMvc tests for Auditor Nomination & Profiles
+ * Tests auditor nomination, nomination pool retrieval, and auditor profile lookup
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles({"test", "mock"})
+@DisplayName("Committee Auditor Controller Tests")
+public class CommitteeAuditorControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private TeamFormationUseCase teamFormationUseCase;
+
+    private UUID caseId;
+    private UUID auditorId;
+    private UUID memberId;
+    private NominateAuditorRequest nominationRequest;
+    private AuditorNominationResponse nominationResponse;
+    private AuditorProfileResponse auditorProfileResponse;
+
+    @BeforeEach
+    void setUp() {
+        caseId = UUID.randomUUID();
+        auditorId = UUID.randomUUID();
+        memberId = UUID.randomUUID();
+
+        // Setup nomination request
+        nominationRequest = new NominateAuditorRequest(
+            auditorId,
+            "Highly experienced in tax audits with 15 years in joint audits"
+        );
+
+        // Setup nomination response
+        nominationResponse = new AuditorNominationResponse(
+            UUID.randomUUID(),
+            auditorId,
+            "John Doe",
+            "Highly experienced in tax audits with 15 years in joint audits",
+            memberId,
+            OffsetDateTime.now()
+        );
+
+        // Setup auditor profile response
+        auditorProfileResponse = new AuditorProfileResponse(
+            auditorId,
+            "John",
+            "Doe",
+            "Tax Compliance, Joint Audits",
+            "Senior Auditor",
+            15
+        );
+    }
+
+    // ============= NOMINATE AUDITOR Tests =============
+
+    @Test
+    @DisplayName("Test 1: POST /nominate-auditor with valid nomination returns 201 CREATED")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_nominateAuditor_ValidNomination_Returns201() throws Exception {
+        // Arrange
+        when(teamFormationUseCase.nominateAuditor(caseId, nominationRequest))
+            .thenReturn(nominationResponse);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/nominate-auditor", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(nominationRequest)))
+            .andExpect(status().isCreated())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        AuditorNominationResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            AuditorNominationResponse.class
+        );
+
+        assertThat(response.getAuditorId()).isEqualTo(auditorId);
+    }
+
+    @Test
+    @DisplayName("Test 2: POST /nominate-auditor with duplicate nomination returns 409 CONFLICT")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_nominateAuditor_DuplicateNomination_Returns409() throws Exception {
+        // Arrange
+        when(teamFormationUseCase.nominateAuditor(caseId, nominationRequest))
+            .thenThrow(new IllegalStateException("Auditor already nominated by this member"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/nominate-auditor", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(nominationRequest)))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Test 3: POST /nominate-auditor with invalid case ID returns 404 NOT FOUND")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_nominateAuditor_InvalidCaseId_Returns404() throws Exception {
+        // Arrange
+        UUID invalidCaseId = UUID.randomUUID();
+        when(teamFormationUseCase.nominateAuditor(invalidCaseId, nominationRequest))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/nominate-auditor", invalidCaseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(nominationRequest)))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 4: POST /nominate-auditor by unauthorized member returns 403 FORBIDDEN")
+    @WithMockUser(roles = "ADMIN")
+    void test_nominateAuditor_UnauthorizedMember_Returns403() throws Exception {
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/backoffice/ap/committee/cases/{caseId}/nominate-auditor", caseId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(nominationRequest)))
+            .andExpect(status().isForbidden());
+    }
+
+    // ============= GET NOMINATION POOL Tests =============
+
+    @Test
+    @DisplayName("Test 5: GET /nominations returns valid pool with criteria (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getNominationPool_ReturnsValidPoolWithCriteria() throws Exception {
+        // Arrange
+        List<AuditorNominationResponse> nominations = Arrays.asList(
+            nominationResponse,
+            new AuditorNominationResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "Jane Smith",
+                "Another qualified auditor", memberId, OffsetDateTime.now()
+            )
+        );
+        Page<AuditorNominationResponse> nominationPage = new PageImpl<>(
+            nominations,
+            PageRequest.of(0, 25),
+            2
+        );
+
+        when(teamFormationUseCase.getNominations(caseId, PageRequest.of(0, 25)))
+            .thenReturn(nominationPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/nominations", caseId)
+            .param("page", "0")
+            .param("size", "25"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+
+        verify(teamFormationUseCase).getNominations(caseId, PageRequest.of(0, 25));
+    }
+
+    @Test
+    @DisplayName("Test 6: GET /nominations filters by experience (returns certified auditors)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getNominationPool_FiltersByExperience_ReturnsCertified() throws Exception {
+        // Arrange
+        AuditorProfileResponse certifiedAuditor = new AuditorProfileResponse(
+            UUID.randomUUID(), "Jane", "Smith", "Joint Audits", "Senior Auditor", 8
+        );
+        Page<AuditorProfileResponse> auditorsPage = new PageImpl<>(
+            Collections.singletonList(certifiedAuditor),
+            PageRequest.of(0, 25),
+            1
+        );
+
+        when(teamFormationUseCase.searchAuditors(eq("Joint Audits"), any(), any()))
+            .thenReturn(auditorsPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/auditors/search")
+            .param("expertise", "Joint Audits")
+            .param("page", "0")
+            .param("size", "25"))
+            .andExpect(status().isOk());
+
+        verify(teamFormationUseCase).searchAuditors(eq("Joint Audits"), any(), any());
+    }
+
+    @Test
+    @DisplayName("Test 7: GET /nominations pagination works (returns 20 per page)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getNominationPool_PaginationWorks_Returns20perPage() throws Exception {
+        // Arrange
+        List<AuditorNominationResponse> nominations = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            nominations.add(new AuditorNominationResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "Auditor " + i,
+                "Justification " + i, memberId, OffsetDateTime.now()
+            ));
+        }
+        Page<AuditorNominationResponse> nominationPage = new PageImpl<>(
+            nominations,
+            PageRequest.of(0, 20),
+            100
+        );
+
+        when(teamFormationUseCase.getNominations(caseId, PageRequest.of(0, 20)))
+            .thenReturn(nominationPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/nominations", caseId)
+            .param("page", "0")
+            .param("size", "20"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Test 8: GET /nominations for invalid case ID returns 404 NOT FOUND")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getNominationPool_InvalidCaseId_Returns404() throws Exception {
+        // Arrange
+        UUID invalidCaseId = UUID.randomUUID();
+        when(teamFormationUseCase.getNominations(invalidCaseId, PageRequest.of(0, 25)))
+            .thenThrow(new IllegalArgumentException("Case not found"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/cases/{caseId}/nominations", invalidCaseId)
+            .param("page", "0")
+            .param("size", "25"))
+            .andExpect(status().isNotFound());
+    }
+
+    // ============= GET AUDITOR PROFILE Tests =============
+
+    @Test
+    @DisplayName("Test 9: GET /auditors/{auditorId}/profile returns profile (200 OK)")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getAuditorProfile_ValidId_ReturnsProfile() throws Exception {
+        // Arrange
+        when(teamFormationUseCase.getAuditorProfile(auditorId))
+            .thenReturn(auditorProfileResponse);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(get("/api/v1/backoffice/ap/committee/auditors/{auditorId}/profile", auditorId))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andReturn();
+
+        AuditorProfileResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            AuditorProfileResponse.class
+        );
+
+        assertThat(response.getAuditorId()).isEqualTo(auditorId);
+        assertThat(response.getFirstName()).isEqualTo("John");
+    }
+
+    @Test
+    @DisplayName("Test 10: GET /auditors/{auditorId}/profile with invalid ID returns 404 NOT FOUND")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getAuditorProfile_InvalidId_Returns404() throws Exception {
+        // Arrange
+        UUID invalidAuditorId = UUID.randomUUID();
+        when(teamFormationUseCase.getAuditorProfile(invalidAuditorId))
+            .thenThrow(new IllegalArgumentException("Auditor not found"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/auditors/{auditorId}/profile", invalidAuditorId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Test 11: GET /auditors/{auditorId}/profile with nomination history returns complete profile")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getAuditorProfile_WithNominationHistory_ReturnsComplete() throws Exception {
+        // Arrange
+        AuditorProfileResponse completeProfile = new AuditorProfileResponse(
+            auditorId,
+            "John",
+            "Doe",
+            "Tax Compliance, Joint Audits, Risk Assessment",
+            "Senior Auditor",
+            8
+        );
+
+        when(teamFormationUseCase.getAuditorProfile(auditorId))
+            .thenReturn(completeProfile);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(get("/api/v1/backoffice/ap/committee/auditors/{auditorId}/profile", auditorId))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        AuditorProfileResponse response = objectMapper.readValue(
+            result.getResponse().getContentAsString(),
+            AuditorProfileResponse.class
+        );
+
+        assertThat(response.getYearsOfExperience()).isEqualTo(8);
+        assertThat(response.getExpertise()).contains("Joint Audits");
+    }
+
+    @Test
+    @DisplayName("Test 12: GET /auditors/{auditorId}/profile returns 404 when auditor missing")
+    @WithMockUser(roles = "COMMITTEE_MEMBER")
+    void test_getAuditorProfile_MissingAuditor_Returns404() throws Exception {
+        // Arrange
+        UUID missingAuditorId = UUID.randomUUID();
+        when(teamFormationUseCase.getAuditorProfile(missingAuditorId))
+            .thenThrow(new IllegalArgumentException("Auditor record not found in system"));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/backoffice/ap/committee/auditors/{auditorId}/profile", missingAuditorId))
+            .andExpect(status().isNotFound());
+    }
+}

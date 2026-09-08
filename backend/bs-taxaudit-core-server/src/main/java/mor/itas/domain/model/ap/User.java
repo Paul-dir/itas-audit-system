@@ -28,9 +28,7 @@ public class User {
     // Constructors
     public User(String username, String email, String fullName, String userType, 
                 String assignedLevel, String assignedLocation, String createdBy) {
-        this.userId = username != null 
-            ? UUID.nameUUIDFromBytes(("itas-user:" + username).getBytes(java.nio.charset.StandardCharsets.UTF_8))
-            : UUID.randomUUID();
+        this.userId = UUID.randomUUID();
         this.username = username;
         this.email = email;
         this.fullName = fullName;

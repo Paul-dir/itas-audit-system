@@ -27,9 +27,6 @@ export const normalizeRegionName = (region) => {
   
   // Special cases for region names
   const specialCases = {
-    'fed': 'Federal Level (LTO)',
-    'federal_level': 'Federal Level (LTO)',
-    'federal level': 'Federal Level (LTO)',
     'snnpr': 'SNNPR',
     'dire_dawa': 'Dire Dawa',
     'dire dawa': 'Dire Dawa'
@@ -66,9 +63,6 @@ export const denormalizeRegionName = (region) => {
   
   // Special cases for region names
   const specialCases = {
-    'fed': 'federal_level',
-    'federal level (lto)': 'federal_level',
-    'federal level': 'federal_level',
     'snnpr': 'snnpr',
     'dire dawa': 'dire_dawa'
   };
@@ -102,7 +96,6 @@ export const getApiRegionName = (region) => {
  * List of all valid regions in API format (lowercase_underscore)
  */
 export const ALL_REGIONS_API = [
-  'federal_level',
   'addis_ababa',
   'oromia',
   'amhara',

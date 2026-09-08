@@ -1,0 +1,332 @@
+package mor.itas.persistence.repository.ap;
+
+import mor.itas.persistence.jpa.entity.ap.AdvisoryVotingEntity;
+import mor.itas.persistence.jpa.entity.ap.CommitteeCaseEntity;
+import mor.itas.persistence.jpa.entity.ap.CommitteeVoteEntity;
+import mor.itas.persistence.jpa.repository.ap.CommitteeVoteRepository;
+import mor.itas.persistence.jpa.repository.ap.AdvisoryVotingRepository;
+import mor.itas.persistence.jpa.repository.ap.CommitteeCaseRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.PostgreSQLContainer;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * CommitteeVoteRepositoryIntegrationTest - @DataJpaTest with TestContainers PostgreSQL
+ * Tests vote persistence, unique constraints, tally calculation, and voting queries
+ */
+@DataJpaTest
+@Testcontainers
+@ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@DisplayName("Committee Vote Repository Integration Tests")
+public class CommitteeVoteRepositoryIntegrationTest {
+
+    @Container
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+        .withReuse(true);
+
+    @Autowired
+    private CommitteeVoteRepository voteRepository;
+
+    @Autowired
+    private AdvisoryVotingRepository votingRepository;
+
+    @Autowired
+    private CommitteeCaseRepository caseRepository;
+
+    private UUID votingId;
+    private CommitteeCaseEntity caseEntity;
+    private AdvisoryVotingEntity votingEntity;
+    private UUID memberId1;
+    private UUID memberId2;
+    private CommitteeVoteEntity testVote;
+
+    @BeforeEach
+    void setUp() {
+        votingId = UUID.randomUUID();
+        memberId1 = UUID.randomUUID();
+        memberId2 = UUID.randomUUID();
+
+        // Create test case
+        caseEntity = new CommitteeCaseEntity();
+        caseEntity.setCaseId(UUID.randomUUID());
+        caseEntity.setOriginalCaseId(UUID.randomUUID());
+        caseEntity.setTaxpayerId(UUID.randomUUID());
+        caseEntity.setTaxpayerName("ABC Corporation");
+        caseEntity.setTaxIdentificationNumber("TIN123456");
+        caseEntity.setSegment("LTO");
+        caseEntity.setIndustry("Manufacturing");
+        caseEntity.setRiskScore(75);
+        caseEntity.setRiskPriority("High");
+        caseEntity.setStatus("PENDING_VOTES");
+        caseEntity.setCreatedDate(OffsetDateTime.now());
+        caseEntity.setCommitteeDeadline(OffsetDateTime.now().plusDays(7));
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Create voting entity first
+        votingEntity = new AdvisoryVotingEntity();
+        votingEntity.setVotingId(votingId);
+        votingEntity.setCommitteeCaseEntity(caseEntity);
+        votingEntity.setStatus("OPEN");
+        votingEntity.setConsensusThreshold(60);
+        votingEntity.setVotingStartedAt(OffsetDateTime.now());
+        votingEntity = votingRepository.save(votingEntity);
+
+        // Create test vote
+        testVote = new CommitteeVoteEntity();
+        testVote.setVoteId(UUID.randomUUID());
+        testVote.setVotingEntity(votingEntity);
+        testVote.setCommitteeCaseEntity(caseEntity);
+        testVote.setMemberId(memberId1);
+        testVote.setVoteOption("APPROVE");
+        testVote.setReasoning("Sufficient evidence for joint audit");
+        testVote.setVotedAt(OffsetDateTime.now());
+    }
+
+    // ============= SAVE & RETRIEVE Tests =============
+
+    @Test
+    @DisplayName("Test 1: Save vote persists correctly")
+    void test_saveVote_PersistsCorrectly() {
+        // Arrange & Act
+        CommitteeVoteEntity saved = voteRepository.save(testVote);
+
+        // Assert
+        assertThat(saved).isNotNull();
+        assertThat(saved.getVoteId()).isNotNull();
+        assertThat(saved.getMemberId()).isEqualTo(memberId1);
+        assertThat(saved.getVoteOption()).isEqualTo("APPROVE");
+
+        // Verify retrieval
+        Optional<CommitteeVoteEntity> retrieved = voteRepository.findById(saved.getVoteId());
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().getReasoning()).isEqualTo("Sufficient evidence for joint audit");
+    }
+
+    // ============= UNIQUE CONSTRAINT Tests =============
+
+    @Test
+    @DisplayName("Test 2: Unique constraint - duplicate vote throws exception")
+    void test_uniqueConstraint_DuplicateVote_ThrowsException() {
+        // Arrange
+        voteRepository.save(testVote);
+
+        CommitteeVoteEntity duplicateVote = new CommitteeVoteEntity();
+        duplicateVote.setVoteId(UUID.randomUUID());
+        duplicateVote.setVotingEntity(votingEntity);
+        duplicateVote.setCommitteeCaseEntity(caseEntity);
+        duplicateVote.setMemberId(memberId1);  // Same member - should violate unique constraint
+        duplicateVote.setVoteOption("REJECT");
+        duplicateVote.setVotedAt(OffsetDateTime.now());
+
+        // Act & Assert
+        assertThatThrownBy(() -> voteRepository.saveAndFlush(duplicateVote))
+            .isNotNull();  // Database constraint violation
+    }
+
+    // ============= FIND BY VOTING ID Tests =============
+
+    @Test
+    @DisplayName("Test 3: Find by voting ID returns all votes for voting")
+    void test_findByVotingId_ReturnsAllVotesForVoting() {
+        // Arrange
+        CommitteeVoteEntity vote1 = new CommitteeVoteEntity();
+        vote1.setVoteId(UUID.randomUUID());
+        vote1.setVotingEntity(votingEntity);
+        vote1.setCommitteeCaseEntity(caseEntity);
+        vote1.setMemberId(memberId1);
+        vote1.setVoteOption("APPROVE");
+        vote1.setVotedAt(OffsetDateTime.now());
+
+        CommitteeVoteEntity vote2 = new CommitteeVoteEntity();
+        vote2.setVoteId(UUID.randomUUID());
+        vote2.setVotingEntity(votingEntity);
+        vote2.setCommitteeCaseEntity(caseEntity);
+        vote2.setMemberId(memberId2);
+        vote2.setVoteOption("REJECT");
+        vote2.setVotedAt(OffsetDateTime.now());
+
+        voteRepository.saveAll(java.util.Arrays.asList(vote1, vote2));
+
+        // Act
+        List<CommitteeVoteEntity> votes = voteRepository.findByVotingEntityVotingIdOrderByVotedAtAsc(votingId);
+
+        // Assert
+        assertThat(votes).hasSize(2);
+        assertThat(votes).allSatisfy(v -> assertThat(v.getVotingEntity().getVotingId()).isEqualTo(votingId));
+    }
+
+    // ============= FIND BY MEMBER ID Tests =============
+
+    @Test
+    @DisplayName("Test 4: Find by member ID returns all member votes")
+    void test_findByMemberId_ReturnsAllMemberVotes() {
+        // Arrange
+        CommitteeVoteEntity memberVote1 = new CommitteeVoteEntity();
+        memberVote1.setVoteId(UUID.randomUUID());
+        memberVote1.setVotingEntity(votingEntity);
+        memberVote1.setCommitteeCaseEntity(caseEntity);
+        memberVote1.setMemberId(memberId1);
+        memberVote1.setVoteOption("APPROVE");
+        memberVote1.setVotedAt(OffsetDateTime.now());
+
+        // Create another case and voting session for the other vote
+        CommitteeCaseEntity case2 = new CommitteeCaseEntity();
+        case2.setCaseId(UUID.randomUUID());
+        case2.setOriginalCaseId(UUID.randomUUID());
+        case2.setTaxpayerId(UUID.randomUUID());
+        case2.setTaxpayerName("XYZ Corp");
+        case2.setTaxIdentificationNumber("TIN2");
+        case2.setSegment("LTO");
+        case2.setStatus("PENDING_VOTES");
+        case2.setCreatedDate(OffsetDateTime.now());
+        case2.setCommitteeDeadline(OffsetDateTime.now().plusDays(7));
+        case2 = caseRepository.save(case2);
+
+        UUID otherVotingId = UUID.randomUUID();
+        AdvisoryVotingEntity otherVoting = new AdvisoryVotingEntity();
+        otherVoting.setVotingId(otherVotingId);
+        otherVoting.setCommitteeCaseEntity(case2);
+        otherVoting.setStatus("OPEN");
+        otherVoting.setVotingStartedAt(OffsetDateTime.now());
+        otherVoting = votingRepository.save(otherVoting);
+
+        CommitteeVoteEntity memberVote2 = new CommitteeVoteEntity();
+        memberVote2.setVoteId(UUID.randomUUID());
+        memberVote2.setVotingEntity(otherVoting);
+        memberVote2.setCommitteeCaseEntity(case2);
+        memberVote2.setMemberId(memberId1);  // Same member, different voting
+        memberVote2.setVoteOption("MORE_INFO");
+        memberVote2.setVotedAt(OffsetDateTime.now());
+
+        voteRepository.saveAll(java.util.Arrays.asList(memberVote1, memberVote2));
+
+        // Act
+        List<CommitteeVoteEntity> memberVotes = voteRepository.findByMemberId(memberId1);
+
+        // Assert
+        assertThat(memberVotes.size()).isGreaterThanOrEqualTo(2);
+        assertThat(memberVotes).allSatisfy(v -> assertThat(v.getMemberId()).isEqualTo(memberId1));
+    }
+
+    // ============= TALLY CALCULATION Tests =============
+
+    @Test
+    @DisplayName("Test 5: Calculate tally - correct aggregation")
+    void test_calculateTally_CorrectAggregation() {
+        // Arrange
+        for (int i = 0; i < 10; i++) {
+            CommitteeVoteEntity vote = new CommitteeVoteEntity();
+            vote.setVoteId(UUID.randomUUID());
+            vote.setVotingEntity(votingEntity);
+            vote.setCommitteeCaseEntity(caseEntity);
+            vote.setMemberId(UUID.randomUUID());
+            vote.setVoteOption(i < 7 ? "APPROVE" : i < 9 ? "REJECT" : "MORE_INFO");
+            vote.setVotedAt(OffsetDateTime.now());
+            voteRepository.save(vote);
+        }
+
+        // Act
+        List<CommitteeVoteEntity> votes = voteRepository.findByVotingEntityVotingIdOrderByVotedAtAsc(votingId);
+
+        // Manual tally calculation (simulating what the service would do)
+        long approveCount = votes.stream().filter(v -> "APPROVE".equals(v.getVoteOption())).count();
+        long rejectCount = votes.stream().filter(v -> "REJECT".equals(v.getVoteOption())).count();
+        long moreInfoCount = votes.stream().filter(v -> "MORE_INFO".equals(v.getVoteOption())).count();
+
+        // Assert
+        assertThat(approveCount).isEqualTo(7);
+        assertThat(rejectCount).isEqualTo(2);
+        assertThat(moreInfoCount).isEqualTo(1);
+    }
+
+    // ============= VOTING TALLY & CONSENSUS Tests =============
+
+    @Test
+    @DisplayName("Test 6: Voting tally - consensus boundary (60% threshold)")
+    void test_votingTally_ConsensusBoundary_ReturnsYesNoAbstain() {
+        // Arrange - 60% consensus test
+        for (int i = 0; i < 10; i++) {
+            CommitteeVoteEntity vote = new CommitteeVoteEntity();
+            vote.setVoteId(UUID.randomUUID());
+            vote.setVotingEntity(votingEntity);
+            vote.setCommitteeCaseEntity(caseEntity);
+            vote.setMemberId(UUID.randomUUID());
+            vote.setVoteOption(i < 6 ? "APPROVE" : "REJECT");  // 6/10 = 60%
+            vote.setVotedAt(OffsetDateTime.now());
+            voteRepository.save(vote);
+        }
+
+        // Act
+        List<CommitteeVoteEntity> votes = voteRepository.findByVotingEntityVotingIdOrderByVotedAtAsc(votingId);
+        long approveCount = votes.stream().filter(v -> "APPROVE".equals(v.getVoteOption())).count();
+        double consensusPercentage = (double) approveCount / votes.size() * 100;
+
+        // Assert
+        assertThat(votes).hasSize(10);
+        assertThat(approveCount).isEqualTo(6);
+        assertThat(consensusPercentage).isGreaterThanOrEqualTo(60.0);
+    }
+
+    // ============= DELETE VOTE & TALLY UPDATE Tests =============
+
+    @Test
+    @DisplayName("Test 7: Delete vote updates tally")
+    void test_deleteVote_UpdatesTally() {
+        // Arrange
+        CommitteeVoteEntity vote = voteRepository.save(testVote);
+        List<CommitteeVoteEntity> beforeDelete = voteRepository.findByVotingEntityVotingIdOrderByVotedAtAsc(votingId);
+        int countBefore = beforeDelete.size();
+
+        // Act
+        voteRepository.delete(vote);
+        List<CommitteeVoteEntity> afterDelete = voteRepository.findByVotingEntityVotingIdOrderByVotedAtAsc(votingId);
+
+        // Assert
+        assertThat(afterDelete).hasSize(countBefore - 1);
+    }
+
+    // ============= FIND VOTING HISTORY Tests =============
+
+    @Test
+    @DisplayName("Test 8: Find voting history with pagination")
+    void test_findVotingHistory_PaginatedResults() {
+        // Arrange - create 25 votes
+        for (int i = 0; i < 25; i++) {
+            CommitteeVoteEntity vote = new CommitteeVoteEntity();
+            vote.setVoteId(UUID.randomUUID());
+            vote.setVotingEntity(votingEntity);
+            vote.setCommitteeCaseEntity(caseEntity);
+            vote.setMemberId(UUID.randomUUID());
+            vote.setVoteOption(i % 3 == 0 ? "APPROVE" : i % 3 == 1 ? "REJECT" : "MORE_INFO");
+            vote.setVotedAt(OffsetDateTime.now());
+            voteRepository.save(vote);
+        }
+
+        // Act
+        Page<CommitteeVoteEntity> page0 = voteRepository.findByCommitteeCaseEntityCaseIdOrderByVotedAtDesc(caseEntity.getCaseId(), PageRequest.of(0, 10));
+        Page<CommitteeVoteEntity> page1 = voteRepository.findByCommitteeCaseEntityCaseIdOrderByVotedAtDesc(caseEntity.getCaseId(), PageRequest.of(1, 10));
+
+        // Assert
+        assertThat(page0.getNumber()).isEqualTo(0);
+        assertThat(page0.getSize()).isEqualTo(10);
+        assertThat(page1.getNumber()).isEqualTo(1);
+        assertThat(page0.getContent()).isNotEqualTo(page1.getContent());
+    }
+}

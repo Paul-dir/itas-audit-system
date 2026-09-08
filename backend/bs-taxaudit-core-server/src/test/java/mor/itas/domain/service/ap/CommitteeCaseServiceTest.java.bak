@@ -1,0 +1,416 @@
+package mor.itas.domain.service.ap;
+
+import mor.itas.domain.aggregate.CommitteeCaseAggregate;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for CommitteeCaseService
+ * Tests state transitions, ownership locks, and SLA enforcement
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("CommitteeCaseService Unit Tests")
+class CommitteeCaseServiceTest {
+
+    private CommitteeCaseService service;
+
+    @Mock
+    private CommitteeCaseAggregate committeeCase;
+
+    private UUID caseId;
+    private UUID chairpersonId;
+
+    @BeforeEach
+    void setUp() {
+        service = new CommitteeCaseService();
+        caseId = UUID.randomUUID();
+        chairpersonId = UUID.randomUUID();
+    }
+
+    // ========== Validation Tests ==========
+
+    @Test
+    @DisplayName("Should validate case is ready for voting phase")
+    void testValidateCaseForVoting_Success() {
+        // Arrange
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateCaseForVoting(committeeCase));
+
+        verify(committeeCase).getStatus();
+    }
+
+    @Test
+    @DisplayName("Should fail validation if case is null")
+    void testValidateCaseForVoting_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateCaseForVoting(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should fail validation if case is not in PENDING_VOTES state")
+    void testValidateCaseForVoting_InvalidStatus_Throws() {
+        // Arrange
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateCaseForVoting(committeeCase))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Case must be in PENDING_VOTES state for voting");
+    }
+
+    @Test
+    @DisplayName("Should validate case is ready for finalization")
+    void testValidateCaseForFinalization_Success() {
+        // Arrange
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateCaseForFinalization(committeeCase));
+
+        verify(committeeCase).getStatus();
+    }
+
+    @Test
+    @DisplayName("Should fail finalization validation if case is not in PENDING_VIABILITY state")
+    void testValidateCaseForFinalization_InvalidStatus_Throws() {
+        // Arrange
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateCaseForFinalization(committeeCase))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Case must be in PENDING_VIABILITY state");
+    }
+
+    @Test
+    @DisplayName("Should validate team assignment with 2 members")
+    void testValidateTeamAssignment_2Members_Success() {
+        // Arrange
+        when(committeeCase.getChairpersonId()).thenReturn(chairpersonId);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamAssignment(committeeCase, 2));
+
+        verify(committeeCase).getChairpersonId();
+    }
+
+    @Test
+    @DisplayName("Should validate team assignment with 5 members")
+    void testValidateTeamAssignment_5Members_Success() {
+        // Arrange
+        when(committeeCase.getChairpersonId()).thenReturn(chairpersonId);
+
+        // Act & Assert - should not throw
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamAssignment(committeeCase, 5));
+    }
+
+    @Test
+    @DisplayName("Should fail if team has less than 2 members")
+    void testValidateTeamAssignment_1Member_Fails() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamAssignment(committeeCase, 1))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Team must have 2-5 members");
+    }
+
+    @Test
+    @DisplayName("Should fail if team has more than 5 members")
+    void testValidateTeamAssignment_6Members_Fails() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamAssignment(committeeCase, 6))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Team must have 2-5 members");
+    }
+
+    @Test
+    @DisplayName("Should fail if chairperson is not set")
+    void testValidateTeamAssignment_NoChairperson_Fails() {
+        // Arrange
+        when(committeeCase.getChairpersonId()).thenReturn(null);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamAssignment(committeeCase, 3))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Chairperson must be set before team assignment");
+    }
+
+    // ========== State Transition Tests ==========
+
+    @Test
+    @DisplayName("Should transition case to voting phase")
+    void testTransitionToVotingPhase_Success() {
+        // Act
+        service.transitionToVotingPhase(committeeCase);
+
+        // Assert
+        verify(committeeCase).transitionToVotingPhase();
+    }
+
+    @Test
+    @DisplayName("Should transition case to viability phase")
+    void testTransitionToViabilityPhase_Success() {
+        // Act
+        service.transitionToViabilityPhase(committeeCase);
+
+        // Assert
+        verify(committeeCase).transitionToViabilityPhase();
+    }
+
+    @Test
+    @DisplayName("Should transition case to approved state")
+    void testTransitionToApprovedState_Success() {
+        // Arrange
+        CommitteeCaseAggregate.CommitteeCaseDecision decision = 
+            CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED;
+        String reason = "Committee voted to approve";
+
+        // Act
+        service.transitionToApprovedState(committeeCase, decision, reason, chairpersonId);
+
+        // Assert
+        verify(committeeCase).finalizeViability(decision, reason, chairpersonId);
+    }
+
+    // ========== Handoff Tests ==========
+
+    @Test
+    @DisplayName("Should schedule handoff for approved case")
+    void testScheduleHandoff_Success() {
+        // Arrange
+        UUID handoffRecordId = UUID.randomUUID();
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+
+        // Act
+        service.scheduleHandoff(committeeCase, handoffRecordId);
+
+        // Assert
+        verify(committeeCase).setHandoffRecordId(handoffRecordId);
+        verify(committeeCase).setHandoffDate(any(OffsetDateTime.class));
+        verify(committeeCase).raiseEvent(any());
+    }
+
+    @Test
+    @DisplayName("Should fail to schedule handoff if case is not approved")
+    void testScheduleHandoff_NotApproved_Fails() {
+        // Arrange
+        UUID handoffRecordId = UUID.randomUUID();
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.scheduleHandoff(committeeCase, handoffRecordId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Only approved cases can be handed off");
+    }
+
+    // ========== Deadline & Overdue Tests ==========
+
+    @Test
+    @DisplayName("Should detect case is overdue")
+    void testIsOverdue_True() {
+        // Arrange
+        when(committeeCase.isOverdue()).thenReturn(true);
+
+        // Act
+        boolean result = service.isOverdue(committeeCase);
+
+        // Assert
+        assertThat(result).isTrue();
+        verify(committeeCase).isOverdue();
+    }
+
+    @Test
+    @DisplayName("Should detect case is not overdue")
+    void testIsOverdue_False() {
+        // Arrange
+        when(committeeCase.isOverdue()).thenReturn(false);
+
+        // Act
+        boolean result = service.isOverdue(committeeCase);
+
+        // Assert
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should return extended deadline if available")
+    void testGetEffectiveDeadline_WithExtension() {
+        // Arrange
+        OffsetDateTime extended = OffsetDateTime.now().plusDays(20);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(extended);
+
+        // Act
+        OffsetDateTime result = service.getEffectiveDeadline(committeeCase);
+
+        // Assert
+        assertThat(result).isEqualTo(extended);
+    }
+
+    @Test
+    @DisplayName("Should return original deadline if no extension")
+    void testGetEffectiveDeadline_NoExtension() {
+        // Arrange
+        OffsetDateTime original = OffsetDateTime.now().plusDays(10);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(original);
+
+        // Act
+        OffsetDateTime result = service.getEffectiveDeadline(committeeCase);
+
+        // Assert
+        assertThat(result).isEqualTo(original);
+    }
+
+    @Test
+    @DisplayName("Should calculate days remaining correctly")
+    void testGetDaysRemaining_Accuracy() {
+        // Arrange
+        OffsetDateTime deadline = OffsetDateTime.now().plusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(deadline);
+
+        // Act
+        long daysRemaining = service.getDaysRemaining(committeeCase);
+
+        // Assert - should be approximately 5 days (allowing for execution time)
+        assertThat(daysRemaining).isBetween(4L, 5L);
+    }
+
+    @Test
+    @DisplayName("Should return negative days when overdue")
+    void testGetDaysRemaining_Overdue() {
+        // Arrange
+        OffsetDateTime pastDeadline = OffsetDateTime.now().minusDays(5);
+        
+        when(committeeCase.getExtendedDeadline()).thenReturn(null);
+        when(committeeCase.getCommitteeDeadline()).thenReturn(pastDeadline);
+
+        // Act
+        long daysRemaining = service.getDaysRemaining(committeeCase);
+
+        // Assert
+        assertThat(daysRemaining).isNegative();
+    }
+
+    // ========== Error Handling Tests ==========
+
+    @Test
+    @DisplayName("Should handle null case in validation")
+    void testValidateCaseForFinalization_CaseNull_Throws() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateCaseForFinalization(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Committee case cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should handle invalid team size (boundary: 0)")
+    void testValidateTeamAssignment_ZeroMembers_Fails() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamAssignment(committeeCase, 0))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("Should handle invalid team size (boundary: -1)")
+    void testValidateTeamAssignment_NegativeMembers_Fails() {
+        // Act & Assert
+        assertThatThrownBy(() -> service.validateTeamAssignment(committeeCase, -1))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ========== Integration Scenario Tests ==========
+
+    @Test
+    @DisplayName("Should complete full voting phase validation workflow")
+    void testValidateCaseForVoting_WorkflowScenario() {
+        // Arrange - case that just entered voting phase
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VOTES);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+
+        // Act - validate for voting
+        assertThatNoException()
+            .isThrownBy(() -> service.validateCaseForVoting(committeeCase));
+
+        // Assert
+        verify(committeeCase).getStatus();
+    }
+
+    @Test
+    @DisplayName("Should complete full finalization workflow validation")
+    void testValidateCaseForFinalization_WorkflowScenario() {
+        // Arrange - case ready for viability decision
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY);
+        when(committeeCase.getChairpersonId()).thenReturn(chairpersonId);
+
+        // Act - validate for finalization
+        assertThatNoException()
+            .isThrownBy(() -> service.validateCaseForFinalization(committeeCase));
+
+        // Then transition
+        service.transitionToApprovedState(
+            committeeCase,
+            CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED,
+            "All requirements met",
+            chairpersonId
+        );
+
+        // Assert
+        verify(committeeCase).finalizeViability(
+            CommitteeCaseAggregate.CommitteeCaseDecision.APPROVED,
+            "All requirements met",
+            chairpersonId
+        );
+    }
+
+    @Test
+    @DisplayName("Should verify team assignment and then schedule handoff")
+    void testTeamAssignmentThenHandoff_Workflow() {
+        // Arrange - validate team, then schedule handoff
+        when(committeeCase.getChairpersonId()).thenReturn(chairpersonId);
+        when(committeeCase.getStatus())
+            .thenReturn(CommitteeCaseAggregate.CommitteeCaseStatus.APPROVED);
+        when(committeeCase.getCaseId()).thenReturn(caseId);
+
+        // Act - validate team
+        assertThatNoException()
+            .isThrownBy(() -> service.validateTeamAssignment(committeeCase, 3));
+
+        // Schedule handoff
+        UUID handoffRecordId = UUID.randomUUID();
+        service.scheduleHandoff(committeeCase, handoffRecordId);
+
+        // Assert
+        verify(committeeCase).setHandoffRecordId(handoffRecordId);
+        verify(committeeCase).setHandoffDate(any());
+    }
+}

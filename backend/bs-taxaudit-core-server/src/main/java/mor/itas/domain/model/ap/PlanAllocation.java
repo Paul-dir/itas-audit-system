@@ -2,8 +2,6 @@ package mor.itas.domain.model.ap;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import java.math.BigDecimal;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * PlanAllocation Entity - Represents allocation at regional and tax center levels
@@ -45,11 +43,7 @@ public class PlanAllocation {
     // Metadata
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
-
-    // Revenue
-    private BigDecimal estimatedRevenue;
-    private JsonNode revenueByAuditType;
-
+    
     // Constructors
     public PlanAllocation() {
         this.tcFeedbackSubmitted = false;
@@ -263,23 +257,7 @@ public class PlanAllocation {
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-    public BigDecimal getEstimatedRevenue() {
-        return estimatedRevenue;
-    }
-
-    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
-        this.estimatedRevenue = estimatedRevenue;
-    }
-
-    public JsonNode getRevenueByAuditType() {
-        return revenueByAuditType;
-    }
-
-    public void setRevenueByAuditType(JsonNode revenueByAuditType) {
-        this.revenueByAuditType = revenueByAuditType;
-    }
-
+    
     @Override
     public String toString() {
         return "PlanAllocation{" +

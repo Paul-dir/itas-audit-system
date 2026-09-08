@@ -8,8 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.math.BigDecimal;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * AnnualAuditPlanEntity - JPA Entity for ap_annual_audit_plans table
@@ -76,8 +74,8 @@ public class AnnualAuditPlanEntity {
     private OffsetDateTime sentToTaxCenterAt;
 
     // Distribution Data Storage
-    @Column(name = "distribution_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "distribution_json")
+    @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Map<String, Integer>> distribution;  // {region_id: {audit_type_id: count}}
 
     @Column(name = "sent_to_regions_at")
@@ -85,22 +83,6 @@ public class AnnualAuditPlanEntity {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
-
-    @Column(name = "sent_to_regions_by", length = 64)
-    private String sentToRegionsBy;
-
-    @Column(name = "regions_received_count")
-    private Integer regionsReceivedCount = 0;
-
-    @Column(name = "amendment_comment")
-    private String amendmentComment;
-
-    @Column(name = "estimated_revenue", precision = 19, scale = 2)
-    private BigDecimal estimatedRevenue;
-
-    @Column(name = "estimated_revenue_distribution", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private JsonNode estimatedRevenueDistribution;
 
     @Version
     private Long version = 0L;
@@ -275,52 +257,12 @@ public class AnnualAuditPlanEntity {
         this.sentToRegionsAt = sentToRegionsAt;
     }
 
-    public String getSentToRegionsBy() {
-        return sentToRegionsBy;
-    }
-
-    public void setSentToRegionsBy(String sentToRegionsBy) {
-        this.sentToRegionsBy = sentToRegionsBy;
-    }
-
-    public Integer getRegionsReceivedCount() {
-        return regionsReceivedCount;
-    }
-
-    public void setRegionsReceivedCount(Integer regionsReceivedCount) {
-        this.regionsReceivedCount = regionsReceivedCount;
-    }
-
-    public String getAmendmentComment() {
-        return amendmentComment;
-    }
-
-    public void setAmendmentComment(String amendmentComment) {
-        this.amendmentComment = amendmentComment;
-    }
-
     public OffsetDateTime getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-
-    public BigDecimal getEstimatedRevenue() {
-        return estimatedRevenue;
-    }
-
-    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
-        this.estimatedRevenue = estimatedRevenue;
-    }
-
-    public JsonNode getEstimatedRevenueDistribution() {
-        return estimatedRevenueDistribution;
-    }
-
-    public void setEstimatedRevenueDistribution(JsonNode estimatedRevenueDistribution) {
-        this.estimatedRevenueDistribution = estimatedRevenueDistribution;
     }
 
     public Long getVersion() {

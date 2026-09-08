@@ -6,6 +6,9 @@ import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.api.dto.response.ap.AllocationResponse;
 import mor.itas.api.dto.response.ap.AuditCaseResponse;
 import mor.itas.api.dto.response.ap.PlanResponse;
+import mor.itas.persistence.jpa.entity.ap.UserEntity;
+import mor.itas.persistence.jpa.repository.ap.UserJpaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,7 +20,10 @@ import java.util.List;
  * Removes references to non-existent domain classes.
  */
 @Component
+@RequiredArgsConstructor
 public class ApResponseDtoMapper {
+
+    private final UserJpaRepository userRepository;
 
     public PlanResponse toPlanResponse(AnnualAuditPlan plan) {
         if (plan == null) return null;
@@ -33,9 +39,6 @@ public class ApResponseDtoMapper {
         
         // Set distribution data
         response.setDistribution(plan.getDistribution());
-        
-        // Set amendment comment
-        response.setAmendmentComment(plan.getAmendmentComment());
         
         // Separate allocations into regional and tax center
         List<AllocationResponse> regionalAllocations = plan.getAllocations().stream()
@@ -86,16 +89,45 @@ public class ApResponseDtoMapper {
             .allocationId(auditCase.getAllocationId())
             .caseNumber(auditCase.getCaseNumber())
             .taxpayerId(auditCase.getTaxpayerId())
+            .taxpayerName(auditCase.getTaxpayerName())
             .auditType(auditCase.getAuditType())
+            .riskPriority(auditCase.getRiskPriority())
             .riskScore(auditCase.getRiskScore())
+            .segment(auditCase.getSegment())
             .status(auditCase.getStatus())
             .assignedTeamLeaderId(auditCase.getAssignedTeamLeaderId())
+            .assignedTeamLeaderName(resolveUserName(auditCase.getAssignedTeamLeaderId()))
             .assignedAuditorId(auditCase.getAssignedAuditorId())
+            .assignedAuditorName(resolveUserName(auditCase.getAssignedAuditorId()))
+            .handoffAt(auditCase.getHandoffAt())
+            .handoffBy(auditCase.getHandoffBy())
+            .handoffComment(auditCase.getHandoffComment())
+            .assignedAt(auditCase.getAssignedAt())
+            .assignedBy(auditCase.getAssignedBy())
             .createdBy(auditCase.getCreatedBy())
             .createdAt(auditCase.getCreatedAt())
             .startedAt(auditCase.getStartedAt())
             .completedAt(auditCase.getCompletedAt())
             .updatedAt(auditCase.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * Resolve a user's full name from their ID.
+     * Handles UUID IDs, usernames, and frontend-format IDs (e.g. 'u-tl-aa1a').
+     */
+    private String resolveUserName(String userId) {
+        if (userId == null || userId.isBlank()) return null;
+        // 1. Try UUID lookup
+        try {
+            java.util.UUID uuid = java.util.UUID.fromString(userId);
+            return userRepository.findById(uuid)
+                    .map(UserEntity::getFullName)
+                    .orElse(null);
+        } catch (IllegalArgumentException ignored) { }
+        // 2. Try username lookup
+        return userRepository.findByUsername(userId)
+                .map(UserEntity::getFullName)
+                .orElse(userId); // Return raw ID as fallback
     }
 }
