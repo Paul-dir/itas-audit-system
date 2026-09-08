@@ -33,12 +33,11 @@ export default function AuditorDashboard({ view }) {
 
   const PHASE_MAP = {
     'phase-1': 'DETAILED_RISK_ASSESSMENT',
-    'phase-2': 'WORKING_HYPOTHESIS',
-    'phase-3': 'PLANNING',
-    'phase-4': 'FIELD_WORK',
-    'phase-5': 'ANALYSIS',
-    'phase-6': 'REPORT',
-    'phase-assessment': 'ASSESSMENT',
+    'phase-2': 'PLANNING',
+    'phase-3': 'FIELD_WORK',
+    'phase-4': 'ANALYSIS',
+    'phase-5': 'REPORT',
+    'phase-6': 'ASSESSMENT',
     'phase-7': 'NOTICE',
     'phase-8': 'COMPLETION'
   };
@@ -372,14 +371,14 @@ export default function AuditorDashboard({ view }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-2 border-t border-purple-200/60 dark:border-purple-800/60">
             {[
-              { id: 'DETAILED_RISK_ASSESSMENT', num: '1', label: 'Risk Scoring' },
-              { id: 'WORKING_HYPOTHESIS',       num: '2', label: 'Hypothesis' },
-              { id: 'PLANNING',                 num: '3', label: 'IDR Request' },
-              { id: 'FIELD_WORK',               num: '4', label: 'Fieldwork' },
-              { id: 'ANALYSIS',                 num: '5', label: 'IQR Benchmarking' },
-              { id: 'REPORT',                   num: '6', label: 'TP Report' },
-              { id: 'ASSESSMENT',               num: '7', label: 'Assessment' },
-              { id: 'COMPLETION',               num: '8', label: 'Closure' },
+              { id: 'DETAILED_RISK_ASSESSMENT', num: '1', label: 'Risk Assessment' },
+              { id: 'PLANNING',                 num: '2', label: 'Audit Planning' },
+              { id: 'FIELD_WORK',               num: '3', label: 'Field Work' },
+              { id: 'ANALYSIS',                 num: '4', label: 'Economic Analysis' },
+              { id: 'REPORT',                   num: '5', label: 'TP Report' },
+              { id: 'ASSESSMENT',               num: '6', label: 'Assessment' },
+              { id: 'NOTICE',                   num: '7', label: 'Notice & Objection' },
+              { id: 'COMPLETION',               num: '8', label: 'Audit Closure' },
             ].map(phase => (
               <button
                 key={phase.id}

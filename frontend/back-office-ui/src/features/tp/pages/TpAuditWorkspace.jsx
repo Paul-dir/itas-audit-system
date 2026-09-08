@@ -11,15 +11,14 @@ import { formatRevenue } from '../../ap/utils/revenueFormatter.js';
 const BASE_API = '/api/v1/backoffice/tp/cases';
 
 const TP_PHASES = [
-  { id: 'DETAILED_RISK_ASSESSMENT', label: 'Risk Assessment', icon: ShieldAlert },
-  { id: 'WORKING_HYPOTHESIS', label: 'Working Hypothesis', icon: FileText },
-  { id: 'PLANNING', label: 'Planning & Meeting', icon: Calendar },
-  { id: 'FIELD_WORK', label: 'Field Work', icon: Layers },
-  { id: 'ANALYSIS', label: 'Economic Analysis', icon: BarChart2 },
-  { id: 'REPORT', label: 'TP Report', icon: FileText },
-  { id: 'ASSESSMENT', label: 'Assessment', icon: Calculator },
-  { id: 'NOTICE', label: 'Notice & Objection', icon: Scale },
-  { id: 'COMPLETION', label: 'Audit Closure', icon: CheckCircle2 }
+  { id: 'DETAILED_RISK_ASSESSMENT', num: 1, label: 'Risk Assessment', icon: ShieldAlert },
+  { id: 'PLANNING', num: 2, label: 'Audit Planning & Programming', icon: Calendar },
+  { id: 'FIELD_WORK', num: 3, label: 'Field Work', icon: Layers },
+  { id: 'ANALYSIS', num: 4, label: 'Economic Analysis', icon: BarChart2 },
+  { id: 'REPORT', num: 5, label: 'TP Report', icon: FileText },
+  { id: 'ASSESSMENT', num: 6, label: 'Assessment', icon: Calculator },
+  { id: 'NOTICE', num: 7, label: 'Notice & Objection', icon: Scale },
+  { id: 'COMPLETION', num: 8, label: 'Audit Closure', icon: CheckCircle2 }
 ];
 
 export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, initialPhase }) {
@@ -584,6 +583,46 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
 
       {/* Main Container Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm w-full flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+
+        {/* Auditor 8-Step Statutory Phase Navigation Bar */}
+        <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 px-6 py-2.5 overflow-x-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 flex-nowrap min-w-max">
+            {TP_PHASES.map((phase) => {
+              const Icon = phase.icon;
+              const isActive = activeTab === phase.id;
+              return (
+                <button
+                  key={phase.id}
+                  type="button"
+                  onClick={() => setActiveTab(phase.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-500 font-bold'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{phase.num}. {phase.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 pl-3 border-l border-slate-300 dark:border-slate-700 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('WORKING_HYPOTHESIS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'WORKING_HYPOTHESIS'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+              <span>Process Owner / Committee Console</span>
+            </button>
+          </div>
+        </div>
 
         {/* Main Content Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
@@ -1317,6 +1356,135 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       </div>
                     )}
 
+                    {/* Taxpayer Information & Evidence Request Sub-Panel */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                            Taxpayer Evidence & Preliminary Information Requests (IDR)
+                          </h4>
+                        </div>
+                        <Badge color="blue" size="xs">
+                          {fullBackendState?.informationRequests?.length || 0} Requests Logged
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        System enables the audit team to request supporting documents or evidence from the taxpayer prior to final risk sign-off, and enables the taxpayer to submit required materials.
+                      </p>
+
+                      {/* Display logged information requests */}
+                      {fullBackendState?.informationRequests && fullBackendState.informationRequests.length > 0 ? (
+                        <div className="space-y-2">
+                          {fullBackendState.informationRequests.map((idr, idx) => (
+                            <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 text-xs flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <span className="font-mono font-bold text-blue-600">{idr.requestReference}</span>
+                                <span className="text-slate-500 ml-2 font-semibold">[{idr.requestType}]</span>: {idr.subject}
+                                {idr.taxpayerResponse && (
+                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                                    ✓ Taxpayer Response: "{idr.taxpayerResponse}"
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge color={idr.status === 'RESPONSE_RECEIVED' ? 'emerald' : 'amber'} size="xs">
+                                  {idr.status}
+                                </Badge>
+                                {idr.status !== 'RESPONSE_RECEIVED' && (
+                                  <Button
+                                    size="xs"
+                                    variant="secondary"
+                                    className="bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                    onClick={() => handlePost(
+                                      `/field-work/idr/${idr.id}/respond`,
+                                      { taxpayerResponse: 'Preliminary contracts, local audited financial breakdown, and transfer pricing policy document submitted.', evidenceUploaded: true },
+                                      'Taxpayer evidence recorded successfully!'
+                                    )}
+                                  >
+                                    Submit Evidence (Taxpayer)
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-400 text-center">
+                          No preliminary information requests issued yet. Click below if additional taxpayer documentation is required before finalizing risk assessment.
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          icon={Send}
+                          className="text-xs"
+                          onClick={() => handlePost(
+                            '/field-work/idr/create',
+                            {
+                              requestType: 'DOCUMENT',
+                              subject: 'Preliminary Transfer Pricing Documentation & Intercompany Contracts',
+                              description: 'Submit master file, local file, and copy of management agreements with overseas affiliates.',
+                              deadlineDays: 10
+                            },
+                            'Preliminary Information Request (IDR) issued to taxpayer!'
+                          )}
+                        >
+                          + Issue Information Request (IDR) to Taxpayer
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Team Leader & Committee Workflow Submissions */}
+                    <div className="p-4 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-purple-950 dark:text-purple-200 uppercase tracking-wider flex items-center gap-2">
+                          <Users className="w-4 h-4 text-purple-600" />
+                          Governance & Workflow Progression Chain
+                        </h4>
+                        <Badge color="purple" size="xs">
+                          {fullBackendState?.caseDetails?.status || 'IN_PROGRESS'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Once detailed risk assessment is completed by the auditor, it is submitted to the Team Leader for review and endorsement, who submits it to the Review Committee / Process Owner to formulate the initial Working Hypothesis (Revenue at Risk) and convene the Planning Meeting.
+                      </p>
+                      
+                      <div className="flex flex-wrap items-center gap-3 pt-1">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={Send}
+                          loading={loading}
+                          className="bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
+                          onClick={() => handlePost(
+                            '/risk-assessment/submit-tl',
+                            {},
+                            'Detailed Risk Assessment submitted to Team Leader for review!'
+                          )}
+                        >
+                          Submit to Team Leader for Review
+                        </Button>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={UserCheck}
+                          loading={loading}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+                          onClick={() => handlePost(
+                            '/risk-assessment/submit-committee',
+                            {},
+                            'Team Leader endorsed and submitted case to Review Committee / Process Owner!'
+                          )}
+                        >
+                          TL Endorse & Submit to Review Committee
+                        </Button>
+                      </div>
+                    </div>
+
                     {/* Action Bar */}
                     <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-700">
                       <Button
@@ -1349,7 +1517,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                             comments: leadAuditorStrategy, 
                             revenueAtRisk: parseFloat(revenueAtRisk) 
                           }, 
-                          'Step 1 (Risk Assessment) 5-Page Process Completed & Saved! Ready to proceed to Step 2 (Working Hypothesis).'
+                          'Step 1 (Risk Assessment) Completed & Saved! Ready for Team Leader Review & Review Committee Planning Meeting.'
                         )}
                       >
                         Save & Finalize Step 1 Process
@@ -1369,15 +1537,15 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                      <Badge color="purple" size="sm">PHASE 2: HYPOTHESIS FORMULATION</Badge>
-                      <Badge color="blue" size="sm">MoR DIRECTIVE NO. 43/2015</Badge>
-                      <span className="text-xs text-slate-400 font-mono">OECD Action 8-10 Compliant</span>
+                      <Badge color="amber" size="sm">GOVERNANCE CONSOLE</Badge>
+                      <Badge color="purple" size="sm">PROCESS OWNER & REVIEW COMMITTEE</Badge>
+                      <span className="text-xs text-slate-400 font-mono">OECD Action 8-10 / BUC-TA-013</span>
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white pt-0.5">
-                      Step 2: Working Hypothesis & Transfer Pricing Issue Framing Process
+                      Process Owner Working Hypothesis & Review Committee Planning Meeting Deliberation
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Formulate testable audit hypotheses, evaluate OECD Benefit Tests, establish DEMPE functional ownership, and model base erosion revenue-at-risk.
+                      Transfer Pricing Process Owner develops the initial working hypothesis and business case (Amount of Revenue at Risk). The Review Committee evaluates the case in the planning meeting; deciding to CONTINUE triggers Step 2 (Audit Planning & Programming) for the Auditor.
                     </p>
                   </div>
                   <div className="bg-slate-50 dark:bg-slate-700/60 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-right">
@@ -1904,7 +2072,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                                 committeeChair
                               }
                             },
-                            'Step 2 Working Hypothesis submitted to Team Leader for review! Case status updated.'
+                            'Process Owner Working Hypothesis saved! Ready for Review Committee Planning Meeting.'
                           );
                           if (caseData?.id) {
                             try {
@@ -1918,8 +2086,69 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           setHypothesisStatus('SUBMITTED_FOR_TL_REVIEW');
                         }}
                       >
-                        Submit Hypothesis to Team Leader for Review
+                        Save Working Hypothesis & Business Case
                       </Button>
+                    </div>
+
+                    {/* Review Committee Planning Meeting Deliberation & Decision Box */}
+                    <div className="mt-4 p-4 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 rounded-xl border border-amber-800/60 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-5 h-5 text-amber-400" />
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                            Review Committee Planning Meeting Deliberation (BUC-TA-013)
+                          </h4>
+                        </div>
+                        <Badge color="amber" size="xs">
+                          {fullBackendState?.planningMeetings?.decision || 'DELIBERATION_PENDING'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        The Review Committee reviews the transfer pricing case and the Process Owner's working hypothesis. As the review committee decides to <strong>CONTINUE</strong>, the <em>‘Audit Planning and Programming’</em> phase will be triggered for the auditor.
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={CheckCircle2}
+                          loading={loading}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
+                          onClick={async () => {
+                            await handlePost(
+                              '/planning-meeting/decision',
+                              {
+                                decision: 'CONTINUE',
+                                discussionNotes: `Review Committee convened and evaluated the Transfer Pricing case for ${fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}. Based on the Process Owner Working Hypothesis and estimated revenue at risk of ETB ${revenueAtRisk}, the Committee resolved to CONTINUE with Audit Planning and Programming.`
+                              },
+                              'Review Committee decided to CONTINUE! Audit Planning & Programming triggered for Auditor.'
+                            );
+                            setActiveTab('PLANNING');
+                          }}
+                        >
+                          Adopt Decision: CONTINUE (Trigger Audit Planning & Programming)
+                        </Button>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={AlertTriangle}
+                          loading={loading}
+                          className="bg-amber-800/60 hover:bg-amber-800 text-amber-200 border-amber-700"
+                          onClick={async () => {
+                            await handlePost(
+                              '/planning-meeting/decision',
+                              {
+                                decision: 'REQUEST_INFO',
+                                discussionNotes: 'Review Committee requested additional preliminary evidence before deciding on full audit plan.'
+                              },
+                              'Planning meeting recorded: Returned for additional evidence.'
+                            );
+                          }}
+                        >
+                          Request Preliminary Info
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 </div>
@@ -1935,12 +2164,12 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                      <Badge color="green" size="sm">PHASE 3: AUDIT PLANNING & ENTRY CONFERENCE</Badge>
+                      <Badge color="green" size="sm">STEP 2: AUDIT PLANNING & PROGRAMMING</Badge>
                       <Badge color="blue" size="sm">FORM FR-04.5.1 / IDR-01</Badge>
                       <span className="text-xs text-slate-400 font-mono">Directive No. 43/2015 Compliant</span>
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white pt-0.5">
-                      Step 3: Enterprise Audit Plan Formulation & Entry Conference Workbench
+                      Step 2: Transfer Pricing Audit Plan Formulation & Entry Conference Workbench
                     </h2>
                     <p className="text-xs text-slate-500">
                       Establish statutory audit plan parameters, benchmark financial ratios, schedule the official Entry Conference, and issue Information Document Request (IDR-01).
@@ -1991,6 +2220,64 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   })}
                 </div>
               </Card>
+
+              {/* Review Committee Planning Meeting Status & Working Hypothesis Gate */}
+              {(() => {
+                const meeting = fullBackendState?.planningMeetings;
+                const hypothesis = fullBackendState?.workingHypothesis;
+                const isContinued = meeting?.decision === 'CONTINUE' || meeting?.decision === 'APPROVED' || fullBackendState?.caseDetails?.status === 'PLANNING_TRIGGERED' || fullBackendState?.caseDetails?.status === 'IN_PROGRESS';
+                
+                if (isContinued) {
+                  return (
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                          <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
+                            Review Committee Planning Meeting Decision: Approved to Continue
+                          </p>
+                        </div>
+                        <Badge color="emerald" size="sm">TRIGGERED FOR AUDITOR</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-white dark:bg-slate-900 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <div>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold">Process Owner Working Hypothesis:</p>
+                          <p className="text-slate-800 dark:text-slate-200 font-medium">{hypothesis?.hypothesisDescription || hypothesisDesc}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold">Business Case Revenue at Risk:</p>
+                          <p className="text-emerald-600 font-bold font-mono text-sm">{formatRevenue(hypothesis?.revenueAtRisk || revenueAtRisk)} ETB</p>
+                          <p className="text-[10px] text-slate-500 mt-1">Issue Identified: <span className="font-semibold">{hypothesis?.identifiedIssue || identifiedIssue}</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                            Awaiting Review Committee Planning Meeting Deliberation
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            The Transfer Pricing Audit Process Owner must develop the initial Working Hypothesis & Business Case, and the Review Committee must decide to <strong>CONTINUE</strong> in the planning meeting to formally trigger this phase.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                        onClick={() => setActiveTab('WORKING_HYPOTHESIS')}
+                      >
+                        Open Committee Console
+                      </Button>
+                    </div>
+                  );
+                }
+              })()}
 
               {/* ───────────────────────────────────────────────────────────── */}
               {/* SUB-PAGE 1: Statutory Scope Parameters & Resource Allocation (Form FR-04.5.1) */}

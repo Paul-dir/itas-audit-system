@@ -42,17 +42,25 @@ public class TpPlanningMeetingUseCase {
         ApAuditCaseEntity auditCase = getCase(caseId);
         TpPlanningMeetingEntity meeting = auditCase.getTpPlanningMeeting();
         if (meeting == null) {
-            throw new IllegalStateException("Planning meeting record not found for case: " + caseId);
+            meeting = TpPlanningMeetingEntity.builder()
+                    .auditCase(auditCase)
+                    .recordedBy(currentUserId)
+                    .build();
         }
         meeting.setDecision(decision);
         meeting.setDiscussionNotes(discussionNotes);
         meeting.setDecisionTimestamp(OffsetDateTime.now());
 
-        if ("APPROVED".equals(decision)) {
-            auditCase.setTpCurrentPhase("FIELD_WORK");
-        } else if ("RETURN_FOR_REVISION".equals(decision)) {
+        if ("CONTINUE".equalsIgnoreCase(decision) || "APPROVED".equalsIgnoreCase(decision) || "PROCEED".equalsIgnoreCase(decision)) {
             auditCase.setTpCurrentPhase("PLANNING");
+            auditCase.setStatus("PLANNING_TRIGGERED");
+        } else if ("RETURN_FOR_REVISION".equalsIgnoreCase(decision) || "REQUEST_INFO".equalsIgnoreCase(decision)) {
+            auditCase.setTpCurrentPhase("DETAILED_RISK_ASSESSMENT");
+            auditCase.setStatus("REVISION_REQUESTED");
+        } else if ("DISCONTINUE".equalsIgnoreCase(decision) || "REJECT".equalsIgnoreCase(decision)) {
+            auditCase.setStatus("DISCONTINUED");
         }
+        meeting.setAuditCase(auditCase);
         auditCase.setTpPlanningMeeting(meeting);
         auditCaseRepository.save(auditCase);
     }

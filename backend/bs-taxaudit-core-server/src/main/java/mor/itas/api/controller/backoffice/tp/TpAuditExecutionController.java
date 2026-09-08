@@ -120,6 +120,58 @@ public class TpAuditExecutionController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/risk-assessment/submit-tl")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> submitRiskAssessmentToTl(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("RISK_ASSESSMENT_SUBMITTED_TL");
+        caseRepository.save(c);
+
+        if (c.getAssignedTeamLeaderId() != null) {
+            notificationService.sendNotification(c.getAssignedTeamLeaderId(), "TP_RISK_SUBMITTED",
+                    "TP Detailed Risk Assessment Submitted",
+                    "Auditor submitted Detailed Risk Assessment for case " + c.getCaseNumber() + " for TL review.",
+                    caseId, null, "TP_RISK_ASSESSMENT", null);
+        }
+
+        logAction(caseId, "RISK_ASSESSMENT_SUBMITTED_TL", "RISK_ASSESSMENT", actorId, "AUDITOR",
+                "Submitted Detailed Risk Assessment to Team Leader", req, "IN_PROGRESS", "RISK_ASSESSMENT_SUBMITTED_TL", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "RISK_ASSESSMENT_SUBMITTED_TL");
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/risk-assessment/submit-committee")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> submitRiskAssessmentToCommittee(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("SUBMITTED_FOR_COMMITTEE");
+        caseRepository.save(c);
+
+        if (c.getCommitteeId() != null) {
+            notificationService.sendNotification(String.valueOf(c.getCommitteeId()), "TP_CASE_FOR_COMMITTEE",
+                    "TP Case Submitted for Planning Review",
+                    "Team Leader endorsed risk assessment for case " + c.getCaseNumber() + ". Ready for Working Hypothesis and Planning Meeting.",
+                    caseId, null, "TP_RISK_ASSESSMENT", null);
+        }
+
+        logAction(caseId, "RISK_ASSESSMENT_SUBMITTED_COMMITTEE", "RISK_ASSESSMENT", actorId, "TEAM_LEADER",
+                "Team Leader endorsed and submitted TP case to Review Committee / Process Owner", req, "RISK_ASSESSMENT_SUBMITTED_TL", "SUBMITTED_FOR_COMMITTEE", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "SUBMITTED_FOR_COMMITTEE");
+        return ResponseEntity.ok(res);
+    }
+
     @PostMapping("/working-hypothesis")
     public ResponseEntity<Void> submitWorkingHypothesis(
             @PathVariable UUID caseId,
