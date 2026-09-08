@@ -77,4 +77,19 @@ public interface ApAuditCaseRepository extends JpaRepository<ApAuditCaseEntity, 
 
     // ── By case number ───────────────────────────────────────────────────────
     java.util.Optional<ApAuditCaseEntity> findByCaseNumber(String caseNumber);
+
+    /**
+     * Get all cases visible to a team leader:
+     * 1. Cases already assigned to this team leader (any status)
+     * 2. PENDING_ASSIGNMENT cases not yet claimed by anyone
+     */
+    @Query("SELECT c FROM ApAuditCaseEntity c WHERE c.assignedTeamLeaderId = :teamLeaderId OR (c.status = 'PENDING_ASSIGNMENT' AND c.assignedTeamLeaderId IS NULL)")
+    List<ApAuditCaseEntity> findVisibleToTeamLeader(@Param("teamLeaderId") String teamLeaderId);
+
+    /**
+     * Get ALL cases for a team leader including incoming unassigned cases.
+     * Returns cases where teamLeaderId matches OR cases that are TEAM_ASSIGNED/PENDING_ASSIGNMENT.
+     */
+    @Query("SELECT c FROM ApAuditCaseEntity c WHERE c.assignedTeamLeaderId = :teamLeaderId OR c.status IN ('TEAM_ASSIGNED', 'PENDING_ASSIGNMENT')")
+    List<ApAuditCaseEntity> findAllForTeamLeader(@Param("teamLeaderId") String teamLeaderId);
 }

@@ -12,15 +12,18 @@ echo "======================================================================="
 echo "   STARTING END-TO-END TRANSFER PRICING STATUTORY LIFECYCLE TEST"
 echo "======================================================================="
 
+TEST_YEAR=$((2030 + RANDOM % 7000))
+
 # --- Step 1: Create New Annual Audit Plan ---
 echo ""
-echo "[Step 1] Creating New 2028 Federal Transfer Pricing Strategic Plan..."
+echo "[Step 1] Creating New $TEST_YEAR Federal Transfer Pricing Strategic Plan..."
 PLAN_RESP=$(curl -s -X POST "$BASE_URL/api/v1/backoffice/ap/plans/workflow" \
   -H "Content-Type: application/json" \
   -H "X-Actor-Id: national-process-owner" \
-  -d '{
-    "planYear": 2028,
-    "planName": "2028 Federal TP Strategic Plan",
+  -d @- <<EOF
+{
+    "planYear": $TEST_YEAR,
+    "planName": "$TEST_YEAR Federal TP Strategic Plan",
     "estimatedRevenue": 350000000,
     "regionalAllocations": [
         {"regionCode": "FEDERAL", "proposedCount": 150}
@@ -32,7 +35,9 @@ PLAN_RESP=$(curl -s -X POST "$BASE_URL/api/v1/backoffice/ap/plans/workflow" \
             "DESK_AUDIT": 100
         }
     }
-}')
+}
+EOF
+)
 
 PLAN_ID=$(echo "$PLAN_RESP" | jq -r '.id')
 echo "==> Plan Created with ID: $PLAN_ID"

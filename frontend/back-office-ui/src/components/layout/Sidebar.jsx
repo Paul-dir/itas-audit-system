@@ -114,10 +114,35 @@ const NAV_SECTIONS = {
       ]
     }
   ],
+  committee_chair: [
+    {
+      title: 'OVERVIEW',
+      items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+    },
+    {
+      title: 'JOINT AUDIT COMMITTEE',
+      items: [
+        { id: 'cases', label: 'Committee Cases', icon: Users },
+        { id: 'research', label: 'Research Workspace', icon: ClipboardList },
+        { id: 'auditors', label: 'Team Formation', icon: Target },
+        { id: 'sessions', label: 'Session Management', icon: Landmark },
+        { id: 'audit-trail', label: 'Audit Trail', icon: CheckSquare }
+      ]
+    }
+  ],
   committee: [
     {
       title: 'OVERVIEW',
       items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+    },
+    {
+      title: 'JOINT AUDIT COMMITTEE',
+      items: [
+        { id: 'cases', label: 'Committee Cases', icon: Users },
+        { id: 'research', label: 'Research Workspace', icon: ClipboardList },
+        { id: 'sessions', label: 'Session Management', icon: Landmark },
+        { id: 'audit-trail', label: 'Audit Trail', icon: CheckSquare }
+      ]
     },
     {
       title: 'AUDIT OPERATIONS',
@@ -147,6 +172,15 @@ const NAV_SECTIONS = {
     {
       title: 'OVERVIEW',
       items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+    },
+    {
+      title: 'JOINT AUDIT COMMITTEE',
+      items: [
+        { id: 'cases', label: 'Committee Cases', icon: Users },
+        { id: 'research', label: 'Research Workspace', icon: ClipboardList },
+        { id: 'sessions', label: 'Session Management', icon: Landmark },
+        { id: 'audit-trail', label: 'Audit Trail', icon: CheckSquare }
+      ]
     },
     {
       title: 'AUDIT OPERATIONS',
@@ -245,6 +279,7 @@ const ROLE_LABELS = {
   team_leader:      'Team Leader',
   committee:        'Joint Audit Committee',
   committee_member: 'Joint Audit Committee',
+  committee_chair:  'Joint Audit Committee Chair',
   auditor:          'Auditor',
   senior_management:'Senior Management',
   audit_requester:  'Directorate Audit Requester',
@@ -316,6 +351,16 @@ export default function Sidebar({ activeView, onNavigate }) {
           }
           if (section.title === 'ISSUE AUDIT EXECUTION') {
             if (userType !== 'ISSUE' && userType !== 'ISSUEAUDIT') {
+              return null;
+            }
+          }
+          if (section.title === 'JOINT AUDIT COMMITTEE') {
+            if (userType === 'TRANSFERPRICING' || userType === 'TP') {
+              return null;
+            }
+          }
+          if (section.title === 'STATUTORY REVIEW GATES' || (section.title === 'AUDIT OPERATIONS' && user?.role?.startsWith('committee'))) {
+            if (userType !== 'TRANSFERPRICING' && userType !== 'TP') {
               return null;
             }
           }

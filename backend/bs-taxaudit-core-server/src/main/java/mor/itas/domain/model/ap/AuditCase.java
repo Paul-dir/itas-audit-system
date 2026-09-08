@@ -13,8 +13,13 @@ public class AuditCase {
     private UUID allocationId;
     private String caseNumber;
     private String taxpayerId;
+    private String taxpayerName;
+    private String taxIdNumber;
     private String auditType;
     private Integer riskScore;
+    private String riskPriority;
+    private String segment;
+    private UUID committeeCaseId;
     private String status;  // PENDING_ASSIGNMENT, ASSIGNED, IN_PROGRESS, COMPLETED
     private String assignedTeamLeaderId;
     private String assignedAuditorId;
@@ -147,4 +152,19 @@ public class AuditCase {
     public void setStartedAt(OffsetDateTime startedAt) { this.startedAt = startedAt; }
     public void setCompletedAt(OffsetDateTime completedAt) { this.completedAt = completedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getTaxpayerName() { return taxpayerName; }
+    public void setTaxpayerName(String taxpayerName) { this.taxpayerName = taxpayerName; }
+
+    public String getTaxIdNumber() { return taxIdNumber; }
+    public void setTaxIdNumber(String taxIdNumber) { this.taxIdNumber = taxIdNumber; }
+
+    public String getRiskPriority() { return riskPriority; }
+    public void setRiskPriority(String riskPriority) { this.riskPriority = riskPriority; }
+
+    public String getSegment() { return segment; }
+    public void setSegment(String segment) { this.segment = segment; }
+
+    public UUID getCommitteeCaseId() { return committeeCaseId; }
+    public void setCommitteeCaseId(UUID committeeCaseId) { this.committeeCaseId = committeeCaseId; }
 }

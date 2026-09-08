@@ -1,6 +1,7 @@
 package mor.itas.persistence.jpa.entity.ap;
 
 import jakarta.persistence.*;
+import lombok.*;
 import mor.itas.persistence.jpa.entity.tp.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -27,6 +28,10 @@ import java.util.UUID;
     @Index(name = "idx_ap_audit_cases_tc_status", columnList = "tax_center_code, status"),
     @Index(name = "idx_ap_audit_cases_tl_status", columnList = "assigned_team_leader_id, status")
 })
+@Getter
+@Setter
+@AllArgsConstructor
+@Builder
 public class ApAuditCaseEntity {
 
     // ── Status constants ──────────────────────────────────────────────────────
@@ -42,6 +47,7 @@ public class ApAuditCaseEntity {
     public static final String STATUS_COMPLETED               = "COMPLETED";
 
     @Id
+    @Builder.Default
     private UUID id = UUID.randomUUID();
 
     @Column(nullable = false, name = "plan_id")
@@ -75,13 +81,20 @@ public class ApAuditCaseEntity {
     @Column(length = 32, name = "audit_type")
     private String auditType;
 
+    @Column(length = 16, name = "risk_priority")
+    private String riskPriority;
+
     @Column(name = "risk_score")
     private Integer riskScore;
+
+    @Column(length = 32, name = "segment")
+    private String segment;
 
     @Column(name = "estimated_revenue")
     private Long estimatedRevenue;
 
     @Column(nullable = false, length = 32, name = "status")
+    @Builder.Default
     private String status = STATUS_PENDING_ASSIGNMENT;
 
     /**
@@ -97,10 +110,26 @@ public class ApAuditCaseEntity {
     @Column(length = 64, name = "assigned_auditor_id")
     private String assignedAuditorId;
 
+    @Column(name = "handoff_at")
+    private OffsetDateTime handoffAt;
+
+    @Column(length = 64, name = "handoff_by")
+    private String handoffBy;
+
+    @Column(name = "handoff_comment", columnDefinition = "TEXT")
+    private String handoffComment;
+
+    @Column(name = "assigned_at")
+    private OffsetDateTime assignedAt;
+
+    @Column(length = 64, name = "assigned_by")
+    private String assignedBy;
+
     @Column(nullable = false, length = 64, name = "created_by")
     private String createdBy;
 
     @Column(nullable = false, name = "created_at")
+    @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     @Column(name = "started_at")
@@ -113,30 +142,39 @@ public class ApAuditCaseEntity {
     private OffsetDateTime updatedAt;
 
     // ── TP-Specific Child Entities (Changed to OneToMany to avoid N+1 issue) ──
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpRiskAssessmentEntity> tpRiskAssessments = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpWorkingHypothesisEntity> tpWorkingHypotheses = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditPlanEntity> tpAuditPlans = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpPlanningMeetingEntity> tpPlanningMeetings = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpFieldWorkDataEntity> tpFieldWorkDatas = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAnalysisDataEntity> tpAnalysisDatas = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditReportEntity> tpAuditReports = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditNoticeEntity> tpAuditNotices = new java.util.ArrayList<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpObjectionEntity> tpObjections = new java.util.ArrayList<>();
 

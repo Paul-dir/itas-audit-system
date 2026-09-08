@@ -19,6 +19,16 @@ import RiskAnalysisDashboard from './features/ap/pages/planning/RiskAnalysisDash
 import RiskEngineDashboard from './features/ap/pages/riskengine/RiskEngineDashboard.jsx';
 import AuditRequesterDashboard from './features/ap/pages/requester/AuditRequesterDashboard.jsx';
 import TaxpayerPortalDashboard from './features/portal/pages/TaxpayerPortalDashboard.jsx';
+import {
+  CommitteeDashboard as JaCommitteeDashboard,
+  CommitteeCases as JaCommitteeCases,
+  CaseDetail as JaCaseDetail,
+  ResearchWorkspace as JaResearchWorkspace,
+  AuditorNomination as JaAuditorNomination,
+  SessionManager as JaSessionManager,
+  AuditTrail as JaAuditTrail,
+  CommitteeProvider
+} from './features/ja/index.js';
 import { Spinner } from './components/ui/index.jsx';
 
 const TP_PHASE_TITLES = {
@@ -68,15 +78,35 @@ const PAGE_TITLES = {
     ...TP_PHASE_TITLES,
   },
   committee: {
-    dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
-    reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
+    dashboard:   { title: 'Committee Dashboard',      subtitle: 'Review and approve audit committee matters' },
+    cases:       { title: 'Committee Cases',          subtitle: 'Manage and review all cases' },
+    research:    { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
+    sessions:    { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
+    'audit-trail':{ title: 'Audit Trail',              subtitle: 'Immutable compliance & activity log' },
+    reviews:     { title: 'Pending Reviews',          subtitle: 'Cases awaiting your committee review'      },
     'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
     deliberations:  { title: 'Committee Deliberations', subtitle: 'Formal session records and statutory voting resolutions' },
     ...TP_PHASE_TITLES,
   },
   committee_member: {
-    dashboard: { title: 'Committee Dashboard',  subtitle: 'Review and approve audit committee matters' },
-    reviews:   { title: 'Pending Reviews',      subtitle: 'Cases awaiting your committee review'      },
+    dashboard:   { title: 'Committee Dashboard',      subtitle: 'Review and approve audit committee matters' },
+    cases:       { title: 'Committee Cases',          subtitle: 'Manage and review all cases' },
+    research:    { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
+    sessions:    { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
+    'audit-trail':{ title: 'Audit Trail',              subtitle: 'Immutable compliance & activity log' },
+    reviews:     { title: 'Pending Reviews',          subtitle: 'Cases awaiting your committee review'      },
+    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
+    deliberations:  { title: 'Committee Deliberations', subtitle: 'Formal session records and statutory voting resolutions' },
+    ...TP_PHASE_TITLES,
+  },
+  committee_chair: {
+    dashboard:   { title: 'Committee Dashboard',      subtitle: 'Executive Control Center' },
+    cases:       { title: 'Committee Cases',          subtitle: 'Manage and review all cases' },
+    research:    { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
+    auditors:    { title: 'Team Formation',            subtitle: 'Select auditors and team leaders for audit cases' },
+    sessions:    { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
+    'audit-trail':{ title: 'Audit Trail',              subtitle: 'Immutable compliance & activity log' },
+    reviews:     { title: 'Pending Reviews',          subtitle: 'Cases awaiting your committee review'      },
     'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
     deliberations:  { title: 'Committee Deliberations', subtitle: 'Formal session records and statutory voting resolutions' },
     ...TP_PHASE_TITLES,
@@ -125,9 +155,29 @@ function RoleRouter({ user, view }) {
   }
   if (role === 'team_leader')      return <TeamLeaderDashboard view={view} />;
   if (role === 'auditor')          return <AuditorDashboard view={view} />;
-  if (role === 'committee' || role === 'committee_member') {
-    if (view === 'assign-cases') return <CommitteeCaseAssignment />;
-    return <CommitteeDashboard view={view} />;
+  if (role === 'committee' || role === 'committee_member' || role === 'committee_chair') {
+    const isTp = (user?.auditType || '').toUpperCase().includes('TP') ||
+                 (user?.auditType || '').toUpperCase().includes('TRANSFER') ||
+                 (user?.name || '').toLowerCase().includes('tp');
+
+    if (isTp && (view.startsWith('phase-') || view === 'deliberations' || view === 'assign-cases')) {
+      if (view === 'assign-cases') return <CommitteeCaseAssignment />;
+      return <CommitteeDashboard view={view} />;
+    }
+
+    // Joint Audit Committee (JAC)
+    return (
+      <CommitteeProvider>
+        {view === 'cases' && <JaCommitteeCases />}
+        {view === 'research' && <JaResearchWorkspace />}
+        {view === 'auditors' && <JaAuditorNomination />}
+        {view === 'sessions' && <JaSessionManager />}
+        {view === 'audit-trail' && <JaAuditTrail />}
+        {(!['cases', 'research', 'auditors', 'sessions', 'audit-trail'].includes(view)) && (
+          <JaCommitteeDashboard />
+        )}
+      </CommitteeProvider>
+    );
   }
   if (role === 'audit_requester')  return <AuditRequesterDashboard view={view} />;
 

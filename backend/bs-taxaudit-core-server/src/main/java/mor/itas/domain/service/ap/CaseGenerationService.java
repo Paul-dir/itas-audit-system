@@ -5,7 +5,11 @@ import mor.itas.domain.model.ap.AuditCase;
 import mor.itas.domain.model.ap.PlanAllocation;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity;
+import mor.itas.persistence.jpa.entity.ap.CommitteeCaseEntity;
+import mor.itas.persistence.jpa.entity.ap.UserEntity;
 import mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository;
+import mor.itas.persistence.jpa.repository.ap.CommitteeCaseRepository;
+import mor.itas.persistence.jpa.repository.ap.UserJpaRepository;
 import mor.itas.persistence.mapper.ap.AuditCaseMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,8 +28,11 @@ import java.util.UUID;
 public class CaseGenerationService {
 
     private final ApAuditCaseRepository caseRepository;
+    private final CommitteeCaseRepository committeeCaseRepository;
     private final AnnualAuditPlanRepository planRepository;
     private final AuditCaseMapper caseMapper;
+    private final UserJpaRepository userRepository;
+    private final JointCaseRoutingBridgeService jointCaseRoutingBridge;
 
     /**
      * Generate audit cases from a finalized plan
@@ -36,7 +43,7 @@ public class CaseGenerationService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
-        if (!plan.getStatus().equals("FINALIZED")) {
+        if (plan.getStatus() != mor.itas.domain.model.ap.PlanStatus.FINALIZED) {
             throw new IllegalStateException("Can only generate cases from FINALIZED plans. Current: " + plan.getStatus());
         }
 
@@ -75,6 +82,12 @@ public class CaseGenerationService {
 
                 // Save and convert to domain model
                 ApAuditCaseEntity saved = caseRepository.save(caseEntity);
+                
+                // If this is a Joint Audit case, bridge it into Josi's Committee Case system
+                if (jointCaseRoutingBridge.isJointAudit(auditType)) {
+                    jointCaseRoutingBridge.routeApCaseToCommittee(saved, taxCenter);
+                }
+                
                 generatedCases.add(caseMapper.toDomain(saved));
             }
         }
@@ -101,21 +114,77 @@ public class CaseGenerationService {
     }
 
     /**
-     * Get cases assigned to auditor
+     * Get cases assigned to auditor.
+     * Handles both UUID IDs and frontend-format IDs (e.g. 'u-aud-aa1a')
+     * by resolving usernames to UUIDs when needed.
      */
     public List<AuditCase> getCasesForAuditor(String auditorId) {
-        return caseRepository.findByAssignedAuditorId(auditorId).stream()
-            .map(caseMapper::toDomain)
-            .toList();
+        // 1. Try direct match by ID
+        List<ApAuditCaseEntity> cases = caseRepository.findByAssignedAuditorId(auditorId);
+        if (!cases.isEmpty()) {
+            return cases.stream().map(caseMapper::toDomain).toList();
+        }
+        // 2. Try resolving username → UUID
+        UserEntity user = userRepository.findByUsername(auditorId).orElse(null);
+        if (user == null) user = userRepository.findByEmail(auditorId).orElse(null);
+        if (user != null) {
+            cases = caseRepository.findByAssignedAuditorId(user.getUserId().toString());
+            if (!cases.isEmpty()) {
+                return cases.stream().map(caseMapper::toDomain).toList();
+            }
+        }
+        // 3. Also try matching by UUID toString for any user with this name
+        if (user == null) {
+            // Try finding user by searching all users with matching full name parts
+            String searchTerm = auditorId.replace("u-aud-", "").replace("u-tl-", "");
+            user = userRepository.findByUsername(searchTerm).orElse(null);
+            if (user != null) {
+                cases = caseRepository.findByAssignedAuditorId(user.getUserId().toString());
+            }
+        }
+        return (cases != null ? cases : List.<ApAuditCaseEntity>of()).stream()
+            .map(caseMapper::toDomain).toList();
     }
 
     /**
-     * Get cases assigned to team leader
+     * Get cases visible to team leader:
+     * 1. Cases already assigned to this team leader in execution workspace (ApAuditCase)
+     * 2. TEAM_ASSIGNED committee cases assigned to this team leader (before execution transfer)
      */
     public List<AuditCase> getCasesForTeamLeader(String teamLeaderId) {
-        return caseRepository.findByAssignedTeamLeaderId(teamLeaderId).stream()
+        // Get cases already in execution workspace
+        List<AuditCase> executionCases = caseRepository.findAllForTeamLeader(teamLeaderId).stream()
             .map(caseMapper::toDomain)
             .toList();
+
+        // Get TEAM_ASSIGNED committee cases for this team leader
+        List<AuditCase> committeeCases = new ArrayList<>();
+        try {
+            UUID teamLeadUuid = UUID.fromString(teamLeaderId);
+            List<CommitteeCaseEntity> teamCases = committeeCaseRepository.findTeamAssignedByTeamLeadId(teamLeadUuid);
+            for (CommitteeCaseEntity cc : teamCases) {
+                committeeCases.add(fromCommitteeCase(cc, teamLeaderId));
+            }
+        } catch (Exception e) {
+            // If UUID parsing fails, try all team assigned cases
+            List<CommitteeCaseEntity> allTeamCases = committeeCaseRepository.findAllTeamAssigned();
+            for (CommitteeCaseEntity cc : allTeamCases) {
+                if (cc.getTeamLeadId() != null && cc.getTeamLeadId().toString().equals(teamLeaderId)) {
+                    committeeCases.add(fromCommitteeCase(cc, teamLeaderId));
+                }
+            }
+        }
+
+        // Merge both sources, avoiding duplicates (execution cases take priority)
+        List<AuditCase> merged = new ArrayList<>(executionCases);
+        for (AuditCase cc : committeeCases) {
+            boolean alreadyInExecution = executionCases.stream()
+                .anyMatch(ec -> ec.getId() != null && ec.getId().equals(cc.getId()));
+            if (!alreadyInExecution) {
+                merged.add(cc);
+            }
+        }
+        return merged;
     }
 
     /**
@@ -147,13 +216,15 @@ public class CaseGenerationService {
 
     /**
      * Assign case to auditor
+     * Accepts PENDING_ASSIGNMENT or ASSIGNED status
      */
     public AuditCase assignCaseToAuditor(UUID caseId, String auditorId) {
         ApAuditCaseEntity caseEntity = caseRepository.findById(caseId)
             .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
-        if (!caseEntity.getStatus().equals("ASSIGNED")) {
-            throw new IllegalStateException("Case must be assigned to team leader first. Current: " + caseEntity.getStatus());
+        // Accept PENDING_ASSIGNMENT (from committee) or ASSIGNED (from team leader)
+        if (!"PENDING_ASSIGNMENT".equals(caseEntity.getStatus()) && !"ASSIGNED".equals(caseEntity.getStatus())) {
+            throw new IllegalStateException("Case must be in PENDING_ASSIGNMENT or ASSIGNED status. Current: " + caseEntity.getStatus());
         }
 
         caseEntity.setAssignedAuditorId(auditorId);
@@ -189,5 +260,25 @@ public class CaseGenerationService {
     private String generateCaseNumber(UUID planId, String taxCenter, int index) {
         String planPrefix = planId.toString().substring(0, 8).toUpperCase();
         return String.format("CASE-%s-%s-%04d", planPrefix, taxCenter, index + 1);
+    }
+
+    /**
+     * Convert a CommitteeCaseEntity to AuditCase domain model for team leader view.
+     */
+    private AuditCase fromCommitteeCase(CommitteeCaseEntity cc, String teamLeaderId) {
+        AuditCase auditCase = new AuditCase();
+        auditCase.setId(cc.getCaseId());
+        auditCase.setCommitteeCaseId(cc.getCaseId());
+        auditCase.setTaxpayerName(cc.getTaxpayerName());
+        auditCase.setTaxIdNumber(cc.getTaxIdNumber());
+        auditCase.setAuditType(cc.getSegment() != null ? cc.getSegment().toUpperCase() : "DESK");
+        auditCase.setRiskPriority(cc.getRiskPriority());
+        auditCase.setRiskScore(cc.getRiskScore());
+        auditCase.setSegment(cc.getSegment());
+        auditCase.setStatus(cc.getStatus());
+        auditCase.setAssignedTeamLeaderId(teamLeaderId);
+        auditCase.setCaseNumber(cc.getCaseCode());
+        auditCase.setCreatedAt(cc.getCreatedDate());
+        return auditCase;
     }
 }

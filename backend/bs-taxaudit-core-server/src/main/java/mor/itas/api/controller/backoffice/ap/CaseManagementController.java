@@ -10,6 +10,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import mor.itas.domain.model.ap.AuditCase;
+import mor.itas.application.port.inboundport.ap.CaseManagementPort;
+import mor.itas.persistence.mapper.ap.ApResponseDtoMapper;
+import mor.itas.api.dto.response.ap.AuditCaseResponse;
+
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,11 +27,28 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CaseManagementController {
 
+    private final CaseManagementPort caseManagementPort;
+    private final ApResponseDtoMapper dtoMapper;
     private final ApAuditCaseRepository caseRepository;
     private final WorkflowExecutionEngine workflowExecutionEngine;
     private final mor.itas.infrastructure.security.OrgScopeAuthorizationService orgScopeAuthorizationService;
     private final mor.itas.application.usecase.ap.UserManagementUseCase userManagementUseCase;
     private final mor.itas.application.service.notification.NotificationService notificationService;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CASE GENERATION FROM PLAN
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @PostMapping("/generate-from-plan/{planId}")
+    public ResponseEntity<GenericResponse<List<AuditCaseResponse>>> generateCasesFromPlan(
+            @PathVariable UUID planId,
+            @RequestHeader(value = "X-Actor-Id", required = false, defaultValue = "national-process-owner") String actorId) {
+        List<AuditCase> cases = caseManagementPort.generateCasesForPlan(planId, actorId);
+        List<AuditCaseResponse> response = cases.stream()
+                .map(dtoMapper::toAuditCaseResponse)
+                .toList();
+        return ResponseEntity.ok(GenericResponse.success(response, response.size(), (long) response.size()));
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // QUERIES
