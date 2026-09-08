@@ -3,8 +3,6 @@ package mor.itas.api.dto.response.ap;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import java.math.BigDecimal;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * AllocationResponse - Response DTO for Plan Allocations
@@ -35,10 +33,6 @@ public class AllocationResponse {
     // Metadata
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
-    
-    // Revenue
-    private BigDecimal estimatedRevenue;
-    private JsonNode revenueByAuditType;
     
     // Type indicators
     private String allocationType;       // "REGIONAL" or "TAX_CENTER"
@@ -165,22 +159,6 @@ public class AllocationResponse {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-
-    public BigDecimal getEstimatedRevenue() {
-        return estimatedRevenue;
-    }
-
-    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
-        this.estimatedRevenue = estimatedRevenue;
-    }
-
-    public JsonNode getRevenueByAuditType() {
-        return revenueByAuditType;
-    }
-
-    public void setRevenueByAuditType(JsonNode revenueByAuditType) {
-        this.revenueByAuditType = revenueByAuditType;
     }
 
     public String getAllocationType() {

@@ -5,8 +5,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.math.BigDecimal;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * PlanResponse - Response DTO for Annual Audit Plan
@@ -48,16 +46,6 @@ public class PlanResponse {
     
     // Distribution data (audit type breakdown by region)
     private Map<String, Map<String, Integer>> distribution;
-
-    // Amendment
-    private String amendmentComment;
-
-    // Regional feedback (submitted regions + defaults for pending)
-    private Map<String, Object> regionalFeedback;
-
-    // Revenue
-    private BigDecimal estimatedRevenue;
-    private JsonNode estimatedRevenueDistribution;
 
     // Metadata
     private Long version;
@@ -249,37 +237,5 @@ public class PlanResponse {
 
     public void setVersion(Long version) {
         this.version = version;
-    }
-
-    public String getAmendmentComment() {
-        return amendmentComment;
-    }
-
-    public void setAmendmentComment(String amendmentComment) {
-        this.amendmentComment = amendmentComment;
-    }
-
-    public BigDecimal getEstimatedRevenue() {
-        return estimatedRevenue;
-    }
-
-    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
-        this.estimatedRevenue = estimatedRevenue;
-    }
-
-    public JsonNode getEstimatedRevenueDistribution() {
-        return estimatedRevenueDistribution;
-    }
-
-    public void setEstimatedRevenueDistribution(JsonNode estimatedRevenueDistribution) {
-        this.estimatedRevenueDistribution = estimatedRevenueDistribution;
-    }
-
-    public Map<String, Object> getRegionalFeedback() {
-        return regionalFeedback;
-    }
-
-    public void setRegionalFeedback(Map<String, Object> regionalFeedback) {
-        this.regionalFeedback = regionalFeedback;
     }
 }
