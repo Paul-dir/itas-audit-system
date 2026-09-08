@@ -1,805 +1,615 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Package, Users, CheckCircle, AlertTriangle, Eye, Send, Search, RefreshCw, UserCheck } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Package, Users, CheckCircle, AlertTriangle, Eye, Send, Filter, Search } from 'lucide-react';
+import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs, Pagination } from '../../../../components/ui/index.jsx';
-import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, COMMITTEE_AUDIT_TYPES } from '../../data/constants.js';
-import { formatRevenue } from '../../utils/revenueFormatter.js';
-import CaseDetailModal from '../shared/CaseDetailModal.jsx';
-
-// Map frontend tax-center ID → backend code (AA-TC1 format)
-const TC_MAP = {
-  'addis_ababa-tc1':'AA-TC1','addis_ababa-tc2':'AA-TC2','addis_ababa-tc3':'AA-TC3',
-  'amhara-tc1':'BA-TC1','amhara-tc2':'BA-TC2','amhara-tc3':'BA-TC3',
-  'oromia-tc1':'BB-TC1','oromia-tc2':'BB-TC2','oromia-tc3':'BB-TC3',
-  'dire_dawa-tc1':'AB-TC1','dire_dawa-tc2':'AB-TC2','dire_dawa-tc3':'AB-TC3',
-  'snnpr-tc1':'CA-TC1','snnpr-tc2':'CA-TC2','snnpr-tc3':'CA-TC3',
-  'somali-tc1':'SO-TC1','somali-tc2':'SO-TC2','somali-tc3':'SO-TC3',
-};
-
-const API = '/api/v1/backoffice/ap/cases';
-
-const riskColors   = { CRITICAL:'red', HIGH:'orange', MEDIUM:'yellow', LOW:'blue' };
-const priorityColors = { HIGH:'red', MEDIUM:'yellow', NORMAL:'blue', LOW:'gray' };
-
-function getRiskLevel(score) {
-  if (score >= 80) return 'CRITICAL';
-  if (score >= 60) return 'HIGH';
-  if (score >= 40) return 'MEDIUM';
-  return 'LOW';
-}
-
-function mapCase(c) {
-  const frontendStatus = c.frontendStatus || normalizeBackendStatus(c.status);
-  const riskLevel = getRiskLevel(c.riskScore || 0);
-  const auditDef = getAuditTypeDef(c.auditType);
-  // Extract plan year from caseNumber prefix (e.g. "5002-85241c1a..." -> 5002) if planYear is missing
-  let year = c.planYear;
-  if (!year && c.caseNumber && c.caseNumber.includes('-')) {
-    const prefix = c.caseNumber.split('-')[0];
-    if (!isNaN(prefix)) year = parseInt(prefix, 10);
-  }
-  return {
-    ...c,
-    id: c.id || c.caseNumber,
-    planYear: year || 2026,
-    taxpayerName: c.taxpayerName || c.taxpayerId,
-    tin: c.taxpayerId,
-    sector: c.sector || 'Unknown',
-    auditTypeDef: auditDef,
-    auditTypeFrontendId: auditDef?.id || c.auditType,
-    riskLevel,
-    priority: riskLevel === 'CRITICAL' || riskLevel === 'HIGH' ? 'HIGH' : riskLevel === 'MEDIUM' ? 'MEDIUM' : 'NORMAL',
-    frontendStatus,
-    isCommittee: c.isCommitteeCase || COMMITTEE_AUDIT_TYPES.has(c.auditType),
-  };
-}
+import { Card, StatCard, Button, Modal, Badge, Alert, Input, Select, Tabs } from '../../../../components/ui/index.jsx';
+import { UnifiedCaseInfo } from '../../../../components/shared/UnifiedCaseDetail.jsx';
+import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
 
 export default function CaseManagement() {
+  const { state, actions, selectors } = useApp();
   const { user } = useAuth();
-  const tcCode = TC_MAP[user?.taxCenter] || user?.taxCenter;
-
-  const [cases, setCases]         = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [selected, setSelected]   = useState([]);
-  const [tab, setTab]             = useState('pending');
-  const [filterAT, setFilterAT]   = useState('ALL');
-  const [searchQ, setSearchQ]     = useState('');
-  const [viewCase, setViewCase]   = useState(null);
+  
+  const [selectedCases, setSelectedCases] = useState([]);
+  const [viewCaseModal, setViewCaseModal] = useState(null);
   const [assignModal, setAssignModal] = useState(false);
-  const [assignLoading, setAssignLoading] = useState(false);
-  const [assignResult, setAssignResult]   = useState(null);
-  const [page, setPage]                   = useState(1);
-  const [itemsPerPage, setItemsPerPage]   = useState(10);
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterAuditType, setFilterAuditType] = useState('ALL');
+  const [filterPriority, setFilterPriority] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [tab, setTab] = useState('all');
+  const [selectedPlanId, setSelectedPlanId] = useState('ALL'); // NEW: Plan filter
 
-  // Team leaders for this tax center (from user management API)
-  const [teamLeaders, setTeamLeaders] = useState([]);
+  // Get cases for this tax center
+  const taxCenterCases = selectors.getCasesForTaxCenter(user.taxCenter) || [];
+  
+  // Get team leaders for this tax center
+  const teamLeaders = selectors.getUsersByTaxCenterAndRole(user.taxCenter, 'team_leader') || [];
 
-// Helper to normalize tax center keys for cross-matching
-const normalizeTcKey = (tc) => {
-  if (!tc) return '';
-  const s = tc.toString().trim().toLowerCase();
-  if (s.includes('aa-tc1') || s.includes('addis_ababa-tc1') || s.includes('tc-aa-01')) return 'aa-tc1';
-  if (s.includes('aa-tc2') || s.includes('addis_ababa-tc2') || s.includes('tc-aa-02')) return 'aa-tc2';
-  if (s.includes('aa-tc3') || s.includes('addis_ababa-tc3') || s.includes('tc-aa-03')) return 'aa-tc3';
-  if (s.includes('federal-lto1') || s.includes('fed-lto1') || s.includes('tc-fed-01') || s.includes('lto1')) return 'federal-lto1';
-  if (s.includes('oromia-tc1') || s.includes('bb-tc1') || s.includes('tc-bb-01')) return 'oromia-tc1';
-  if (s.includes('amhara-tc1') || s.includes('ba-tc1') || s.includes('tc-ba-01')) return 'amhara-tc1';
-  return s;
-};
+  // Get plans that have cases for this tax center
+  const plansWithCases = useMemo(() => {
+    const planIds = [...new Set(taxCenterCases.map(c => c.planId).filter(Boolean))];
+    return planIds.map(id => state.plans.find(p => p.id === id)).filter(Boolean);
+  }, [taxCenterCases, state.plans]);
 
-  // Audit referrals state
-  const [referrals, setReferrals] = useState([]);
-  const [selectedReferral, setSelectedReferral] = useState(null);
-  const [assignReferralModal, setAssignReferralModal] = useState(false);
-  const [targetTLForReferral, setTargetTLForReferral] = useState('');
-  const [referralDurationDays, setReferralDurationDays] = useState('30');
-
-  // Load audit referrals
-  useEffect(() => {
-    const saved = localStorage.getItem('mor_audit_referrals');
-    if (saved) {
-      try {
-        setReferrals(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse referrals:', e);
-      }
-    }
-  }, []);
-
-  // Filter referrals strictly for THIS tax center
-  const tcFilteredReferrals = useMemo(() => {
-    const managerTcKey = normalizeTcKey(user?.taxCenter || tcCode);
-    return referrals.filter(ref => {
-      if (!managerTcKey) return true;
-      const targetTcKey = normalizeTcKey(ref.targetTaxCenter);
-      return managerTcKey === targetTcKey;
-    });
-  }, [referrals, user?.taxCenter, tcCode]);
-
-  // ── Fetch cases ─────────────────────────────────────────────────────────────
-  const fetchCases = useCallback(async () => {
-    if (!tcCode) return;
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}?taxCenter=${encodeURIComponent(tcCode)}`, {
-        headers: { 'X-Actor-Id': user?.id || 'tc-manager' }
-      });
-      if (r.ok) {
-        const res = await r.json();
-        setCases((res.data || []).map(mapCase));
-      }
-    } catch (e) { console.error('fetchCases', e); }
-    finally { setLoading(false); }
-  }, [tcCode, user?.id]);
-
-  const fetchTeamLeaders = useCallback(async () => {
-    if (!tcCode) return;
-    try {
-      const r = await fetch(`/api/v1/backoffice/ap/users?role=team_leader&taxCenter=${encodeURIComponent(tcCode)}`, {
-        headers: { 'X-Actor-Id': user?.id || 'tc-manager' }
-      });
-      if (r.ok) {
-        const res = await r.json();
-        const list = res.data || res || [];
-        if (list.length > 0) {
-          const mapped = list.map(u => ({
-            ...u,
-            id: u.username || u.userId,
-            username: u.username,
-            userId: u.userId,
-            fullName: u.fullName || u.username,
-            name: u.fullName || u.username,
-            auditType: u.auditType || 'GENERAL'
-          }));
-          setTeamLeaders(mapped);
-          return;
-        }
-      }
-    } catch (e) { console.error('fetchTeamLeaders', e); }
-  }, [tcCode, user?.id]);
-
-  useEffect(() => { fetchCases(); fetchTeamLeaders(); }, [fetchCases, fetchTeamLeaders]);
-
-  const resolveTlDisplay = (tlId, assignedName) => {
-    if (!tlId && !assignedName) return null;
-    if (assignedName && !assignedName.includes('-')) {
-      return { name: assignedName, role: 'Team Leader', isCommittee: false };
-    }
-    const matched = teamLeaders.find(t => 
-      t.id === tlId || t.userId === tlId || t.username === tlId || t.email === tlId
-    );
-    if (matched) {
-      return { name: matched.fullName || matched.name, role: matched.auditType || 'Team Leader', isCommittee: false };
-    }
-    const lower = (tlId || '').toLowerCase();
-    if (lower.includes('committee')) {
-      const type = lower.replace('-committee', '').toUpperCase();
-      return { name: `${type} Audit Committee`, role: 'Audit Committee', isCommittee: true };
-    }
-    if (lower.startsWith('u-tl-') || lower.startsWith('u-aud-')) {
-      const parts = lower.split('-');
-      const type = parts[parts.length - 2]?.toUpperCase() || 'AUDIT';
-      const num = parts[parts.length - 1] || '1';
-      return { name: `${type} TL-${num}`, role: `${type} Audit`, isCommittee: false };
-    }
-    if (assignedName) {
-      return { name: assignedName, role: 'Team Leader', isCommittee: false };
-    }
-    return { name: 'Assigned TL', role: 'Team Leader', isCommittee: false };
+  // Check if a plan has been assigned to team leaders
+  const planIsAssigned = (planId) => {
+    const plan = state.plans.find(p => p.id === planId);
+    return plan?.teamLeaderAssignments?.[user.taxCenter]?.status === 'ASSIGNED';
   };
 
-  const [yearFilter, setYearFilter]       = useState('ALL');
+  // Filter cases by selected plan
+  const planFilteredCases = useMemo(() => {
+    if (selectedPlanId === 'ALL') return taxCenterCases;
+    return taxCenterCases.filter(c => c.planId === selectedPlanId);
+  }, [taxCenterCases, selectedPlanId]);
 
-  // Available Plan Years
-  const availableYears = useMemo(() => {
-    const years = new Set(cases.map(c => c.planYear || 2026));
-    return ['ALL', ...Array.from(years).sort()];
-  }, [cases]);
+  // Filter cases
+  const filteredCases = useMemo(() => {
+    return planFilteredCases.filter(c => {
+      // Tab filter
+      if (tab === 'pending' && c.status !== 'PENDING') return false;
+      if (tab === 'assigned' && !['ASSIGNED', 'IN_PROGRESS'].includes(c.status)) return false;
+      if (tab === 'completed' && !['COMPLETED', 'CLOSED'].includes(c.status)) return false;
+      // 'all' tab shows everything — no status restriction
 
-  // ── Derived lists ────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return cases.filter(c => {
-      if (yearFilter !== 'ALL' && String(c.planYear || 2026) !== String(yearFilter)) return false;
-      if (tab === 'pending'   && c.frontendStatus !== 'PENDING')   return false;
-      if (tab === 'assigned'  && !['ASSIGNED','IN_PROGRESS'].includes(c.frontendStatus)) return false;
-      if (tab === 'completed' && !['COMPLETED','CLOSED'].includes(c.frontendStatus))     return false;
-      if (filterAT !== 'ALL'  && c.auditTypeFrontendId !== filterAT) return false;
-      if (searchQ) {
-        const q = searchQ.toLowerCase();
-        return c.taxpayerName?.toLowerCase().includes(q) || c.tin?.toLowerCase().includes(q) || c.sector?.toLowerCase().includes(q);
+      // Status filter
+      if (filterStatus !== 'ALL' && c.status !== filterStatus) return false;
+
+      // Audit type filter
+      if (filterAuditType !== 'ALL' && c.auditType !== filterAuditType) return false;
+
+      // Priority filter
+      if (filterPriority !== 'ALL' && c.priority !== filterPriority) return false;
+
+      // Search query
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          c.taxpayerName?.toLowerCase().includes(q) ||
+          c.tin?.toLowerCase().includes(q) ||
+          c.sector?.toLowerCase().includes(q)
+        );
       }
+
       return true;
     });
-  }, [cases, tab, filterAT, searchQ, yearFilter]);
+  }, [planFilteredCases, tab, filterStatus, filterAuditType, filterPriority, searchQuery]);
 
-  const yearFilteredCases = useMemo(() => {
-    if (yearFilter === 'ALL') return cases;
-    return cases.filter(c => String(c.planYear || 2026) === String(yearFilter));
-  }, [cases, yearFilter]);
-
+  // Statistics (based on plan-filtered cases)
   const stats = useMemo(() => ({
-    total:     yearFilteredCases.length,
-    pending:   yearFilteredCases.filter(c => c.frontendStatus === 'PENDING').length,
-    assigned:  yearFilteredCases.filter(c => ['ASSIGNED','IN_PROGRESS'].includes(c.frontendStatus)).length,
-    completed: yearFilteredCases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
-  }), [yearFilteredCases]);
+    total: planFilteredCases.length,
+    pending: planFilteredCases.filter(c => c.status === 'PENDING').length,
+    assigned: planFilteredCases.filter(c => ['ASSIGNED', 'IN_PROGRESS'].includes(c.status)).length,
+    completed: planFilteredCases.filter(c => ['COMPLETED', 'CLOSED'].includes(c.status)).length,
+  }), [planFilteredCases]);
 
-  const tabs = [
-    { id:'pending',   label:'Pending Assignment', count: stats.pending   },
-    { id:'referrals', label:'Directorate Referrals', count: tcFilteredReferrals.length },
-    { id:'assigned',  label:'Assigned / In Progress', count: stats.assigned  },
-    { id:'completed', label:'Completed',          count: stats.completed },
-  ];
-
-  // Assign Referral Case Handler
-  const handleAssignReferral = (ref) => {
-    if (!ref) return;
-    const targetTL = targetTLForReferral || (teamLeaders[0]?.username || teamLeaders[0]?.userId || teamLeaders[0]?.id || `u-tl-${normalizeTcKey(user?.taxCenter || tcCode)}-desk-1`);
-    const updatedReferrals = referrals.map(r => {
-      if (r.id === ref.id) {
-        const isComm = r.auditType === 'transfer_pricing' || r.auditType === 'joint_audit';
-        return {
-          ...r,
-          status: isComm ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER',
-          assignedTeamLeaderId: targetTL,
-          assignedTeamLeaderName: teamLeaders.find(t => (t.userId||t.id) === targetTL)?.name || targetTL,
-          assignedAt: new Date().toISOString(),
-          durationDays: referralDurationDays,
-          startDate: new Date().toISOString().split('T')[0],
-          expectedEndDate: new Date(Date.now() + Number(referralDurationDays) * 86400000).toISOString().split('T')[0],
-        };
+  // Toggle case selection
+  const toggleCaseSelection = (caseId) => {
+    setSelectedCases(prev => {
+      if (prev.includes(caseId)) {
+        return prev.filter(id => id !== caseId);
+      } else {
+        return [...prev, caseId];
       }
-      return r;
     });
-    setReferrals(updatedReferrals);
-    localStorage.setItem('mor_audit_referrals', JSON.stringify(updatedReferrals));
-
-    // Also inject into active cases list
-    const newCase = mapCase({
-      id: `case-${ref.id}`,
-      caseNumber: ref.caseNumber,
-      taxpayerId: ref.taxpayerId,
-      taxpayerName: ref.taxpayerName,
-      sector: ref.sector,
-      auditType: ref.auditType.toUpperCase(),
-      riskScore: ref.priority === 'CRITICAL' ? 95 : ref.priority === 'HIGH' ? 80 : 50,
-      estimatedRevenue: ref.estimatedRevenue,
-      status: ref.auditType === 'transfer_pricing' || ref.auditType === 'joint_audit' ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER',
-      assignedTeamLeaderId: targetTL,
-      createdBy: ref.requestingEntity,
-      createdAt: new Date().toISOString(),
-    });
-
-    setCases(prev => [newCase, ...prev]);
-    setAssignReferralModal(false);
-    setSelectedReferral(null);
-    alert(`✅ Case ${ref.caseNumber} successfully assigned to ${newCase.status === 'ASSIGNED_TO_COMMITTEE' ? 'Joint/TP Audit Committee' : 'Team Leader'}!`);
   };
 
-  // ── Selection ────────────────────────────────────────────────────────────────
-  const toggleAll = () => {
-    const selectablePending = filtered.filter(c => c.frontendStatus === 'PENDING').map(c => c.id);
-    setSelected(prev => prev.length === selectablePending.length ? [] : selectablePending);
+  // Select all filtered cases
+  const toggleSelectAll = () => {
+    if (selectedCases.length === filteredCases.length) {
+      setSelectedCases([]);
+    } else {
+      setSelectedCases(filteredCases.map(c => c.id));
+    }
   };
-  const toggle = id => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const [manualTlSelections, setManualTlSelections] = useState({});
+  // Update case priority
+  const handlePriorityChange = (caseId, newPriority) => {
+    actions.updateCasePriority(caseId, newPriority);
+  };
 
-  // ── Smart Assignment ─────────────────────────────────────────────────────────
-  const handleAssign = async () => {
-    if (!selected.length) return;
-    setAssignLoading(true);
-    setAssignResult(null);
-    try {
-      // Group team leaders by audit type
-      const tlByType = {};
-      teamLeaders.forEach(tl => {
-        let rawAt = (tl.auditType || '').toUpperCase().replace(/\s+/g, '_');
-        if (rawAt === 'DESK') rawAt = 'DESK_AUDIT';
-        if (rawAt === 'FIELD') rawAt = 'FIELD_AUDIT';
-        if (rawAt === 'COMPREHENSIVE') rawAt = 'COMPREHENSIVE_AUDIT';
-        if (rawAt === 'ISSUE') rawAt = 'ISSUE_AUDIT';
-        if (!tlByType[rawAt]) tlByType[rawAt] = [];
-        tlByType[rawAt].push(tl);
-      });
-      // Round-robin index per audit type
-      const rrIdx = {};
+  // Open assignment modal
+  const openAssignModal = () => {
+    if (selectedCases.length === 0) {
+      alert('Please select at least one case to assign.');
+      return;
+    }
+    setAssignModal(true);
+  };
 
-      const selectedCaseObjects = cases.filter(c => selected.includes(c.id));
-      const assignments = [];
-      const warnings = [];
+  // Smart auto-assignment based on audit type
+  const handleSmartAssignment = () => {
+    if (selectedCases.length === 0) return;
 
-      let committeeCount = 0;
-      let standardCount = 0;
+    // Check if current plan (if filtered) is already assigned
+    if (selectedPlanId !== 'ALL' && planIsAssigned(selectedPlanId)) {
+      alert(`❌ Assignment Already Done!\n\nPlan "${state.plans.find(p => p.id === selectedPlanId)?.name}" has already been assigned to team leaders for your tax center.\n\nEach plan can only be assigned once per tax center.\n\nPlease select a different plan.`);
+      return;
+    }
 
-      for (const c of selectedCaseObjects) {
-        const backendType = c.auditType; // Already backend format (DESK_AUDIT etc.)
-        const frontendTypeId = c.auditTypeFrontendId;
-        const isCommittee = c.isCommittee;
+    // If multiple plans in selection, check each
+    const casePlans = [...new Set(selectedCases.map(id => {
+      const c = state.cases.find(cs => cs.id === id);
+      return c?.planId;
+    }).filter(Boolean))];
 
-        // Check if user manually selected a specific TL or Committee Chair for this audit type
-        const manualTarget = manualTlSelections[frontendTypeId] || manualTlSelections[backendType];
-        if (manualTarget && manualTarget !== 'auto') {
-          assignments.push({
-            caseId: c.id,
-            teamLeaderId: manualTarget,
-            status: isCommittee ? 'ASSIGNED_TO_COMMITTEE' : 'ASSIGNED_TO_TEAM_LEADER'
-          });
-          if (isCommittee) committeeCount++; else standardCount++;
-          continue;
-        }
+    const alreadyAssignedPlans = casePlans.filter(planId => planIsAssigned(planId));
+    if (alreadyAssignedPlans.length > 0) {
+      const planNames = alreadyAssignedPlans.map(id => 
+        state.plans.find(p => p.id === id)?.name || id
+      ).join(', ');
+      alert(`❌ Some Plans Already Assigned!\n\nThe following plans have already been assigned:\n${planNames}\n\nPlease filter by a specific unassigned plan.`);
+      return;
+    }
 
-        if (isCommittee) {
-          // Attempt to find a dynamic committee chair for this type
-          let commCandidates = tlByType[backendType] || [];
-          let commChairId;
-          
-          if (commCandidates.length > 0) {
-            const idx = (rrIdx[backendType] || 0) % commCandidates.length;
-            rrIdx[backendType] = idx + 1;
-            const tl = commCandidates[idx];
-            commChairId = tl.username || tl.userId || tl.id;
-          } else {
-            // Dynamic committee chair derived strictly from user's current Tax Center
-            const tcSlug = normalizeTcKey(user?.taxCenter || tcCode || 'federal-lto1');
-            commChairId = backendType === 'TRANSFER_PRICING' 
-              ? `u-com-${tcSlug}-tp` 
-              : `u-com-${tcSlug}-ja`;
-          }
-          
-          assignments.push({ caseId: c.id, teamLeaderId: commChairId, status: 'ASSIGNED_TO_COMMITTEE' });
-          committeeCount++;
-          continue;
-        }
+    let assignedCount = 0;
+    let errors = [];
 
-        let candidates = tlByType[backendType] || [];
+    selectedCases.forEach(caseId => {
+      const caseItem = state.cases.find(c => c.id === caseId);
+      if (!caseItem) return;
 
-        if (!candidates.length) {
-          // No matching standard TL — assign to available standard TL
-          const standardTLs = Object.values(tlByType).flat().filter(t => t.auditType !== 'JOINT_AUDIT' && t.auditType !== 'TRANSFER_PRICING');
-          if (standardTLs.length) {
-            candidates = standardTLs;
-          } else {
-            warnings.push(`No team leader found for ${c.auditType}`);
-            continue;
-          }
-        }
+      // Find team leader specialized in this audit type
+      const specializedTLs = teamLeaders.filter(tl => tl.auditType === caseItem.auditType);
 
-        const idx = (rrIdx[backendType] || 0) % candidates.length;
-        rrIdx[backendType] = idx + 1;
-        const tl = candidates[idx];
-
-        assignments.push({ caseId: c.id, teamLeaderId: tl.username || tl.userId || tl.id });
-        standardCount++;
-      }
-
-      if (!assignments.length) {
-        setAssignResult({ status:'FAILED', message:'No valid assignments could be built. Ensure team leaders exist for this tax center.' });
+      if (specializedTLs.length === 0) {
+        errors.push(`No team leader found for ${AUDIT_TYPES.find(at => at.id === caseItem.auditType)?.name || caseItem.auditType}`);
         return;
       }
 
-      const r = await fetch(`${API}/bulk-assign-team-leader`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user?.id || 'tc-manager' },
-        body: JSON.stringify({ assignments }),
-      });
+      // Load balance: assign to TL with fewest cases
+      const tlCaseCounts = specializedTLs.map(tl => ({
+        tl,
+        count: state.cases.filter(c => c.assignedTeamLeader === tl.id && c.status !== 'COMPLETED').length
+      }));
 
-      const res = await r.json();
-      const resultData = res.data || res;
-      
-      let summaryParts = [];
-      if (standardCount > 0) summaryParts.push(`${standardCount} case${standardCount > 1 ? 's' : ''} assigned to Team Leaders`);
-      if (committeeCount > 0) summaryParts.push(`${committeeCount} Joint/TP case${committeeCount > 1 ? 's' : ''} routed to Audit Committee`);
-      
-      const summaryMsg = summaryParts.join(' • ');
+      const leastLoadedTL = tlCaseCounts.reduce((min, curr) => 
+        curr.count < min.count ? curr : min
+      ).tl;
 
-      setAssignResult({
-        status: resultData.status || (res.status === 'SUCCESS' ? 'SUCCESS' : 'DONE'),
-        assigned: resultData.assigned || 0,
-        failed: resultData.failed || 0,
-        warnings: Array.from(new Set(warnings)),
-        message: summaryMsg || `${resultData.assigned || 0} cases successfully assigned.`,
-      });
+      // Assign case
+      actions.assignCaseToTeamLeader(caseId, leastLoadedTL.id);
+      assignedCount++;
+    });
 
-      // Refresh cases from backend
-      await fetchCases();
-      setSelected([]);
-      setAssignModal(false);
-    } catch(e) {
-      setAssignResult({ status:'ERROR', message: e.message });
-    } finally { setAssignLoading(false); }
+    // Mark plan(s) as assigned for this tax center
+    casePlans.forEach(planId => {
+      if (planId) {
+        actions.markPlanAsAssigned(planId, user.taxCenter);
+      }
+    });
+
+    // Show results
+    if (assignedCount > 0) {
+      alert(`✅ Success!\n\n${assignedCount} case(s) assigned to specialized team leaders.\n\nCases automatically distributed based on:\n- Audit type specialization\n- Team leader workload balancing\n\nThis plan cannot be assigned again for your tax center.`);
+    }
+
+    if (errors.length > 0) {
+      alert(`⚠️ Partial Assignment\n\n${errors.length} case(s) could not be assigned:\n${errors.join('\n')}\n\nPlease ensure team leaders are available for all audit types.`);
+    }
+
+    setSelectedCases([]);
+    setAssignModal(false);
   };
+
+  const riskColors = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
+  const priorityColors = { HIGH: 'red', MEDIUM: 'yellow', NORMAL: 'blue', LOW: 'gray' };
+
+  const tabs = [
+    { id: 'all', label: 'All Cases', count: stats.total },
+    { id: 'pending', label: 'Pending Assignment', count: stats.pending },
+    { id: 'assigned', label: 'Assigned / In Progress', count: stats.assigned },
+    { id: 'completed', label: 'Completed', count: stats.completed },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Case Management</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {loading ? 'Loading cases…' : `${stats.total} cases for ${tcCode || user?.taxCenter}`}
-          </p>
-        </div>
-        <Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchCases} disabled={loading}>
-          Refresh
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Case Management</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage audit cases for {user.taxCenter?.replace(/-/g, ' ').toUpperCase()}
+        </p>
       </div>
+
+      {/* Plan Selector */}
+      {plansWithCases.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                📋 Select Plan to Manage
+              </label>
+              <select
+                value={selectedPlanId}
+                onChange={(e) => {
+                  setSelectedPlanId(e.target.value);
+                  setSelectedCases([]); // Clear selections when changing plan
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-slate-700 dark:border-gray-600 dark:text-white dark:focus:ring-blue-500 appearance-none"
+              >
+                <option value="ALL">All Plans ({taxCenterCases.length} total cases)</option>
+                {plansWithCases.map(plan => {
+                  const planCases = taxCenterCases.filter(c => c.planId === plan.id);
+                  const isAssigned = planIsAssigned(plan.id);
+                  return (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.planName} - FY {plan.planYear} ({planCases.length} cases) {isAssigned ? '✓ Assigned' : '○ Pending'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            {selectedPlanId !== 'ALL' && (
+              <div className="text-sm">
+                {planIsAssigned(selectedPlanId) ? (
+                  <Badge color="green" dot>Already Assigned</Badge>
+                ) : (
+                  <Badge color="yellow" dot>Pending Assignment</Badge>
+                )}
+              </div>
+            )}
+          </div>
+          {selectedPlanId !== 'ALL' && (
+            <div className="mt-3 text-xs text-gray-600 dark:text-slate-400">
+              <strong>Note:</strong> Viewing cases for "{state.plans.find(p => p.id === selectedPlanId)?.name}". 
+              Each plan can be assigned to team leaders only once per tax center.
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Total Cases"         value={stats.total}     icon={Package}       color="blue"   sub="All cases" />
-        <StatCard label="Pending Assignment"  value={stats.pending}   icon={AlertTriangle} color="yellow" sub="Awaiting team leader" />
-        <StatCard label="Active"              value={stats.assigned}  icon={Users}         color="purple" sub="Assigned or in progress" />
-        <StatCard label="Completed"           value={stats.completed} icon={CheckCircle}   color="green"  sub="Audit finished" />
+        <StatCard 
+          label="Total Cases" 
+          value={stats.total} 
+          icon={Package} 
+          color="blue"
+          sub="All cases"
+        />
+        <StatCard 
+          label="Pending Assignment" 
+          value={stats.pending} 
+          icon={AlertTriangle} 
+          color="yellow"
+          sub="Awaiting team leader"
+        />
+        <StatCard 
+          label="Active" 
+          value={stats.assigned} 
+          icon={Users} 
+          color="purple"
+          sub="Assigned or in progress"
+        />
+        <StatCard 
+          label="Completed" 
+          value={stats.completed} 
+          icon={CheckCircle} 
+          color="green"
+          sub="Audit finished"
+        />
       </div>
 
-      {/* Selection banner */}
-      {selected.length > 0 && (
+      {/* Selection Banner */}
+      {selectedCases.length > 0 && (
         <div className="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <UserCheck className="text-blue-600" size={22} />
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
-              {selected.length} case{selected.length > 1 ? 's' : ''} selected — ready to assign to team leaders
-            </p>
+            <CheckCircle className="text-blue-600 dark:text-blue-400" size={24} />
+            <div>
+              <p className="text-sm font-semibold text-blue-900">
+                {selectedCases.length} case{selectedCases.length > 1 ? 's' : ''} selected
+              </p>
+              <p className="text-xs text-blue-700">
+                Ready for assignment to specialized team leaders
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setSelected([])}>Clear</Button>
-            <Button size="sm" variant="success" icon={Send} onClick={() => { setAssignResult(null); setAssignModal(true); }}>
-              Assign to Team Leaders
+            <Button 
+              size="sm" 
+              variant="secondary"
+              onClick={() => setSelectedCases([])}
+            >
+              Clear Selection
+            </Button>
+            <Button 
+              size="sm" 
+              variant="success"
+              icon={Send}
+              onClick={openAssignModal}
+            >
+              Assign Selected
             </Button>
           </div>
         </div>
       )}
 
-      {assignResult && (
-        <Alert type={assignResult.status === 'SUCCESS' || assignResult.assigned > 0 ? 'success' : 'error'}
-          title={assignResult.status === 'SUCCESS' ? `✅ ${assignResult.assigned} cases assigned` : '⚠️ Assignment issue'}>
-          {assignResult.message || `${assignResult.assigned || 0} assigned, ${assignResult.failed || 0} failed.`}
-        </Alert>
-      )}
-
-      {/* Filters + table */}
+      {/* Filters & Tabs */}
       <Card padding={false}>
         <div className="px-6 pt-4 pb-0">
           <Tabs tabs={tabs} active={tab} onChange={setTab} />
         </div>
 
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex gap-3 flex-wrap items-center">
-          <Input icon={Search} placeholder="Search taxpayer / TIN…" value={searchQ} onChange={e => setSearchQ(e.target.value)} />
-          <Select value={filterAT} onChange={e => setFilterAT(e.target.value)}>
-            <option value="ALL">All Audit Types</option>
-            {AUDIT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
-          </Select>
-          <Select value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-            {availableYears.map(y => (
-              <option key={y} value={y}>{y === 'ALL' ? 'All Plan Years' : `FY ${y}`}</option>
-            ))}
-          </Select>
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 dark:bg-gray-800 dark:bg-slate-700">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <Input
+              icon={Search}
+              placeholder="Search taxpayer, TIN..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            
+            <Select value={filterAuditType} onChange={(e) => setFilterAuditType(e.target.value)}>
+              <option value="ALL">All Audit Types</option>
+              {AUDIT_TYPES.map(at => (
+                <option key={at.id} value={at.id}>{at.name}</option>
+              ))}
+            </Select>
+
+            <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+              <option value="ALL">All Priorities</option>
+              <option value="HIGH">High Priority</option>
+              <option value="MEDIUM">Medium Priority</option>
+              <option value="NORMAL">Normal Priority</option>
+              <option value="LOW">Low Priority</option>
+            </Select>
+
+            <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+              <option value="ALL">All Statuses</option>
+              {Object.entries(CASE_STATUS).map(([key, val]) => (
+                <option key={key} value={key}>{val.label}</option>
+              ))}
+            </Select>
+
+            <Button size="sm" variant="secondary" icon={Filter}>
+              Advanced Filters
+            </Button>
+          </div>
         </div>
 
-        {tab === 'referrals' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+        {/* Case Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+              <tr>
+                <th className="px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectedCases.length === filteredCases.length && filteredCases.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-400"
+                  />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">Taxpayer</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Risk</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Audit Type</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Priority</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Status</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Assigned To</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-slate-200">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredCases.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Case / Taxpayer</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Requesting Entity</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Audit Type</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-slate-200">Priority</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-slate-200">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-slate-200">Assigned Team Leader</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-slate-200">Action</th>
+                  <td colSpan="8" className="px-4 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
+                    No cases found matching your filters
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                {tcFilteredReferrals.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
-                      No statutory referral requests assigned to {tcCode || 'your Tax Center'}.
-                    </td>
-                  </tr>
-                ) : (
-                  tcFilteredReferrals.map(ref => (
-                    <tr key={ref.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
+              ) : (
+                filteredCases.map(caseItem => {
+                  const auditType = AUDIT_TYPES.find(at => at.id === caseItem.auditType);
+                  const teamLeader = caseItem.assignedTeamLeader 
+                    ? selectors.getUserById(caseItem.assignedTeamLeader)
+                    : null;
+
+                  return (
+                    <tr key={caseItem.id} className="hover:bg-blue-50 dark:hover:bg-slate-600">
                       <td className="px-4 py-3">
-                        <div className="font-mono font-bold text-blue-600 dark:text-blue-400">{ref.caseNumber}</div>
-                        <div className="font-semibold text-gray-900 dark:text-white mt-0.5">{ref.taxpayerName}</div>
-                        <div className="text-[11px] text-gray-500 font-mono">TIN: {ref.taxpayerId} | {ref.sector}</div>
+                        <input
+                          type="checkbox"
+                          checked={selectedCases.includes(caseItem.id)}
+                          onChange={() => toggleCaseSelection(caseItem.id)}
+                          disabled={caseItem.status !== 'PENDING'}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+                        />
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-gray-800 dark:text-gray-200">{ref.requestingEntity}</div>
-                        <div className="text-[11px] text-gray-500">{ref.referralReason}</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{caseItem.taxpayerName}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">{caseItem.tin} • {caseItem.sector}</p>
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <Badge color="purple" size="sm">
-                          {ref.auditType.replace(/_/g, ' ').toUpperCase()}
+                      <td className="px-4 py-3 text-center">
+                        <Badge color={riskColors[caseItem.riskLevel]} dot size="sm">
+                          {caseItem.riskLevel}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge color={ref.priority === 'CRITICAL' ? 'red' : ref.priority === 'HIGH' ? 'orange' : 'yellow'} size="sm">
-                          {ref.priority}
+                        <Badge color={auditType?.color || 'gray'} size="sm">
+                          {auditType?.shortName || caseItem.auditType}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge color={ref.status === 'PENDING_TAX_CENTER_REVIEW' ? 'orange' : 'green'} dot size="sm">
-                          {ref.status.replace(/_/g, ' ')}
+                        {caseItem.status === 'PENDING' ? (
+                          <select
+                            value={caseItem.priority}
+                            onChange={(e) => handlePriorityChange(caseItem.id, e.target.value)}
+                            className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          >
+                            <option value="HIGH">High</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="NORMAL">Normal</option>
+                            <option value="LOW">Low</option>
+                          </select>
+                        ) : (
+                          <Badge color={priorityColors[caseItem.priority]} size="sm">
+                            {caseItem.priority}
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge 
+                          color={CASE_STATUS[caseItem.status]?.color || 'gray'} 
+                          dot 
+                          size="sm"
+                        >
+                          {CASE_STATUS[caseItem.status]?.label || caseItem.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-700 dark:text-slate-300">
-                        {ref.assignedTeamLeaderName || ref.assignedTeamLeaderId || <span className="text-gray-400 font-normal">Pending Assignment</span>}
+                      <td className="px-4 py-3 text-center">
+                        {teamLeader ? (
+                          <div className="text-xs">
+                            <p className="font-medium text-gray-900 dark:text-white">{teamLeader.name}</p>
+                            <p className="text-gray-500 dark:text-slate-400">{auditType?.shortName} TL</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">Not assigned</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-right space-x-2">
+                      <td className="px-4 py-3 text-center">
                         <Button
                           size="sm"
-                          variant="success"
-                          icon={Send}
-                          disabled={ref.status !== 'PENDING_TAX_CENTER_REVIEW'}
-                          onClick={() => { setSelectedReferral(ref); setAssignReferralModal(true); }}
+                          variant="secondary"
+                          icon={Eye}
+                          onClick={() => setViewCaseModal(caseItem)}
                         >
-                          {ref.status === 'PENDING_TAX_CENTER_REVIEW' ? 'Assign Team' : 'Assigned'}
+                          View
                         </Button>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
-                <tr>
-                  <th className="px-4 py-3">
-                    <input type="checkbox"
-                      checked={filtered.filter(c=>c.frontendStatus==='PENDING').length > 0 &&
-                               selected.length === filtered.filter(c=>c.frontendStatus==='PENDING').length}
-                      onChange={toggleAll}
-                      className="w-4 h-4 rounded" />
-                  </th>
-                  {['Taxpayer','Plan Year','Risk','Audit Type','Status','Assigned To',''].map((h,i) => (
-                    <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-200">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
-                    {loading ? 'Loading…' : 'No cases found'}
-                  </td></tr>
-                ) : filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage).map(c => {
-                  const atDef = c.auditTypeDef;
-                  const statusDef = CASE_STATUS[c.status] || CASE_STATUS[c.frontendStatus];
-                  return (
-                    <tr key={c.id} className="hover:bg-blue-50 dark:hover:bg-slate-700/50">
-                      <td className="px-4 py-3">
-                        <input type="checkbox" checked={selected.includes(c.id)}
-                          onChange={() => toggle(c.id)}
-                          disabled={c.frontendStatus !== 'PENDING'}
-                          className="w-4 h-4 rounded disabled:opacity-40" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">{c.tin} • {c.sector}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge color="purple" size="sm">FY {c.planYear || 2026}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge color={atDef?.color || 'gray'} size="sm">
-                          {atDef?.shortName || c.auditType}
-                          {c.isCommittee && <span className="ml-1 opacity-70">(Cmte)</span>}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge color={statusDef?.color || 'gray'} dot size="sm">
-                          {statusDef?.label || c.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {(() => {
-                          const tlInfo = resolveTlDisplay(c.assignedTeamLeaderId, c.assignedTeamLeaderName);
-                          if (!tlInfo) {
-                            return <span className="text-gray-400 text-xs font-normal">Not assigned</span>;
-                          }
-                          return (
-                            <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${
-                                tlInfo.isCommittee ? 'bg-amber-600' : 'bg-blue-600'
-                              }`}>
-                                {tlInfo.isCommittee ? '🏛️' : tlInfo.name.charAt(0)}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-gray-100 text-xs truncate leading-tight">
-                                  {tlInfo.name}
-                                </p>
-                                <span className={`inline-block text-[10px] px-1.5 py-0.2 rounded font-medium ${
-                                  tlInfo.isCommittee
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                                }`}>
-                                  {tlInfo.role}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
-                      </td>
-                    </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <Pagination
-          currentPage={page}
-          totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
-          totalItems={filtered.length}
-          itemsPerPage={itemsPerPage}
-          onPageChange={setPage}
-          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
-        />
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      {/* View Case Details & Detailed Taxpayer Profile Modal */}
-      {viewCase && (
-        <CaseDetailModal
-          caseData={{
-            ...viewCase,
-            annualRevenue: viewCase.estimatedRevenue || 14200000,
-            employees: viewCase.employees || 35,
-            taxCenter: viewCase.taxCenterCode || viewCase.taxCenter || user?.taxCenter,
-            region: viewCase.regionCode || viewCase.region || user?.region,
-            assignedTeamLeader: viewCase.assignedTeamLeaderId || viewCase.assignedTeamLeader,
-            assignedAuditor: viewCase.assignedAuditorId || viewCase.assignedAuditor,
-          }}
-          onClose={() => setViewCase(null)}
-          users={teamLeaders}
-        />
-      )}
-
-      {/* Assignment Confirmation Modal */}
-      {assignModal && (
-        <Modal open onClose={() => setAssignModal(false)} title="Assign Cases to Team Leaders" size="lg"
+      {/* View Case Modal */}
+      {viewCaseModal && (
+        <Modal
+          open={!!viewCaseModal}
+          onClose={() => setViewCaseModal(null)}
+          title="Case Details"
+          size="xl"
           footer={
-            <div className="flex justify-between w-full">
-              <Button variant="secondary" onClick={() => setAssignModal(false)}>Cancel</Button>
-              <Button variant="success" icon={Send} onClick={handleAssign} disabled={assignLoading}>
-                {assignLoading ? 'Assigning…' : `Assign ${selected.length} Cases`}
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={() => setViewCaseModal(null)}>
+                Close
               </Button>
             </div>
-          }>
+          }
+        >
           <div className="space-y-4">
-            <Alert type="info" title="Role & Audit Type Segregated Assignment">
-              Cases are strictly isolated by audit type. Select a specific Team Leader or Committee for each audit type, or leave set to Auto Load-Balance for specialized round-robin routing.
-            </Alert>
-            <div>
-              <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Selected Cases by Audit Type & Assignee Selection</p>
-              {AUDIT_TYPES.map(at => {
-                const typeCases = cases.filter(c => selected.includes(c.id) && c.auditTypeFrontendId === at.id);
-                if (!typeCases.length) return null;
+            {/* Unified Case Information (same fields across all roles) */}
+            <UnifiedCaseInfo
+              caseData={viewCaseModal}
+              compactRisk
+              sections={{
+                overview: true,
+                taxpayer: true,
+                address: true,
+                risk: true,
+                auditInfo: true,
+                committeeDecision: false,
+                segmentHistory: false,
+              }}
+            />
 
-                // Filter team leaders for this audit type
-                const matchingTLs = teamLeaders.filter(tl => {
-                  const uAt = (tl.auditType || '').toUpperCase().replace(/\s+/g, '_');
-                  const tAt = at.id.toUpperCase().replace(/\s+/g, '_');
-                  if (tAt === 'DESK_AUDIT' || tAt === 'DESK') return uAt.includes('DESK');
-                  if (tAt === 'COMPREHENSIVE' || tAt === 'COMPREHENSIVE_AUDIT' || tAt === 'COMP') return uAt.includes('COMP');
-                  if (tAt === 'ISSUE' || tAt === 'ISSUE_AUDIT' || tAt === 'QA') return uAt.includes('ISSUE') || uAt.includes('QA');
-                  if (tAt === 'JOINT_AUDIT' || tAt === 'JOINT') return uAt.includes('JOINT') || tl.userType === 'COMMITTEE_MEMBER';
-                  if (tAt === 'TRANSFER_PRICING' || tAt === 'TP') return uAt.includes('TRANSFER') || uAt.includes('TP') || tl.userType === 'COMMITTEE_MEMBER';
-                  return uAt === tAt;
-                });
-
-                return (
-                  <div key={at.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 mb-3 gap-3">
-                    <div className="flex items-center gap-3">
-                      <Badge color={at.color}>{at.shortName}</Badge>
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{typeCases.length} case{typeCases.length > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 font-medium">Assign To:</span>
-                      <select
-                        className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-                        value={manualTlSelections[at.id] || 'auto'}
-                        onChange={e => setManualTlSelections(prev => ({ ...prev, [at.id]: e.target.value }))}
-                      >
-                        <option value="auto">⚡ Auto Load-Balance (Specialized TLs)</option>
-                        {matchingTLs.map(tl => (
-                          <option key={tl.id || tl.userId} value={tl.userId || tl.id}>
-                            👤 {tl.name || tl.fullName} ({tl.auditType?.replace(/_/g, ' ') || 'Team Leader'})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {teamLeaders.length === 0 && (
-              <Alert type="warning" title="No Team Leaders Found">
-                No team leaders found for {tcCode}. Cases will remain PENDING. Please register team leaders first.
-              </Alert>
+            {/* Creation Info */}
+            {viewCaseModal.creationMethod && (
+              <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 dark:text-slate-400 dark:bg-slate-700">
+                <strong>Creation Method:</strong> {viewCaseModal.creationMethod === 'risk_engine_manual_selection' 
+                  ? 'Risk Engine Manual Selection' 
+                  : 'Automatic Plan Mapping'}
+              </div>
             )}
           </div>
         </Modal>
       )}
 
-      {/* Assign Referral Modal */}
-      {assignReferralModal && selectedReferral && (
+      {/* Assignment Modal */}
+      {assignModal && (
         <Modal
-          open
-          onClose={() => setAssignReferralModal(false)}
-          title={`📌 Review & Assign Statutory Audit Referral — ${selectedReferral.caseNumber}`}
+          open={assignModal}
+          onClose={() => setAssignModal(false)}
+          title="Smart Assignment to Team Leaders"
           size="lg"
           footer={
             <div className="flex justify-between w-full">
-              <Button variant="secondary" onClick={() => setAssignReferralModal(false)}>Cancel</Button>
-              <Button variant="success" icon={Send} onClick={() => handleAssignReferral(selectedReferral)}>
-                Confirm & Route Case
+              <Button variant="secondary" onClick={() => setAssignModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="success" icon={Send} onClick={handleSmartAssignment}>
+                Assign {selectedCases.length} Case{selectedCases.length > 1 ? 's' : ''}
               </Button>
             </div>
           }
         >
-          <div className="space-y-4 text-xs">
-            <Alert type="info">
-              Review directorate audit rationale, evaluate team leader workload, and set expected completion timeframe.
+          <div className="space-y-4">
+            <Alert type="info" title="Intelligent Assignment">
+              The system will automatically assign selected cases to team leaders based on:
+              <ul className="list-disc list-inside mt-2 text-sm space-y-1">
+                <li><strong>Audit Type Specialization</strong> - Each TL handles specific audit types</li>
+                <li><strong>Workload Balancing</strong> - Cases distributed evenly among specialized TLs</li>
+                <li><strong>Instant Assignment</strong> - No manual TL selection needed</li>
+              </ul>
             </Alert>
 
-            <div className="bg-slate-900 text-white rounded-xl p-4 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="font-mono text-blue-400 font-bold">{selectedReferral.caseNumber}</span>
-                <Badge color={selectedReferral.priority === 'CRITICAL' ? 'red' : 'orange'}>{selectedReferral.priority}</Badge>
+            {/* Show assignment preview */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Assignment Preview</h3>
+              <div className="space-y-2">
+                {AUDIT_TYPES.map(auditType => {
+                  const casesOfType = selectedCases
+                    .map(id => state.cases.find(c => c.id === id))
+                    .filter(c => c && c.auditType === auditType.id);
+
+                  if (casesOfType.length === 0) return null;
+
+                  const specializedTLs = teamLeaders.filter(tl => tl.auditType === auditType.id);
+
+                  return (
+                    <div key={auditType.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge color={auditType.color}>{auditType.shortName}</Badge>
+                          <span className="text-sm text-gray-700 dark:text-slate-200">{casesOfType.length} case(s)</span>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-slate-400">
+                          → {specializedTLs.length} specialized TL{specializedTLs.length > 1 ? 's' : ''} available
+                        </div>
+                      </div>
+                      {specializedTLs.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {specializedTLs.map(tl => {
+                            const currentLoad = state.cases.filter(
+                              c => c.assignedTeamLeader === tl.id && c.status !== 'COMPLETED'
+                            ).length;
+                            return (
+                              <span key={tl.id} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                                {tl.name} ({currentLoad} cases)
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {specializedTLs.length === 0 && (
+                        <p className="mt-2 text-xs text-red-600">
+                          ⚠️ No team leader specialized in {auditType.name}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <h4 className="text-base font-bold text-white">{selectedReferral.taxpayerName}</h4>
-              <p className="text-slate-300">TIN: {selectedReferral.taxpayerId} | Sector: {selectedReferral.sector}</p>
             </div>
 
-            <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1">
-              <p className="font-semibold text-gray-700 dark:text-gray-300">Requesting Directorate Rationale:</p>
-              <p className="text-gray-800 dark:text-gray-200">{selectedReferral.referralReason}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Assign to Team Leader / Committee <span className="text-red-500">*</span>
-                </label>
-                <select
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-xl text-xs font-semibold"
-                  value={targetTLForReferral || (teamLeaders[0]?.userId || teamLeaders[0]?.id || '')}
-                  onChange={e => setTargetTLForReferral(e.target.value)}
-                >
-                  {teamLeaders.map(tl => (
-                    <option key={tl.id || tl.userId} value={tl.userId || tl.id}>
-                      {tl.name || tl.fullName} ({tl.auditType?.replace(/_/g, ' ') || 'General TL'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Audit Target Completion Duration (Days)
-                </label>
-                <select
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-xl text-xs font-semibold"
-                  value={referralDurationDays}
-                  onChange={e => setReferralDurationDays(e.target.value)}
-                >
-                  <option value="15">15 Days (Urgent Clearance Audit)</option>
-                  <option value="30">30 Days (Standard Audit Deadline)</option>
-                  <option value="60">60 Days (Comprehensive Audit)</option>
-                  <option value="90">90 Days (Transfer Pricing Audit)</option>
-                </select>
-              </div>
+            <div className="bg-green-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-green-800 dark:text-green-400 border border-green-200 dark:border-slate-600">
+              <strong>Ready to assign:</strong> Click "Assign" to automatically distribute {selectedCases.length} case(s) to the appropriate team leaders.
             </div>
           </div>
         </Modal>

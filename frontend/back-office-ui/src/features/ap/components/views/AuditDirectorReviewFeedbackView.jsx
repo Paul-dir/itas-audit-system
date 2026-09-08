@@ -226,8 +226,8 @@ function AuditDirectorReviewFeedbackView() {
       regionalFeedbackSummary: plan.regionalFeedbackStatus
     };
 
-    // ✅ Change status to SUBMITTED_TO_SENIOR_MGMT
-    plan.status = 'SUBMITTED_TO_SENIOR_MGMT';
+    // ✅ Change status to SUBMITTED_TO_SENIOR_MANAGEMENT
+    plan.status = 'SUBMITTED_TO_SENIOR_MANAGEMENT';
 
     // ✅ Track in approval history (like regional feedback pattern)
     plan.approvalHistory = plan.approvalHistory || [];
@@ -241,7 +241,7 @@ function AuditDirectorReviewFeedbackView() {
 
     console.log('✅ DIRECTOR SENT TO SENIOR MANAGEMENT:', {
       planId: plan.id,
-      status: 'SUBMITTED_TO_SENIOR_MGMT',
+      status: 'SUBMITTED_TO_SENIOR_MANAGEMENT',
       hasExecutiveSummary: !!directorRemarks
     });
 

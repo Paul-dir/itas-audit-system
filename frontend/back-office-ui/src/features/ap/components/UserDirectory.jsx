@@ -1,7 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Users, Mail, Shield, Building2, X } from 'lucide-react';
-import { mapBackendUserToProfile } from '../data/userResolver.js';
-import { storage, STORE_KEYS } from '../services/storage.js';
+import { SEED_USERS } from '../data/seed.js';
+
+// Committee roles + all DB auditors from t_auditor table
+const ALLOWED_DEMO_EMAILS = new Set([
+  // Committee roles (1 chair + 1 member per tax center)
+  'aa.committee1@mor.gov.et',              // Chair AA-TC1
+  'aa-ara.joint_committee.2@mor.gov.et',   // Member AA-TC1
+  'aa.committee2@mor.gov.et',              // Chair AA-TC2
+  'aa-ara.joint_committee.7@mor.gov.et',   // Member AA-TC2
+  'aa.committee3@mor.gov.et',              // Chair AA-TC3
+  'aa-ara.joint_committee.9@mor.gov.et',   // Member AA-TC3
+  'or.committee1@mor.gov.et',              // Chair OR-TC1
+  'or-ara.joint_committee.11@mor.gov.et',  // Member OR-TC1
+  // Team Leaders (from t_user table — 4)
+  'henok.belay@mor.gov.et',              // AA-TC1, desk_audit
+  'tigist.alemu@mor.gov.et',             // AA-TC3, field_audit
+  'fikadu.desta@mor.gov.et',             // AA-TC2, desk_audit
+  'lalisa.wakjira@mor.gov.et',           // OR-TC1, desk_audit
+  // DB auditors (synced from t_auditor table V12)
+  'abebe.kebede@mor.gov.et',               // Corporate Tax, SENIOR
+  'fatuma.ahmed@mor.gov.et',               // Transfer Pricing, PRINCIPAL
+  'dawit.tadesse@mor.gov.et',              // International Tax, SENIOR
+  'sara.mohammed@mor.gov.et',              // VAT Compliance, MID_LEVEL
+  'yonas.berhanu@mor.gov.et',              // Corporate Tax, JUNIOR
+  'hana.girma@mor.gov.et',                 // Audit Investigation, SENIOR
+  'mulugeta.alemayehu@mor.gov.et',          // Transfer Pricing, MID_LEVEL
+  'tigist.haile@mor.gov.et',               // International Tax, JUNIOR
+]);
 
 const ROLE_INFO = {
   planning_team: { label: 'Planning Team', color: 'bg-blue-50 border-blue-200 text-blue-700', icon: '📋' },
@@ -11,61 +37,25 @@ const ROLE_INFO = {
   tax_center_manager: { label: 'Tax Center Manager', color: 'bg-teal-50 border-teal-200 text-teal-700', icon: '🏢' },
   team_leader: { label: 'Team Leader', color: 'bg-indigo-50 border-indigo-200 text-indigo-700', icon: '👥' },
   auditor: { label: 'Auditor', color: 'bg-rose-50 border-rose-200 text-rose-700', icon: '🔍' },
-  committee_member: { label: 'Committee', color: 'bg-yellow-50 border-yellow-200 text-yellow-700', icon: '⚖️' },
-  audit_requester: { label: 'Audit Requester', color: 'bg-orange-50 border-orange-200 text-orange-700', icon: '📨' },
-  national_admin: { label: 'National Admin', color: 'bg-blue-50 border-blue-200 text-blue-700', icon: '🛡️' }
 };
 
 export default function UserDirectory({ onSelectUser, onClose }) {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const [federalOnly, setFederalOnly] = useState(false);
-  const [backendUsers, setBackendUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchUsers() {
-      try {
-        const API_URL = import.meta.env.VITE_API_URL || '/api/v1/backoffice';
-        const res = await fetch(`${API_URL}/ap/users`);
-        if (res.ok) {
-          const data = await res.json();
-          const userList = Array.isArray(data) ? data : (data.data || []);
-          const mapped = userList.map(mapBackendUserToProfile).filter(Boolean);
-          setBackendUsers(mapped);
-          storage.set(STORE_KEYS.USERS, mapped);
-        }
-      } catch (err) {
-        console.error('Failed to fetch backend users:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchUsers();
-  }, []);
-
-  const isFederalUser = (u) => {
-    if (!u) return false;
-    const r = (u.region || '').toLowerCase();
-    const tc = (u.taxCenter || '').toLowerCase();
-    const id = (u.id || u.username || '').toLowerCase();
-    const loc = (u.assignedLocation || '').toLowerCase();
-    return r === 'federal_level' || tc.includes('fed') || tc.includes('lto') || id.includes('fed') || loc.includes('fed') || id.startsWith('u-pt-') || id.startsWith('u-ad-') || id.startsWith('u-sm-');
-  };
+  // Only show the 4 curated demo accounts
+  const demoUsers = SEED_USERS.filter(u => ALLOWED_DEMO_EMAILS.has(u.email));
 
   // Get unique roles
-  const roles = [...new Set(backendUsers.map(u => u.role))].filter(Boolean);
+  const roles = [...new Set(demoUsers.map(u => u.role))];
 
   // Filter users
-  const filteredUsers = backendUsers.filter(user => {
-    if (federalOnly && !isFederalUser(user)) return false;
+  const filteredUsers = demoUsers.filter(user => {
     const matchesSearch = 
-      user.name?.toLowerCase().includes(search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(search.toLowerCase()) ||
-      user.id?.toLowerCase().includes(search.toLowerCase()) ||
+      user.name.toLowerCase().includes(search.toLowerCase()) ||
+      user.email.toLowerCase().includes(search.toLowerCase()) ||
       (user.region && user.region.toLowerCase().includes(search.toLowerCase())) ||
-      (user.taxCenter && user.taxCenter.toLowerCase().includes(search.toLowerCase())) ||
-      (user.auditType && user.auditType.toLowerCase().replace(/_/g, ' ').includes(search.toLowerCase()));
+      (user.taxCenter && user.taxCenter.toLowerCase().includes(search.toLowerCase()));
     
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     
@@ -74,7 +64,6 @@ export default function UserDirectory({ onSelectUser, onClose }) {
 
   // Group by role
   const usersByRole = filteredUsers.reduce((acc, user) => {
-    if (!user.role) return acc;
     if (!acc[user.role]) acc[user.role] = [];
     acc[user.role].push(user);
     return acc;
@@ -82,7 +71,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
 
   const handleUserClick = (user) => {
     if (onSelectUser) {
-      onSelectUser(user);
+      onSelectUser(user.email);
     }
   };
 
@@ -98,7 +87,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">User Directory</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{backendUsers.length} active directory accounts</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{demoUsers.length} curated demo accounts</p>
               </div>
             </div>
             {onClose && (
@@ -123,7 +112,7 @@ export default function UserDirectory({ onSelectUser, onClose }) {
           {/* Search and filter */}
           <div className="flex gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
               <input
                 type="text"
                 placeholder="Search by name, email, region, or tax center..."
@@ -146,41 +135,26 @@ export default function UserDirectory({ onSelectUser, onClose }) {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => setFederalOnly(v => !v)}
-              className={`px-3 py-2 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                federalOnly
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                  : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              🏛️ Federal Only
-            </button>
           </div>
         </div>
 
         {/* User list */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-             <div className="text-center py-12">
-               <p className="text-gray-500">Loading directory from backend...</p>
-             </div>
-          ) : filteredUsers.length === 0 ? (
+          {filteredUsers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="mx-auto text-gray-300 mb-3" size={48} />
-              <p className="text-gray-500">No users found matching your search</p>
+              <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">No users found matching your search</p>
             </div>
           ) : (
             <div className="space-y-6">
               {Object.entries(usersByRole).map(([role, users]) => (
                 <div key={role}>
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">{ROLE_INFO[role]?.icon || '👤'}</span>
+                    <span className="text-2xl">{ROLE_INFO[role]?.icon}</span>
                     <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                      {ROLE_INFO[role]?.label || role.replace(/_/g, ' ')}
+                      {ROLE_INFO[role]?.label || role}
                     </h3>
-                    <span className="text-xs text-gray-400">({users.length})</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">({users.length})</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {users.map(user => (
@@ -191,37 +165,34 @@ export default function UserDirectory({ onSelectUser, onClose }) {
                                    hover:border-gray-300 transition-all group"
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate pr-2">
+                          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
                             {user.name}
                           </p>
-                          <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full border ${ROLE_INFO[user.role]?.color || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
-                            {ROLE_INFO[user.role]?.label || user.role}
+                          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${ROLE_INFO[user.role]?.color}`}>
+                            {ROLE_INFO[user.role]?.label}
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Mail size={12} className="flex-shrink-0" />
-                            <span className="font-mono truncate">{user.email}</span>
+                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                            <Mail size={12} />
+                            <span className="font-mono">{user.email}</span>
                           </div>
                           {user.region && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <Building2 size={12} className="flex-shrink-0" />
+                            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                              <Building2 size={12} />
                               <span className="capitalize">{user.region.replace(/_/g, ' ')}</span>
                               {user.taxCenter && (
-                                <span>• {user.taxCenter}</span>
+                                <span className="text-gray-400 dark:text-gray-500">• {user.taxCenter.toUpperCase()}</span>
                               )}
                             </div>
                           )}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {user.auditType && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                {user.auditType.replace(/_/g, ' ')}
-                              </span>
-                            )}
-                            <span className="text-[9px] font-mono text-gray-400 px-1 py-0.5 rounded bg-gray-100">
-                              {user.id}
-                            </span>
-                          </div>
+                          {user.expertise && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <Shield size={12} className="text-blue-500" />
+                              <span className="text-blue-600 font-medium">{user.expertise}</span>
+                              <span className="text-gray-400">• {user.seniority} ({user.yearsOfExperience}y)</span>
+                            </div>
+                          )}
                         </div>
                       </button>
                     ))}

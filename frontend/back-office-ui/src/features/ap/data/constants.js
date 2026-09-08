@@ -3,20 +3,15 @@
 // ============================================================
 
 export const REGIONS = [
-  { id: 'federal_level', name: 'Federal Level (LTO)', code: 'FED' },
-  { id: 'addis_ababa',    name: 'Addis Ababa',          code: 'AA' },
-  { id: 'amhara',         name: 'Amhara',               code: 'BA' },
-  { id: 'oromia',         name: 'Oromia',               code: 'BB' },
-  { id: 'dire_dawa',      name: 'Dire Dawa',            code: 'AB' },
-  { id: 'snnpr',          name: 'SNNPR',                code: 'CA' },
-  { id: 'somali',         name: 'Somali',               code: 'SO' },
+  { id: 'addis_ababa', name: 'Addis Ababa', code: 'AA' },
+  { id: 'amhara',      name: 'Amhara',      code: 'BA' },
+  { id: 'oromia',      name: 'Oromia',      code: 'BB' },
+  { id: 'dire_dawa',   name: 'Dire Dawa',   code: 'AB' },
+  { id: 'snnpr',       name: 'SNNPR',       code: 'CA' },
+  { id: 'somali',      name: 'Somali',      code: 'SO' },
 ];
 
 export const TAX_CENTERS = {
-  federal_level: [
-    { id: 'federal-lto1', name: 'Federal Large Taxpayers Office 1', shortName: 'FED-LTO1' },
-    { id: 'federal-lto2', name: 'Federal Large Taxpayers Office 2', shortName: 'FED-LTO2' },
-  ],
   addis_ababa: [
     { id: 'addis_ababa-tc1', name: 'Addis Ababa TC1', shortName: 'AA-TC1' },
     { id: 'addis_ababa-tc2', name: 'Addis Ababa TC2', shortName: 'AA-TC2' },
@@ -83,34 +78,11 @@ export const ROLES = {
 };
 
 export const CASE_STATUS = {
-  // Frontend-canonical statuses (used in UI logic)
-  PENDING:                    { id: 'PENDING',                    label: 'Pending Assignment',      color: 'gray'   },
-  ASSIGNED:                   { id: 'ASSIGNED',                   label: 'Assigned',                color: 'blue'   },
-  IN_PROGRESS:                { id: 'IN_PROGRESS',                label: 'In Progress',             color: 'yellow' },
-  COMPLETED:                  { id: 'COMPLETED',                  label: 'Completed',               color: 'green'  },
-  CLOSED:                     { id: 'CLOSED',                     label: 'Closed',                  color: 'teal'   },
-
-  // Backend-canonical statuses (returned by the API)
-  PENDING_ASSIGNMENT:         { id: 'PENDING_ASSIGNMENT',         label: 'Pending Assignment',      color: 'gray'   },
-  ASSIGNED_TO_TEAM_LEADER:    { id: 'ASSIGNED_TO_TEAM_LEADER',    label: 'Assigned to Team Leader', color: 'blue'   },
-  ASSIGNED_TO_COMMITTEE:      { id: 'ASSIGNED_TO_COMMITTEE',      label: 'Assigned to Committee',   color: 'purple' },
-
-  // Workflow Approval States
-  SUBMITTED_FOR_TL_REVIEW:    { id: 'SUBMITTED_FOR_TL_REVIEW',    label: 'Pending TL Review',       color: 'purple' },
-  SUBMITTED_TO_TL:            { id: 'SUBMITTED_TO_TL',            label: 'Pending TL Review',       color: 'purple' },
-  REPORT_SUBMITTED_FOR_TL_REVIEW: { id: 'REPORT_SUBMITTED_FOR_TL_REVIEW', label: 'Report Pending TL Review', color: 'purple' },
-  REVISION_REQUESTED:         { id: 'REVISION_REQUESTED',         label: 'Revisions Requested',     color: 'orange' },
-  RETURNED_TO_AUDITOR:        { id: 'RETURNED_TO_AUDITOR',        label: 'Returned for Revision',   color: 'rose' },
-  TL_APPROVED:                { id: 'TL_APPROVED',                label: 'TL Endorsed',             color: 'blue'   },
-  SUBMITTED_TO_TC_DIRECTOR:   { id: 'SUBMITTED_TO_TC_DIRECTOR',   label: 'Pending TC Director Decision', color: 'indigo' },
-  SUBMITTED_FOR_COMMITTEE:    { id: 'SUBMITTED_FOR_COMMITTEE',    label: 'Pending Committee Deliberation', color: 'indigo' },
-  AWAITING_COMMITTEE_DECISION:{ id: 'AWAITING_COMMITTEE_DECISION',label: 'Awaiting Committee Vote', color: 'indigo' },
-  COMMITTEE_APPROVED:         { id: 'COMMITTEE_APPROVED',         label: 'Committee Approved ✓',    color: 'green'  },
-  RETURNED_BY_COMMITTEE:      { id: 'RETURNED_BY_COMMITTEE',      label: 'Returned by Committee',   color: 'orange' },
-  PENDING_NOTICE_ISSUANCE:    { id: 'PENDING_NOTICE_ISSUANCE',    label: 'Pending Notice Issuance', color: 'teal'   },
-  REPORT_FINALIZED:           { id: 'REPORT_FINALIZED',           label: 'Report Finalized',        color: 'green'  },
-  REFERRED_TO_FRAUD:          { id: 'REFERRED_TO_FRAUD',          label: 'Referred to Tax Fraud',   color: 'rose'   },
-  REFERRED_TO_COMPREHENSIVE:  { id: 'REFERRED_TO_COMPREHENSIVE',  label: 'Escalated to Comp Audit', color: 'purple' },
+  PENDING:     { id: 'PENDING',     label: 'Pending Assignment', color: 'gray'   },
+  ASSIGNED:    { id: 'ASSIGNED',    label: 'Assigned',           color: 'blue'   },
+  IN_PROGRESS: { id: 'IN_PROGRESS', label: 'In Progress',        color: 'yellow' },
+  COMPLETED:   { id: 'COMPLETED',   label: 'Completed',          color: 'green'  },
+  CLOSED:      { id: 'CLOSED',      label: 'Closed',             color: 'teal'   },
 };
 
 export const SECTORS = [
@@ -144,100 +116,27 @@ export const getTaxCenterById = (id) => {
 };
 
 /**
- * Map backend audit type identifiers to frontend audit type IDs.
- * Backend cascade stores: DESK_AUDIT, JOINT_AUDIT, TRANSFER_PRICING, COMPREHENSIVE_AUDIT, ISSUE_AUDIT
- * Frontend constants use:  desk_audit, joint_audit, transfer_pricing, comprehensive, issue_audit
- */
-export const BACKEND_AUDIT_TYPE_TO_FRONTEND = {
-  'DESK_AUDIT':          'desk_audit',
-  'JOINT_AUDIT':         'joint_audit',
-  'TRANSFER_PRICING':    'transfer_pricing',
-  'COMPREHENSIVE_AUDIT': 'comprehensive',
-  'ISSUE_AUDIT':         'issue_audit',
-};
-
-export const FRONTEND_AUDIT_TYPE_TO_BACKEND = {
-  'desk_audit':       'DESK_AUDIT',
-  'joint_audit':      'JOINT_AUDIT',
-  'transfer_pricing': 'TRANSFER_PRICING',
-  'comprehensive':    'COMPREHENSIVE_AUDIT',
-  'issue_audit':      'ISSUE_AUDIT',
-};
-
-/**
- * Committee-managed audit types
- */
-export const COMMITTEE_AUDIT_TYPES = new Set(['JOINT_AUDIT', 'TRANSFER_PRICING']);
-
-/**
- * Normalize a backend case status to a simple frontend status for tab filtering.
- */
-export const normalizeBackendStatus = (backendStatus) => {
-  switch (backendStatus) {
-    case 'PENDING_ASSIGNMENT':      return 'PENDING';
-    case 'ASSIGNED_TO_TEAM_LEADER': return 'ASSIGNED';
-    case 'ASSIGNED_TO_COMMITTEE':   return 'ASSIGNED';
-    case 'IN_PROGRESS':             return 'IN_PROGRESS';
-    case 'COMPLETED':               return 'COMPLETED';
-    case 'CLOSED':                  return 'COMPLETED';
-    default:                        return backendStatus || 'PENDING';
-  }
-};
-
-/**
- * Get the audit type definition matching a backend or frontend id.
- */
-export const getAuditTypeDef = (id) => {
-  if (!id) return null;
-  // Try direct match first
-  const direct = AUDIT_TYPES.find(at => at.id === id);
-  if (direct) return direct;
-  // Try mapping from backend to frontend id
-  const frontendId = BACKEND_AUDIT_TYPE_TO_FRONTEND[id];
-  return frontendId ? AUDIT_TYPES.find(at => at.id === frontendId) : null;
-};
-
-/**
  * Convert distribution from backend format (region codes like "AA") to frontend format (region IDs like "addis_ababa")
  * Backend stores distribution as { "AA": { "desk_audit": 30, ... }, ... }
  * Frontend expects { "addis_ababa": { "desk_audit": 30, ... }, ... }
  */
 export const convertDistributionFromBackend = (backendDistribution) => {
   if (!backendDistribution) return null;
+  
+  // Build code-to-id mapping
   const codeToId = {};
-  REGIONS.forEach(r => { codeToId[r.code] = r.id; });
+  REGIONS.forEach(r => {
+    codeToId[r.code] = r.id;
+  });
+  
+  // Transform distribution object keys from codes to IDs
   const frontendDistribution = {};
   Object.entries(backendDistribution).forEach(([code, auditTypes]) => {
     const regionId = codeToId[code];
-    if (regionId) frontendDistribution[regionId] = auditTypes;
+    if (regionId) {
+      frontendDistribution[regionId] = auditTypes;
+    }
   });
+  
   return frontendDistribution;
 };
-
-/**
- * Flexible comparison of two audit type strings.
- * Accurately matches:
- * - 'desk_audit' <-> 'DESK_AUDIT' <-> 'desk' <-> 'DESK'
- * - 'joint_audit' <-> 'JOINT_AUDIT' <-> 'joint' <-> 'JOINT' <-> 'ja'
- * - 'transfer_pricing' <-> 'TRANSFER_PRICING' <-> 'tp' <-> 'TP'
- * - 'comprehensive' <-> 'COMPREHENSIVE' <-> 'COMPREHENSIVE_AUDIT' <-> 'comp'
- * - 'issue_audit' <-> 'ISSUE_AUDIT' <-> 'issue' <-> 'ISSUE'
- */
-export const isAuditTypeMatch = (type1, type2) => {
-  if (!type1 || !type2) return false;
-  const t1 = String(type1).trim().toUpperCase().replace(/[\s-]+/g, '_');
-  const t2 = String(type2).trim().toUpperCase().replace(/[\s-]+/g, '_');
-  if (t1 === t2) return true;
-
-  const normalize = (t) => {
-    if (t === 'DESK' || t === 'DESK_AUDIT') return 'DESK';
-    if (t === 'JOINT' || t === 'JOINT_AUDIT' || t === 'JA') return 'JOINT';
-    if (t === 'TP' || t === 'TRANSFER_PRICING' || t === 'TRANSFER') return 'TP';
-    if (t === 'COMP' || t === 'COMPREHENSIVE' || t === 'COMPREHENSIVE_AUDIT') return 'COMP';
-    if (t === 'ISSUE' || t === 'ISSUE_AUDIT') return 'ISSUE';
-    return t;
-  };
-
-  return normalize(t1) === normalize(t2);
-};
-

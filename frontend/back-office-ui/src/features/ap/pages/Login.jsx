@@ -1,459 +1,328 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeOff, ChevronDown, ChevronUp, Users, Shield, Lock, ArrowRight, HelpCircle, Activity, FileText, Mail, AlertCircle, Sparkles, Search } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, EyeOff, ChevronDown, ChevronUp, Users } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext.jsx';
-import useUserValidation from '../../../hooks/useUserValidation.js';
 import UserDirectory from '../components/UserDirectory.jsx';
+import { SEED_USERS } from '../data/seed.js';
+
+// Curated demo accounts — committee roles + all DB auditors from t_auditor
+const DEMO_ACCOUNTS = [
+  // Committee roles (1 chair + 1 member per tax center)
+  { label: 'Chair AA-TC1',                email: 'aa.committee1@mor.gov.et',              role: 'Committee Chair · AA-TC1' },
+  { label: 'Member AA-TC1',               email: 'aa-ara.joint_committee.2@mor.gov.et',   role: 'Committee Member · AA-TC1' },
+  { label: 'Chair AA-TC2',                email: 'aa.committee2@mor.gov.et',              role: 'Committee Chair · AA-TC2' },
+  { label: 'Member AA-TC2',               email: 'aa-ara.joint_committee.7@mor.gov.et',   role: 'Committee Member · AA-TC2' },
+  { label: 'Chair AA-TC3',                email: 'aa.committee3@mor.gov.et',              role: 'Committee Chair · AA-TC3' },
+  { label: 'Member AA-TC3',               email: 'aa-ara.joint_committee.9@mor.gov.et',   role: 'Committee Member · AA-TC3' },
+  { label: 'Chair OR-TC1',                email: 'or.committee1@mor.gov.et',              role: 'Committee Chair · OR-TC1' },
+  { label: 'Member OR-TC1',               email: 'or-ara.joint_committee.11@mor.gov.et',  role: 'Committee Member · OR-TC1' },
+  // Team Leaders (from t_user table — 4)
+  { label: 'Henok Belay',                email: 'henok.belay@mor.gov.et',              role: 'Team Leader · desk_audit'        },
+  { label: 'Tigist Alemu (AA-TC3)',        email: 'tigist.alemu@mor.gov.et',             role: 'Team Leader · field_audit'       },
+  { label: 'Fikadu Desta',               email: 'fikadu.desta@mor.gov.et',             role: 'Team Leader · desk_audit'        },
+  { label: 'Lalisa Wakjira',             email: 'lalisa.wakjira@mor.gov.et',           role: 'Team Leader · desk_audit'        },
+  // DB auditors (synced from t_auditor table)
+  { label: 'Abebe Kebede',               email: 'abebe.kebede@mor.gov.et',              role: 'Auditor · Corporate Tax'         },
+  { label: 'Fatuma Ahmed',               email: 'fatuma.ahmed@mor.gov.et',               role: 'Auditor · Transfer Pricing'      },
+  { label: 'Dawit Tadesse',              email: 'dawit.tadesse@mor.gov.et',              role: 'Auditor · International Tax'     },
+  { label: 'Sara Mohammed',              email: 'sara.mohammed@mor.gov.et',              role: 'Auditor · VAT Compliance'        },
+  { label: 'Yonas Berhanu',              email: 'yonas.berhanu@mor.gov.et',              role: 'Auditor · Corporate Tax'         },
+  { label: 'Hana Girma',                 email: 'hana.girma@mor.gov.et',                 role: 'Auditor · Audit Investigation'   },
+  { label: 'Mulugeta Alemayehu',         email: 'mulugeta.alemayehu@mor.gov.et',          role: 'Auditor · Transfer Pricing'      },
+  { label: 'Tigist Haile',               email: 'tigist.haile@mor.gov.et',               role: 'Auditor · International Tax'     },
+];
 
 export default function Login() {
+  console.log("Login component mounted");
   const { login } = useAuth();
-  const { getRecommendedTestUsers, isUsernameValid } = useUserValidation();
-  
-  // Pre-fill with Planning Team Lead demo user
-  const [email, setEmail]         = useState('u-pt-01');
-  const [password, setPassword]   = useState('password123');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
   const [showPwd, setShowPwd]     = useState(false);
   const [error, setError]         = useState('');
   const [loading, setLoading]     = useState(false);
-  const [showDemo, setShowDemo]   = useState(true);
+  const [showDemo, setShowDemo]   = useState(false);
   const [showDirectory, setShowDirectory] = useState(false);
-  const [demoAccounts, setDemoAccounts] = useState([]);
-  const [quickCategory, setQuickCategory] = useState('ALL');
-  const [quickAuditType, setQuickAuditType] = useState('ALL');
-  const [quickSearch, setQuickSearch] = useState('');
-
-  useEffect(() => {
-    try {
-      const recommended = getRecommendedTestUsers();
-      const demoList = recommended.map(user => ({
-        label: user.username,
-        username: user.username,
-        fullName: user.fullName || user.username,
-        email: user.username,
-        userEmail: user.email,
-        role: user.role ? user.role.replace(/_/g, ' ') : (user.auditType ? user.auditType.replace(/_/g, ' ') : 'USER'),
-        category: user.category || 'Other',
-        auditType: user.auditType || '',
-        assignedLocation: user.assignedLocation || 'FEDERAL',
-        description: user.description
-      }));
-      setDemoAccounts(demoList);
-    } catch (err) {
-      console.error('Failed to load demo accounts', err);
-    }
-  }, [getRecommendedTestUsers]);
-
-  const categories = useMemo(() => [
-    { id: 'ALL', label: 'All Federal' },
-    { id: 'Planning Team', label: 'Planning Team' },
-    { id: 'Audit Directorate', label: 'Audit Directorate' },
-    { id: 'Senior Management', label: 'Senior Mgmt' },
-    { id: 'Federal Regional Directorate', label: 'Fed Reg Dir' },
-    { id: 'Federal Tax Centers', label: 'Federal LTOs' },
-    { id: 'Committees (Joint & TP)', label: 'Committees' },
-    { id: 'Team Leaders', label: 'Team Leaders' },
-    { id: 'Auditors', label: 'Auditors' },
-  ], []);
-
-  const auditTypePills = useMemo(() => [
-    { id: 'ALL', label: 'All Types' },
-    { id: 'TRANSFER_PRICING', label: 'Transfer Pricing' },
-    { id: 'JOINT_AUDIT', label: 'Joint Audit' },
-    { id: 'DESK_AUDIT', label: 'Desk Audit' },
-    { id: 'COMPREHENSIVE_AUDIT', label: 'Comprehensive' },
-    { id: 'ISSUE_AUDIT', label: 'Issue Audit' },
-  ], []);
-
-  const filteredDemoAccounts = useMemo(() => {
-    return demoAccounts.filter(u => {
-      // Category filter
-      if (quickCategory !== 'ALL') {
-        if (u.category !== quickCategory) return false;
-      }
-
-      // Audit Type filter
-      if (quickAuditType !== 'ALL') {
-        const at = (u.auditType || '').toUpperCase();
-        if (!at.includes(quickAuditType)) return false;
-      }
-
-      // Search
-      if (quickSearch.trim()) {
-        const q = quickSearch.toLowerCase().trim();
-        const mUser = (u.username || '').toLowerCase().includes(q);
-        const mName = (u.fullName || '').toLowerCase().includes(q);
-        const mRole = (u.role || '').toLowerCase().includes(q);
-        const mAudit = (u.auditType || '').toLowerCase().includes(q);
-        const mLoc = (u.assignedLocation || '').toLowerCase().includes(q);
-        const mDesc = (u.description || '').toLowerCase().includes(q);
-        if (!mUser && !mName && !mRole && !mAudit && !mLoc && !mDesc) return false;
-      }
-
-      return true;
-    });
-  }, [demoAccounts, quickCategory, quickAuditType, quickSearch]);
 
   const handleSubmit = async (e) => {
+    console.log("Sign in button clicked");
     e.preventDefault();
-    const inputValue = email.trim();
-    
-    if (!inputValue) { 
-      setError('Username or email is required');    
-      return; 
-    }
-    
+    if (!email.trim())    { setError('Email is required');    return; }
+    if (!password.trim()) { setError('Password is required'); return; }
     setError('');
     setLoading(true);
-
     try {
-      await login(inputValue, password);
+      await login(email.trim(), password);
     } catch (err) {
-      setError(err.message || 'Login failed. Please check the username or email.');
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const fillDemo = async (demoUser) => {
-    const identifier = typeof demoUser === 'object' && demoUser !== null
-      ? (demoUser.username || demoUser.email || demoUser.id)
-      : demoUser;
-    setEmail(identifier);
+  const fillDemo = async (demoEmail) => {
+    setEmail(demoEmail);
     setPassword('password123');
+    setError('');
+    setShowDemo(false);
     setShowDirectory(false);
-    // Auto-login on selection from directory
-    setError('');
     setLoading(true);
     try {
-      await login(demoUser, 'password123');
+      await login(demoEmail, 'password123');
     } catch (err) {
-      setError(err.message || 'Login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Auto-login when clicking any test user preset
-  const handleQuickLogin = async (demoUsername) => {
-    const inputValue = String(demoUsername).trim();
-    setError('');
-    setLoading(true);
-    setEmail(inputValue);
-    
-    try {
-      await login(inputValue, 'password123');
-    } catch (err) {
-      setError(err.message || 'Login failed. Please check the username.');
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex">
+    <div className="min-h-screen flex">
+      {/* User Directory Modal */}
       {showDirectory && (
-        <UserDirectory
-          onSelectUser={fillDemo}
-          onClose={() => setShowDirectory(false)}
+        <UserDirectory 
+          onSelectUser={fillDemo} 
+          onClose={() => setShowDirectory(false)} 
         />
       )}
 
-      {/* ═══ LEFT PANEL — Royal Blue Brand Section ═══ */}
-      <div className="hidden md:flex md:w-1/2 relative overflow-hidden bg-[#1e40af] text-white p-8 lg:p-12 flex-col justify-between h-full">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-
-        <div className="relative z-10">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-md">
+      {/* Left Panel - Blue branded section */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 relative overflow-hidden">
+        {/* Background pattern */}
+        <div 
+          className="absolute inset-0 opacity-5"
+          style={{ 
+            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', 
+            backgroundSize: '40px 40px' 
+          }}
+        />
+        
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
+          {/* Logo and title */}
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-white/10 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center">
               <img
                 src="/mor-logo.jpeg"
-                alt="Ministry of Revenues"
+                alt="MOR"
                 className="w-full h-full object-cover"
-                onError={e => {
+                onError={e => { 
                   e.target.style.display = 'none';
                   e.target.nextElementSibling.style.display = 'flex';
                 }}
               />
-              <div className="w-full h-full bg-white/15 items-center justify-center text-white font-bold text-sm hidden">MOR</div>
+              <div 
+                className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 items-center justify-center text-white font-bold text-lg hidden"
+              >
+                MOR
+              </div>
             </div>
-            <h1 className="text-lg font-bold tracking-tight text-white">ITAS Back-office</h1>
+            <div>
+              <h1 className="text-xl font-bold">ITAS Back-office</h1>
+            </div>
           </div>
-        </div>
 
-        <div className="relative z-10 space-y-4 max-w-xl my-auto">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-200/80">MINISTRY OF REVENUE - ITAS</p>
-          <h2 className="text-[2.25rem] lg:text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-white">
-            Tax administration, operated with clarity.
-          </h2>
-          <p className="text-blue-100/80 text-[14px] leading-relaxed max-w-lg">
-            Sign in to access the back-office suite — registration, workflow tasks, and tax-type administration in one secure console.
-          </p>
-        </div>
+          {/* Main content */}
+          <div className="space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-blue-300 font-semibold mb-2">
+                MINISTRY OF REVENUE - ITAS
+              </p>
+              <h2 className="text-4xl font-bold leading-tight mb-4">
+                Tax administration, operated with clarity.
+              </h2>
+              <p className="text-blue-100 text-lg leading-relaxed">
+                Sign in to access the back-office suite — registration, workflow tasks,
+                and tax-type administration in one secure console.
+              </p>
+            </div>
+          </div>
 
-        <div className="relative z-10 flex items-center gap-2 text-blue-200/70 text-xs">
-          <Lock size={13} />
-          <span>Authorized personnel only • Ethiopian Ministry of Revenues</span>
+          {/* Footer */}
+          <div className="flex items-center gap-2 text-blue-300 text-xs">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Authorized personnel only.</span>
+          </div>
         </div>
       </div>
 
-      {/* ═══ RIGHT PANEL — Dark Theme Login Form ═══ */}
-      <div className="w-full md:w-1/2 h-full bg-[#050505] flex items-center justify-center p-6 lg:p-8 text-white overflow-y-auto">
-        <div className="w-full max-w-[420px] space-y-4 my-auto">
-          <div className="space-y-1">
-            <h2 className="text-[2.2rem] font-bold tracking-tight text-white">Welcome back</h2>
-            <p className="text-sm text-gray-400">Sign in to continue to the ITAS Back-office.</p>
+      {/* Right Panel - Dark login form */}
+      <div className="w-full lg:w-1/2 bg-black flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          {/* Mobile logo - shown only on small screens */}
+          <div className="lg:hidden flex items-center gap-3 mb-12">
+            <div className="w-12 h-12 rounded-full overflow-hidden bg-blue-600 flex items-center justify-center border-2 border-blue-400">
+              <img
+                src="/mor-logo.jpeg"
+                alt="MOR"
+                className="w-full h-full object-cover"
+                onError={e => { 
+                  e.target.style.display = 'none';
+                  e.target.nextElementSibling.style.display = 'flex';
+                }}
+              />
+              <span className="text-white font-bold text-sm hidden">MOR</span>
+            </div>
+            <span className="text-white text-lg font-bold">ITAS Back-office</span>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {/* Form content */}
+          <div className="space-y-8">
+            {/* Header */}
             <div>
-              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-[0.08em] mb-2">
-                Username or Email <span className="text-red-400">*</span>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="e.g. u-pt-01, u-ad-01, or planning.auditor1@mor.gov.et"
-                  className="w-full pl-10 pr-4 py-3 bg-[#111827] border border-gray-800 text-white placeholder-gray-500 text-[13px]
-                             rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500
-                             transition-all duration-200 font-mono"
-                />
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1.5">
-                Use your system username (e.g. <code className="text-blue-400">u-pt-01</code>) or official MOR email.
+              <h2 className="text-3xl font-bold text-white mb-2">Welcome back</h2>
+              <p className="text-gray-400 text-sm">
+                Sign in to continue to the ITAS Back-office.
               </p>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-[0.08em]">
-                  Password <span className="text-gray-500 text-[10px] font-normal">(Optional in Demo Mode)</span>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {/* Username/Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Username <span className="text-red-500">*</span>
                 </label>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <input
-                  type={showPwd ? 'text' : 'password'}
-                  autoComplete="off"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="password123 or leave empty"
-                  className="w-full pl-10 pr-11 py-3 bg-[#111827] border border-gray-800 text-white placeholder-gray-600 text-[13px]
-                             rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500
-                             transition-all duration-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/60 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
-                <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-[14px] font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-blue-900/30"
-            >
-              {loading ? 'Signing in…' : 'Sign in to ITAS'}
-              <ArrowRight size={15} />
-            </button>
-          </form>
-
-          {/* Quick Access & Directory Section */}
-          <div className="space-y-2.5 pt-3 border-t border-gray-900">
-            {/* Directory Button */}
-            <button
-              type="button"
-              onClick={() => setShowDirectory(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5
-                         bg-[#0e1626] hover:bg-[#132038] border border-blue-900/40
-                         text-blue-300 hover:text-white text-[12px] font-medium rounded-xl transition-all duration-200"
-            >
-              <Users size={14} />
-              Browse Full User Directory (684+ System Accounts)
-            </button>
-
-            {/* Quick login accordion */}
-            <button
-              type="button"
-              onClick={() => setShowDemo(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-2.5
-                         bg-[#111827] hover:bg-[#1f2937] border border-gray-800
-                         text-gray-300 text-[12px] font-medium rounded-xl transition-all duration-200"
-            >
-              <span className="flex items-center gap-2">
-                <Sparkles size={14} className="text-amber-400" />
-                Quick Federal Login Presets ({filteredDemoAccounts.length} / {demoAccounts.length} Users)
-              </span>
-              {showDemo ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
-
-            {showDemo && (
-              <div className="space-y-2 p-2.5 rounded-xl bg-[#0b1120]/90 border border-gray-800/80 shadow-inner">
-                {/* Search inside quick presets */}
                 <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search federal user, role, or audit type..."
-                    value={quickSearch}
-                    onChange={e => setQuickSearch(e.target.value)}
-                    className="w-full pl-8 pr-7 py-1.5 bg-[#111827] border border-gray-800 text-xs text-white placeholder-gray-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  {quickSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setQuickSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs font-bold"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                {/* Category Filter Tabs */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin text-[10px]">
-                  {categories.map(cat => {
-                    const count = cat.id === 'ALL'
-                      ? demoAccounts.length
-                      : demoAccounts.filter(a => a.category === cat.id).length;
-                    const isActive = quickCategory === cat.id;
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => {
-                          setQuickCategory(cat.id);
-                          if (cat.id !== 'Team Leaders' && cat.id !== 'Auditors' && cat.id !== 'ALL') {
-                            setQuickAuditType('ALL');
-                          }
-                        }}
-                        className={`px-2 py-1 rounded-md font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-                          isActive
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-[#111827] text-gray-400 hover:text-gray-200 hover:bg-[#1f2937]'
-                        }`}
-                      >
-                        <span>{cat.label}</span>
-                        <span className={`text-[9px] px-1 py-0.2 rounded-full ${isActive ? 'bg-blue-700 text-blue-100' : 'bg-gray-800 text-gray-400'}`}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Audit Type Sub-filters (visible when Team Leaders, Auditors, Committees, or All is active) */}
-                {(quickCategory === 'Team Leaders' || quickCategory === 'Auditors' || quickCategory === 'Committees (Joint & TP)' || quickCategory === 'ALL') && (
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin text-[9px] pt-0.5 border-t border-gray-900">
-                    <span className="text-gray-500 font-bold uppercase tracking-wider pl-1 pr-0.5 text-[8px]">Audit Type:</span>
-                    {auditTypePills.map(at => {
-                      const isActive = quickAuditType === at.id;
-                      return (
-                        <button
-                          key={at.id}
-                          type="button"
-                          onClick={() => setQuickAuditType(at.id)}
-                          className={`px-1.5 py-0.5 rounded font-medium whitespace-nowrap transition-colors ${
-                            isActive
-                              ? 'bg-purple-600 text-white font-bold shadow-sm'
-                              : 'bg-[#1a233a]/60 text-purple-300 hover:bg-[#1f2937] hover:text-white'
-                          }`}
-                        >
-                          {at.label}
-                        </button>
-                      );
-                    })}
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-                )}
-
-                {/* Scrollable Presets List */}
-                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
-                  {filteredDemoAccounts.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-gray-500">
-                      No federal users match the selected filters.
-                    </div>
-                  ) : (
-                    filteredDemoAccounts.map(u => (
-                      <button
-                        key={u.username}
-                        type="button"
-                        onClick={() => handleQuickLogin(u.username)}
-                        disabled={loading}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-[#0f172a]/80 border border-gray-800/80
-                                   hover:bg-[#1e293b] hover:border-blue-500/50 hover:shadow-sm transition-all duration-150
-                                   disabled:opacity-50 disabled:cursor-not-allowed group"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[12px] font-semibold text-gray-200 font-mono group-hover:text-blue-400 transition-colors">
-                                {u.username}
-                              </span>
-                              <span className="text-[11px] font-medium text-white truncate">
-                                • {u.fullName}
-                              </span>
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-900/40 text-blue-300 font-semibold border border-blue-800/40 uppercase">
-                                {u.role}
-                              </span>
-                              {u.auditType && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-900/40 text-purple-300 font-semibold border border-purple-800/40 uppercase">
-                                  {u.auditType.replace(/_/g, ' ')}
-                                </span>
-                              )}
-                              {u.assignedLocation && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
-                                  {u.assignedLocation}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-gray-400 truncate mt-0.5">{u.description}</p>
-                          </div>
-                          <span className="text-[9px] font-bold px-2 py-1 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                            LOGIN
-                          </span>
-                        </div>
-                      </button>
-                    ))
-                  )}
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Enter your username"
+                    className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 text-white placeholder-gray-500 text-sm
+                               rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                               transition-all"
+                  />
                 </div>
               </div>
-            )}
-          </div>
 
-          <div className="flex items-center justify-center gap-5 mt-6 pt-2">
-            {[
-              { icon: HelpCircle, label: 'Help Center' },
-              { icon: Activity, label: 'System Status' },
-              { icon: FileText, label: 'Privacy Policy' },
-              { icon: Mail, label: 'Contact Support' },
-            ].map((link, i) => (
-              <a key={i} href="#" className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-blue-400 transition-colors duration-150">
-                <link.icon size={11} />
-                <span>{link.label}</span>
-              </a>
-            ))}
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-12 py-3 bg-gray-900 border border-gray-700 text-white placeholder-gray-500 text-sm
+                               rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                               transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-4 py-3 whitespace-pre-line">
+                  {error}
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-blue-600
+                           hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold
+                           rounded-lg transition-all shadow-lg shadow-blue-900/50"
+              >
+                {loading ? (
+                  <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                ) : null}
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            {/* Demo section */}
+            <div className="pt-6 border-t border-gray-800">
+              {/* Demo info */}
+              <div className="mb-4 p-3 bg-blue-950/30 border border-blue-900/50 rounded-lg">
+                <p className="text-xs text-blue-300 font-medium mb-1">🎭 Demo Mode Active</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Use <strong className="text-white">any MOR email</strong> with password:{' '}
+                  <code className="bg-gray-800 px-1.5 py-0.5 rounded font-mono text-blue-400 font-semibold">password123</code>
+                </p>
+              </div>
+
+              {/* Browse users button */}
+              <button
+                onClick={() => setShowDirectory(true)}
+                className="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2.5 
+                           bg-gray-800 hover:bg-gray-700 border border-gray-700
+                           text-gray-300 text-sm font-medium rounded-lg transition-all"
+              >
+                <Users size={16} />
+                Demo Accounts ({DEMO_ACCOUNTS.length})
+              </button>
+              <p className="text-[11px] text-gray-600 text-center mb-3">
+                {DEMO_ACCOUNTS.filter(u => u.role.startsWith('Team Leader')).length} team leaders + {DEMO_ACCOUNTS.filter(u => u.role.startsWith('Auditor')).length} auditors enabled.
+              </p>
+
+              {/* Quick access toggle */}
+              <button
+                onClick={() => setShowDemo(v => !v)}
+                className="flex items-center justify-between w-full text-sm text-gray-400 hover:text-gray-300 transition-colors"
+              >
+                <span className="font-medium">Quick access demo accounts</span>
+                {showDemo ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {/* Demo accounts list */}
+              {showDemo && (
+                <div className="mt-3 space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                  {DEMO_ACCOUNTS.map(u => (
+                    <button
+                      key={u.email}
+                      onClick={() => fillDemo(u.email)}
+                      className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-900/50 border border-gray-800
+                                 hover:bg-gray-800 hover:border-gray-700 transition-all"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-medium text-white">{u.label}</p>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">
+                          {u.role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{u.email}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

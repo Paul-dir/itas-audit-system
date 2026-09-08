@@ -222,7 +222,6 @@ export const ROLE_NAVIGATION = {
       {
         label: 'Committee',
         items: [
-          { id: 'assign-cases', label: 'Assign Cases to Team Leaders', icon: 'fas fa-tasks' },
           { id: 'reviews', label: 'Pending Reviews', icon: 'fas fa-inbox' },
           { id: 'approvals', label: 'Approvals', icon: 'fas fa-check-circle' },
           { id: 'reports', label: 'Reports', icon: 'fas fa-file-alt' },

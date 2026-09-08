@@ -75,13 +75,13 @@ function AssignToAuditorsView() {
       console.log(`   taxCenter: ${userTaxCenter}`);
 
       // Get available plan years from stored cases
-      // Get available plan years from stored cases
       // ✅ Include cases even if planYear not explicitly set (default to 2027)
+      const activeStatusesForYear = ['ASSIGNED_TO_TEAM_LEADER', 'ASSIGNED_TO_AUDITOR', 'IN_EXECUTION'];
       const planYearsArray = [...new Set((data.auditCases || [])
         .filter(c => {
-          // Match by Team Leader ID with flexible format
+          // Match by Team Leader ID with flexible format - include ALL active statuses
           const isForThisTL = 
-            c.status === 'ASSIGNED_TO_TEAM_LEADER' && (
+            activeStatusesForYear.includes(c.status) && (
               c.assignedTeamLeaderId === tlId ||
               c.assignedTeamLeaderId === userInfo?.userId ||
               c.assignedTeamLeaderId === userInfo?.id
@@ -134,8 +134,10 @@ console.log(`   using planYear: ${planYear}`);
           console.log(`     userInfo.email: ${userInfo?.email}`);
         }
         
-        // Check status first
-        if (c.status !== 'ASSIGNED_TO_TEAM_LEADER') {
+        // ✅ FIX: Show cases in BOTH ASSIGNED_TO_TEAM_LEADER AND ASSIGNED_TO_AUDITOR/IN_EXECUTION
+        // Cases that were assigned to auditor should still be visible to the team leader
+        const activeStatuses = ['ASSIGNED_TO_TEAM_LEADER', 'ASSIGNED_TO_AUDITOR', 'IN_EXECUTION'];
+        if (!activeStatuses.includes(c.status)) {
           return false;
         }
         
