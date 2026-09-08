@@ -45,70 +45,10 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<List<UserResponse>> getAllUsers(
-            @RequestParam(required = false) String role,
-            @RequestParam(required = false) String taxCenter,
-            @RequestParam(required = false) String auditType,
-            @RequestParam(required = false) String teamLeader,
-            @RequestHeader(value = "X-Actor-Id", required = false) String actorId) {
-
-        List<User> users;
-
-        if ("team_leader".equalsIgnoreCase(role) || "TEAM_LEADER".equals(role)) {
-            // Tax center team leaders — all audit types unless specified
-            String at = auditType != null ? auditType : "";
-            String tc = taxCenter != null ? taxCenter : "";
-            users = userManagementUseCase.getTeamLeaders(at, tc);
-            // If no auditType filter, getTeamLeaders may be filtering — fall back to all
-            if (users.isEmpty() && !tc.isEmpty()) {
-                users = userManagementUseCase.getAllUsers().stream()
-                    .filter(u -> "TEAM_LEADER".equalsIgnoreCase(u.getUserType())
-                              && (tc.isEmpty() || tc.equalsIgnoreCase(u.getAssignedLocation())))
-                    .collect(java.util.stream.Collectors.toList());
-            }
-        } else if ("auditor".equalsIgnoreCase(role) || "AUDITOR".equals(role)) {
-            if (teamLeader != null && !teamLeader.isBlank()) {
-                // Filter auditors to match the Team Leader's location and audit type scope
-                Optional<User> tlOpt = userManagementUseCase.getAllUsers().stream()
-                    .filter(u -> u.getUserId().toString().equalsIgnoreCase(teamLeader)
-                              || u.getUsername().equalsIgnoreCase(teamLeader)
-                              || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(teamLeader)))
-                    .findFirst();
-                if (tlOpt.isPresent()) {
-                    User tl = tlOpt.get();
-                    users = userManagementUseCase.getAuditors(
-                        tl.getAuditType() != null ? tl.getAuditType() : (auditType != null ? auditType : ""),
-                        tl.getAssignedLocation() != null ? tl.getAssignedLocation() : (taxCenter != null ? taxCenter : "")
-                    );
-
-                    // STRICT TEAM LEADER AUDITOR SCOPING:
-                    // Return ONLY auditors who report directly to this Team Leader!
-                    // In canonical MoR naming: u-tl-{tc}-{auditType}-{tlNum} -> u-aud-{tc}-{auditType}-{tlNum}-
-                    String tlUsername = tl.getUsername();
-                    if (tlUsername != null && tlUsername.startsWith("u-tl-")) {
-                        String expectedAuditorPrefix = tlUsername.replaceFirst("^u-tl-", "u-aud-") + "-";
-                        List<User> scoped = users.stream()
-                            .filter(u -> u.getUsername() != null && u.getUsername().startsWith(expectedAuditorPrefix))
-                            .collect(Collectors.toList());
-                        if (!scoped.isEmpty()) {
-                            users = scoped;
-                        }
-                    }
-                } else {
-                    users = userManagementUseCase.getAuditors(
-                        auditType != null ? auditType : "",
-                        taxCenter != null ? taxCenter : "");
-                }
-            } else {
-                users = userManagementUseCase.getAuditors(
-                    auditType != null ? auditType : "",
-                    taxCenter != null ? taxCenter : "");
-            }
-        } else {
-            users = userManagementUseCase.getAllUsers();
-        }
-
+            @RequestHeader("X-Actor-Id") String actorId) {
+        List<User> users = userManagementUseCase.getAllUsers();
         return ResponseEntity.ok(
-            users.stream().map(this::mapUserToResponse).collect(java.util.stream.Collectors.toList())
+            users.stream().map(this::mapUserToResponse).collect(Collectors.toList())
         );
     }
 
