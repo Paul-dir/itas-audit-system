@@ -33,7 +33,19 @@ export { useCommitteeSSE } from './hooks/useCommitteeSSE';
 
 // ── Context ────────────────────────────────────────────────────────────
 export { CommitteeProvider, useCommitteeContext } from './context/CommitteeContext';
+export { TeamLeaderProvider, useTeamLeaderContext } from './teamleader/context/TeamLeaderContext';
+export { WorkflowProvider, useWorkflow } from './teamleader/context/WorkflowContext';
 
-// ── API Service ────────────────────────────────────────────────────────
+// ── Joint Team Leader & Auditor Pages ───────────────────────────────────
+export { default as TeamLeaderDashboard } from './teamleader/pages/TeamLeaderDashboard';
+export { default as TeamLeaderCases } from './teamleader/pages/TeamLeaderCases';
+export { default as TeamLeaderCaseDetail } from './teamleader/pages/TeamLeaderCaseDetail';
+export { default as CaseExecution } from './teamleader/pages/CaseExecution';
+export { default as AuditorWorkspace } from './pages/AuditorWorkspace';
+
+// ── API Services ────────────────────────────────────────────────────────
 export { committeeAPI } from './services/api';
 export { committeeSSE } from './services/sse';
+export { teamLeaderAPI } from './teamleader/services/api';
+export { workflowAPI } from './teamleader/services/workflowApi';
+export { auditorAPI } from './services/auditorApi';
