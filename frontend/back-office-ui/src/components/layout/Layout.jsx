@@ -2,20 +2,24 @@ import { useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useNotifications } from '../../features/teamleader/hooks/useNotifications';
 
 export default function Layout({ children, activeView, onNavigate, title, subtitle }) {
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const notifications = useNotifications(user?.id || user?.userId);
   const isDark = theme === 'dark';
   
   // Match the dark blue/slate background from the screenshots
   const mainBg = isDark ? 'bg-slate-800' : 'bg-gray-50';
   
   return (
-    <div className={`h-screen w-screen overflow-hidden flex ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen flex ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
       <Sidebar activeView={activeView} onNavigate={onNavigate} />
-      <div className={`flex-1 ml-64 flex flex-col h-screen overflow-hidden ${mainBg}`}>
-        <TopBar title={title} subtitle={subtitle} onNavigate={onNavigate} />
-        <main className="flex-1 p-6 overflow-y-auto min-h-0">
+      <div className={`flex-1 ml-64 flex flex-col min-h-screen ${mainBg}`}>
+        <TopBar title={title} subtitle={subtitle} notifications={notifications} />
+        <main className="flex-1 p-6 overflow-auto">
           {children}
         </main>
       </div>
