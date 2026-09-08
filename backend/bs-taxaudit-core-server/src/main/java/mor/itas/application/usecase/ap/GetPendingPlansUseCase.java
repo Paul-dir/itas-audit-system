@@ -4,7 +4,6 @@ import mor.itas.application.port.inboundport.ap.GetPendingPlansPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
@@ -14,7 +13,6 @@ import java.util.List;
  * Retrieves all plans awaiting director review.
  */
 @Component
-@Transactional(readOnly = true)
 public class GetPendingPlansUseCase implements GetPendingPlansPort {
     
     private final AnnualAuditPlanRepository planRepository;
