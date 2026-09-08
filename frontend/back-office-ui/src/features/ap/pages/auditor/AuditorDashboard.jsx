@@ -126,27 +126,29 @@ export default function AuditorDashboard({ view }) {
     const userType = (user?.auditType || '').toUpperCase().replace(/_/g, '');
     if (view && PHASE_MAP[view]) {
       if (userType === 'TRANSFERPRICING' || userType === 'TP') {
-        setInitialPhase(PHASE_MAP[view]);
+        const nextPhase = PHASE_MAP[view];
+        setInitialPhase(prev => prev === nextPhase ? prev : nextPhase);
         if (cases.length > 0) {
           const activeCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0];
           if (activeCase) {
-            setTpWorkspaceCase(activeCase);
+            setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
           }
         }
       }
     } else if (view && ISSUE_PHASE_MAP[view]) {
       if (userType === 'ISSUE' || userType === 'ISSUEAUDIT') {
-        setIssueInitialPhase(ISSUE_PHASE_MAP[view]);
+        const nextPhase = ISSUE_PHASE_MAP[view];
+        setIssueInitialPhase(prev => prev === nextPhase ? prev : nextPhase);
         if (cases.length > 0) {
           const activeCase = cases.find(c => (c.auditType || '').toUpperCase().includes('ISSUE')) || cases[0];
           if (activeCase) {
-            setIssueWorkspaceCase(activeCase);
+            setIssueWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
           }
         }
       }
     } else if (view === 'dashboard' || view === 'cases') {
-      setTpWorkspaceCase(null);
-      setIssueWorkspaceCase(null);
+      setTpWorkspaceCase(prev => (prev !== null ? null : prev));
+      setIssueWorkspaceCase(prev => (prev !== null ? null : prev));
     }
   }, [view, cases, user?.auditType]);
 
