@@ -1,0 +1,297 @@
+/**
+ * Team Leader API Service
+ * Handles all backend API calls for the team leader dashboard and cases.
+ * 
+ * Cases flow:
+ * 1. Committee votes → status becomes TEAM_ASSIGNED
+ * 2. Team Leader sees incoming cases and assigns to auditors
+ * 3. Auditor executes the audit
+ */
+
+const COMMITTEE_API_BASE = '/api/v1/backoffice/ap/committee';
+const CASE_API_BASE = '/api/v1/backoffice/ap/cases';
+
+// Map frontend user IDs to backend UUIDs
+const ID_MAP = {
+  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
+  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
+  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-cc-aa1': '10000000-0000-0000-0000-000000000005',
+  'u-cc-aa2': '10000000-0000-0000-0000-000000000006',
+  'u-cc-aa3': '10000000-0000-0000-0000-000000000008',
+  'u-cc-or1': '10000000-0000-0000-0000-000000000016',
+  'u-cm-aa1': '20000000-0000-0000-0000-000000000001',
+  'u-cm-aa2': '20000000-0000-0000-0000-000000000002',
+  'u-cm-aa3': '20000000-0000-0000-0000-000000000003',
+  'u-cm-or1': '20000000-0000-0000-0000-000000000004',
+};
+
+const AUDITOR_ID_MAP = {
+  'u-aud-aa1a': 'a0000001-0000-0000-0000-000000000001',
+  'u-aud-db02': 'a0000001-0000-0000-0000-000000000002',
+  'u-aud-db03': 'a0000001-0000-0000-0000-000000000003',
+  'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
+  'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
+  'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+};
+
+function resolveId(frontendId) {
+  return ID_MAP[frontendId] || frontendId;
+}
+
+function resolveUserId(frontendId) {
+  return resolveId(frontendId) || AUDITOR_ID_MAP[frontendId] || frontendId;
+}
+
+function getHeaders() {
+  const token = localStorage.getItem('authToken');
+  const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
+  const userId = session?.id || '';
+  const actorId = resolveId(userId);
+  
+  return {
+    'Content-Type': 'application/json',
+    'X-Actor-Id': actorId,
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+}
+
+export const teamLeaderAPI = {
+  // ── Dashboard ──────────────────────────────────────────────────────────────
+
+  /**
+   * Get team leader dashboard metrics
+   * Aggregates incoming committee cases + assigned cases
+   */
+  getDashboard: async (teamLeaderId) => {
+    const params = new URLSearchParams({ teamLeaderId: resolveId(teamLeaderId) });
+    const response = await fetch(`${COMMITTEE_API_BASE.replace('/committee', '/team-leader')}/dashboard?${params}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch team leader dashboard');
+    return response.json();
+  },
+
+  // ── Committee Cases (incoming after vote passes) ────────────────
+
+  /**
+   * Get committee cases with TEAM_ASSIGNED status (after vote passes)
+   * These cases need team assignment before viability assessment
+   */
+  getTeamAssignedCases: async () => {
+    const params = new URLSearchParams({ status: 'TEAM_ASSIGNED' });
+    
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases?${params}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch team assigned cases');
+    return response.json();
+  },
+
+  /**
+   * Get AP audit cases with PENDING_ASSIGNMENT status (after viability approved)
+   * These are ready for team leader to assign to auditors
+   */
+  getPendingAssignmentCases: async () => {
+    const params = new URLSearchParams({ status: 'PENDING_ASSIGNMENT' });
+    
+    const response = await fetch(`${CASE_API_BASE}?${params}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch pending assignment cases');
+    return response.json();
+  },
+
+  /**
+   * Get detail of a specific committee case
+   */
+  getCommitteeCaseDetail: async (caseId) => {
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases/${caseId}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch case detail');
+    return response.json();
+  },
+
+  // ── Case Management (AP system) ────────────────────────────────────────────
+
+  /**
+   * Get all cases assigned to this team leader
+   */
+  getAssignedCases: async (teamLeaderId, filters = {}) => {
+    // Resolve frontend ID to backend UUID for DB query
+    const params = new URLSearchParams({ assignedTeamLeader: resolveId(teamLeaderId) });
+    if (filters.status) params.append('status', filters.status);
+    
+    const response = await fetch(`${CASE_API_BASE}?${params}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch assigned cases');
+    return response.json();
+  },
+
+  /**
+   * Get case detail from AP system
+   */
+  getCaseDetail: async (caseId) => {
+    const response = await fetch(`${CASE_API_BASE}/${caseId}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch case detail');
+    return response.json();
+  },
+
+  /**
+   * Assign a case to an auditor (Team Leader action)
+   * Status: ASSIGNED → IN_PROGRESS
+   */
+  assignCaseToAuditor: async (caseId, auditorId) => {
+    const response = await fetch(`${CASE_API_BASE}/${caseId}/assign-auditor`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ auditorId: resolveUserId(auditorId) }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to assign case to auditor');
+    }
+    return response.json();
+  },
+
+  /**
+   * Assign case to team leader (transfer from committee)
+   * Status: PENDING → ASSIGNED
+   */
+  assignCaseToTeamLeader: async (caseId, teamLeaderId) => {
+    const response = await fetch(`${CASE_API_BASE}/${caseId}/assign-team-leader`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ teamLeaderId: resolveId(teamLeaderId) }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to assign case to team leader');
+    }
+    return response.json();
+  },
+
+  /**
+   * Ensure a committee case exists in the AP execution workspace.
+   */
+  importCaseFromCommittee: async (caseId, teamLeaderId) => {
+    const response = await fetch(`${CASE_API_BASE}/${caseId}/import-from-committee`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ teamLeaderId: resolveId(teamLeaderId) }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || error.error?.message || 'Failed to import case into execution');
+    }
+    const result = await response.json();
+    return result.data || result;
+  },
+
+  /**
+   * Get auditor nominations for a case (used to show team auditors)
+   */
+  getAuditorNominations: async (caseId) => {
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases/${caseId}/auditor-nominations`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch auditor nominations');
+    return response.json();
+  },
+
+  /**
+   * Get team leader nominations for a case
+   */
+  getTeamLeaderNominations: async (caseId) => {
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases/${caseId}/team-leader-nominations`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch team leader nominations');
+    return response.json();
+  },
+
+  /**
+   * Assign an auditor from nominated team to a case
+   */
+  assignAuditorToCase: async (caseId, auditorId, teamLeaderId) => {
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases/${caseId}/assign-auditor-to-case`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        auditorId: resolveUserId(auditorId),
+        teamLeaderId: teamLeaderId ? resolveId(teamLeaderId) : undefined,
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to assign auditor to case');
+    }
+    return response.json();
+  },
+
+  /**
+   * Hand off a case (Team Leader takes responsibility)
+   * Status: ASSIGNED → HANDED_OFF
+   */
+  handoffCase: async (caseId, teamLeaderId, comment) => {
+    const importedCase = await teamLeaderAPI.importCaseFromCommittee(caseId, teamLeaderId);
+    const executionCaseId = importedCase.id || caseId;
+    const response = await fetch(`${CASE_API_BASE}/${executionCaseId}/handoff`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ comment: comment || 'Accepted by Team Leader' }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || error.error?.message || 'Failed to hand off case');
+    }
+    return response.json();
+  },
+
+  /**
+   * Update case status
+   */
+  updateCaseStatus: async (caseId, status) => {
+    const response = await fetch(`${CASE_API_BASE}/${caseId}/status`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to update case status');
+    }
+    return response.json();
+  },
+
+  // ── Team Formation ────────────────────────────────────────────────────────
+
+  /**
+   * Get the team for the current team leader
+   * Returns team info with auditor details
+   */
+  getMyTeam: async (teamLeaderId) => {
+    // Use X-Actor-Id header to identify the user (backend resolves from auth context)
+    // Do NOT pass frontend user IDs as query params — the backend expects UUIDs
+    const response = await fetch(`${COMMITTEE_API_BASE}/teams/my-team`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch team');
+    return response.json();
+  },
+
+  // ── Vote tally (for committee cases details) ───────────────────────────────
+
+  getVoteTally: async (caseId) => {
+    const response = await fetch(`${COMMITTEE_API_BASE}/cases/${caseId}/vote-tally`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch vote tally');
+    return response.json();
+  },
+};
