@@ -42,6 +42,20 @@ public class JointCaseRoutingBridgeService {
                normalized.equals("jointaudit");
     }
 
+    public static String normalizeTaxCenter(String tc) {
+        if (tc == null || tc.isBlank()) return "addis_ababa-tc1";
+        String s = tc.trim().toLowerCase();
+        if (s.contains("fed-lto1") || s.contains("federal-lto1") || s.contains("tc-fed-01") || s.contains("fed_lto1")) return "federal-lto1";
+        if (s.contains("fed-lto2") || s.contains("federal-lto2") || s.contains("tc-fed-02") || s.contains("fed_lto2")) return "federal-lto2";
+        if (s.contains("tc-aa-01") || s.contains("aa-bol") || s.contains("addis_ababa-tc1") || s.contains("addis-ababa-tc1")) return "addis_ababa-tc1";
+        if (s.contains("tc-aa-02") || s.contains("aa-ara") || s.contains("addis_ababa-tc2") || s.contains("addis-ababa-tc2")) return "addis_ababa-tc2";
+        if (s.contains("tc-aa-03") || s.contains("aa-yek") || s.contains("addis_ababa-tc3") || s.contains("addis-ababa-tc3")) return "addis_ababa-tc3";
+        if (s.contains("tc-bb-01") || s.contains("or-ada") || s.contains("oromia-tc1") || s.contains("oromia_tc1")) return "oromia-tc1";
+        if (s.contains("tc-bb-02") || s.contains("or-bis") || s.contains("oromia-tc2") || s.contains("oromia_tc2")) return "oromia-tc2";
+        if (s.contains("tc-bb-03") || s.contains("or-jim") || s.contains("oromia-tc3") || s.contains("oromia_tc3")) return "oromia-tc3";
+        return s;
+    }
+
     /**
      * Route an AP audit case to the Joint Audit Committee workspace.
      */
@@ -60,23 +74,32 @@ public class JointCaseRoutingBridgeService {
             return existing;
         }
 
-        String effectiveTaxCenter = taxCenter != null && !taxCenter.isBlank() ? taxCenter : "addis_ababa-tc1";
-
+        String effectiveTaxCenter = normalizeTaxCenter(taxCenter);
+        final String matchTc = effectiveTaxCenter;
         // Dynamically resolve Chairperson and Team Leader for this tax center
         UUID chairpersonId = userJpaRepo.findByUserTypeAndAuditType("COMMITTEE_CHAIR", "joint_audit").stream()
-                .filter(u -> effectiveTaxCenter.equalsIgnoreCase(u.getAssignedLocation()))
+                .filter(u -> matchTc.equalsIgnoreCase(u.getAssignedLocation()))
                 .map(UserEntity::getUserId)
                 .findFirst()
                 .orElse(UUID.fromString("20000000-0000-0000-0001-000000000001"));
 
         UUID defaultTeamLeadId = userJpaRepo.findByUserTypeAndAuditType("TEAM_LEADER", "joint_audit").stream()
-                .filter(u -> effectiveTaxCenter.equalsIgnoreCase(u.getAssignedLocation()))
+                .filter(u -> matchTc.equalsIgnoreCase(u.getAssignedLocation()))
                 .map(UserEntity::getUserId)
                 .findFirst()
                 .orElse(UUID.fromString("10000000-0000-0000-0001-000000000001"));
 
         UUID newCaseId = UUID.randomUUID();
         String caseCode = apCase.getCaseNumber() != null ? apCase.getCaseNumber() : "JAC-" + newCaseId.toString().substring(0, 8).toUpperCase();
+        if (committeeCaseRepository.findByCaseCode(caseCode).isPresent()) {
+            caseCode = caseCode + "-" + newCaseId.toString().substring(0, 4).toUpperCase();
+        }
+
+        String baseTin = apCase.getTaxpayerId() != null ? apCase.getTaxpayerId() : "00" + (10000000 + new Random().nextInt(89999999));
+        String taxIdNumber = baseTin;
+        if (committeeCaseRepository.findByTaxIdNumber(taxIdNumber).isPresent()) {
+            taxIdNumber = baseTin + "-" + UUID.randomUUID().toString().substring(0, 4);
+        }
 
         CommitteeCaseEntity committeeCase = CommitteeCaseEntity.builder()
                 .caseId(newCaseId)
@@ -84,7 +107,7 @@ public class JointCaseRoutingBridgeService {
                 .caseCode(caseCode)
                 .taxpayerId(UUID.randomUUID())
                 .taxpayerName(apCase.getTaxpayerName() != null ? apCase.getTaxpayerName() : "Joint Enterprise S.C.")
-                .taxIdNumber(apCase.getTaxpayerId() != null ? apCase.getTaxpayerId() : "00" + (10000000 + new Random().nextInt(89999999)))
+                .taxIdNumber(taxIdNumber)
                 .segment(apCase.getSegment() != null ? apCase.getSegment() : "LARGE")
                 .industry("Heavy Manufacturing & Imports")
                 .businessType("Industrial Manufacturing & Multimodal Cross-Border Importation")

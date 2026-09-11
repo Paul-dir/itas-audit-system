@@ -96,7 +96,7 @@ echo "  ✓ Transferred to Execution! Handoff ID: $HANDOFF_ID"
 
 echo ""
 echo "[Step 8] Verifying Case in PostgreSQL Database..."
-DB_STATE=$(psql -U postgres -d itas_audit -t -A -c "SELECT status, case_code, taxpayer_name, team_lead_id FROM t_committee_case WHERE case_id = '$CASE_ID';")
+DB_STATE=$(PGPASSWORD=dev_password psql -h localhost -p 5432 -U itas_dev -d itas_audit -t -A -c "SELECT status, case_code, taxpayer_name, team_lead_id FROM t_committee_case WHERE case_id = '$CASE_ID';")
 echo "  ✓ PostgreSQL Record: $DB_STATE"
 
 echo ""

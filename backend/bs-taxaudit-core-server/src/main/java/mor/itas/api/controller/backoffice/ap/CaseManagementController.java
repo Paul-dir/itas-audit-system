@@ -34,6 +34,7 @@ public class CaseManagementController {
     private final mor.itas.infrastructure.security.OrgScopeAuthorizationService orgScopeAuthorizationService;
     private final mor.itas.application.usecase.ap.UserManagementUseCase userManagementUseCase;
     private final mor.itas.application.service.notification.NotificationService notificationService;
+    private final mor.itas.persistence.jpa.repository.ap.UserJpaRepository userJpaRepository;
 
     // ─────────────────────────────────────────────────────────────────────────
     // CASE GENERATION FROM PLAN
@@ -62,14 +63,18 @@ public class CaseManagementController {
     public ResponseEntity<GenericResponse<List<Map<String, Object>>>> getCases(
             @RequestParam(required = false) String taxCenter,
             @RequestParam(required = false) String teamLeader,
+            @RequestParam(required = false) String assignedTeamLeader,
             @RequestParam(required = false) String committeeId,
             @RequestParam(required = false) String auditor,
+            @RequestParam(required = false) String assignedAuditor,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String auditType,
             @RequestParam(required = false) Integer planYear,
             @RequestParam(required = false) Integer year) {
 
         try {
+            final String effectiveTeamLeader = (teamLeader != null && !teamLeader.isBlank()) ? teamLeader : assignedTeamLeader;
+            final String effectiveAuditor = (auditor != null && !auditor.isBlank()) ? auditor : assignedAuditor;
             List<ApAuditCaseEntity> cases;
 
             if (taxCenter != null && !taxCenter.isBlank()) {
@@ -89,13 +94,13 @@ public class CaseManagementController {
                     dedup.putIfAbsent(c.getId(), c);
                 }
                 cases = new ArrayList<>(dedup.values());
-            } else if (teamLeader != null && !teamLeader.isBlank()) {
+            } else if (effectiveTeamLeader != null && !effectiveTeamLeader.isBlank()) {
                 // ── Team leader view ─────────────────────────────────────────
-                cases = new ArrayList<>(caseRepository.findByAssignedTeamLeaderId(teamLeader));
+                cases = new ArrayList<>(caseRepository.findByAssignedTeamLeaderId(effectiveTeamLeader));
 
                 // If no results or to be thorough, attempt canonical resolution
-                String canonicalTL = resolveTeamLeaderCanonicalId(teamLeader);
-                if (canonicalTL != null && !canonicalTL.equalsIgnoreCase(teamLeader)) {
+                String canonicalTL = resolveTeamLeaderCanonicalId(effectiveTeamLeader);
+                if (canonicalTL != null && !canonicalTL.equalsIgnoreCase(effectiveTeamLeader)) {
                     List<ApAuditCaseEntity> extra = caseRepository.findByAssignedTeamLeaderId(canonicalTL);
                     for (ApAuditCaseEntity c : extra) {
                         boolean exists = false;
@@ -111,9 +116,9 @@ public class CaseManagementController {
                     try {
                         List<mor.itas.domain.model.ap.User> allUsers = userManagementUseCase.getAllUsers();
                         for (mor.itas.domain.model.ap.User u : allUsers) {
-                            boolean matches = (u.getUsername() != null && u.getUsername().equalsIgnoreCase(teamLeader))
-                                           || (u.getUserId() != null && u.getUserId().toString().equalsIgnoreCase(teamLeader))
-                                           || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(teamLeader));
+                            boolean matches = (u.getUsername() != null && u.getUsername().equalsIgnoreCase(effectiveTeamLeader))
+                                           || (u.getUserId() != null && u.getUserId().toString().equalsIgnoreCase(effectiveTeamLeader))
+                                           || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(effectiveTeamLeader));
                             if (matches) {
                                 if (u.getUserId() != null) {
                                     for (ApAuditCaseEntity c : caseRepository.findByAssignedTeamLeaderId(u.getUserId().toString())) {
@@ -138,22 +143,72 @@ public class CaseManagementController {
                     } catch (Exception ignored) {}
                 }
 
-                // If still no results by direct UUID/username, search by taxCenter and match assignedTeamLeaderId
+                // Resolve TL audit type and tax center
+                String tlAuditType = auditType != null && !auditType.isBlank() ? auditType.toUpperCase() : null;
+                if (tlAuditType == null) {
+                    String lowerTL = effectiveTeamLeader.toLowerCase();
+                    if (lowerTL.contains("desk")) tlAuditType = "DESK_AUDIT";
+                    else if (lowerTL.contains("comp")) tlAuditType = "COMPREHENSIVE_AUDIT";
+                    else if (lowerTL.contains("issue") || lowerTL.contains("qa")) tlAuditType = "ISSUE_AUDIT";
+                    else if (lowerTL.contains("tp") || lowerTL.contains("transfer")) tlAuditType = "TRANSFER_PRICING";
+                    else if (lowerTL.contains("ja") || lowerTL.contains("joint")) tlAuditType = "JOINT_AUDIT";
+                }
+
+                // If still no results by direct UUID/username, search by taxCenter and match assignedTeamLeaderId or auditType
                 if (cases.isEmpty()) {
-                    String resolvedTC = resolveTaxCenterFromUserContext(teamLeader, taxCenter);
+                    String resolvedTC = resolveTaxCenterFromUserContext(effectiveTeamLeader, taxCenter);
                     if (resolvedTC != null) {
-                        cases = caseRepository.findByTaxCenterCode(resolvedTC)
-                                .stream()
-                                .filter(c -> teamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId())
-                                          && !ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT.equals(c.getStatus()))
+                        List<String> tcVariants = getTaxCenterVariants(resolvedTC);
+                        List<ApAuditCaseEntity> tcCases = new ArrayList<>();
+                        for (String v : tcVariants) {
+                            tcCases.addAll(caseRepository.findByTaxCenterCode(v));
+                        }
+                        final String requiredType = tlAuditType;
+                        cases = tcCases.stream()
+                                .filter(c -> {
+                                    if (effectiveTeamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId())) return true;
+                                    if (requiredType != null && requiredType.equalsIgnoreCase(c.getAuditType())
+                                            && (c.getAssignedTeamLeaderId() == null || effectiveTeamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId()))) {
+                                        return true;
+                                    }
+                                    return false;
+                                })
                                 .collect(Collectors.toList());
                     }
                 }
 
+                // Enforce that Team Leader only gets their specific audit type
+                if (tlAuditType != null) {
+                    final String requiredType = tlAuditType;
+                    cases = cases.stream()
+                            .filter(c -> matchesAuditType(c.getAuditType(), requiredType))
+                            .collect(Collectors.toList());
+                }
+
             } else if (committeeId != null && !committeeId.isBlank()) {
-                // ── Committee member view (strictly separated by auditType) ──
+                // ── Committee member view (strictly separated by auditType and taxCenter) ──
                 String resolvedTC = resolveTaxCenterFromUserContext(committeeId, taxCenter);
-                final String requestedType = auditType != null && !auditType.isBlank() ? auditType.toUpperCase() : null;
+                String requestedType = auditType != null && !auditType.isBlank() ? auditType.toUpperCase() : null;
+                if (requestedType == null) {
+                    String lowerComm = committeeId.toLowerCase();
+                    if (lowerComm.contains("ja") || lowerComm.contains("joint")) {
+                        requestedType = "JOINT_AUDIT";
+                    } else if (lowerComm.contains("tp") || lowerComm.contains("transfer")) {
+                        requestedType = "TRANSFER_PRICING";
+                    } else if (userManagementUseCase != null) {
+                        try {
+                            mor.itas.domain.model.ap.User u = userManagementUseCase.getUserByUsername(committeeId);
+                            if (u == null) {
+                                try { u = userManagementUseCase.getUserById(UUID.fromString(committeeId)); } catch (Exception ignored) {}
+                            }
+                            if (u != null && u.getAuditType() != null) {
+                                String at = u.getAuditType().toUpperCase();
+                                if (at.contains("JOINT")) requestedType = "JOINT_AUDIT";
+                                else if (at.contains("TP") || at.contains("TRANSFER")) requestedType = "TRANSFER_PRICING";
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
 
                 if (resolvedTC != null) {
                     List<String> tcVariants = getTaxCenterVariants(resolvedTC);
@@ -165,29 +220,39 @@ public class CaseManagementController {
                     for (ApAuditCaseEntity c : found) {
                         dedup.putIfAbsent(c.getId(), c);
                     }
+                    final String finalType = requestedType;
                     cases = dedup.values().stream()
-                            .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
-                                      || "JOINT_AUDIT".equals(c.getAuditType())
-                                      || "TRANSFER_PRICING".equals(c.getAuditType()))
-                            .filter(c -> requestedType == null || requestedType.equals(c.getAuditType()))
+                            .filter(c -> {
+                                if (finalType != null) {
+                                    return matchesAuditType(c.getAuditType(), finalType);
+                                }
+                                return ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
+                                    || matchesAuditType(c.getAuditType(), "JOINT_AUDIT")
+                                    || matchesAuditType(c.getAuditType(), "TRANSFER_PRICING");
+                            })
                             .collect(Collectors.toList());
                 } else {
+                    final String finalType = requestedType;
                     cases = caseRepository.findAll()
                             .stream()
-                            .filter(c -> ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
-                                      || "JOINT_AUDIT".equals(c.getAuditType())
-                                      || "TRANSFER_PRICING".equals(c.getAuditType()))
-                            .filter(c -> requestedType == null || requestedType.equals(c.getAuditType()))
+                            .filter(c -> {
+                                if (finalType != null) {
+                                    return matchesAuditType(c.getAuditType(), finalType);
+                                }
+                                return ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(c.getStatus())
+                                    || matchesAuditType(c.getAuditType(), "JOINT_AUDIT")
+                                    || matchesAuditType(c.getAuditType(), "TRANSFER_PRICING");
+                            })
                             .collect(Collectors.toList());
                 }
 
-            } else if (auditor != null && !auditor.isBlank()) {
+            } else if (effectiveAuditor != null && !effectiveAuditor.isBlank()) {
                 // ── Auditor view ─────────────────────────────────────────────
-                cases = new ArrayList<>(caseRepository.findByAssignedAuditorId(auditor));
+                cases = new ArrayList<>(caseRepository.findByAssignedAuditorId(effectiveAuditor));
 
                 // Resolve auditor identifier (email, alias, UUID, username)
-                String canonicalAuditor = resolveAuditorCanonicalId(auditor);
-                if (canonicalAuditor != null && !canonicalAuditor.equalsIgnoreCase(auditor)) {
+                String canonicalAuditor = resolveAuditorCanonicalId(effectiveAuditor);
+                if (canonicalAuditor != null && !canonicalAuditor.equalsIgnoreCase(effectiveAuditor)) {
                     for (ApAuditCaseEntity c : caseRepository.findByAssignedAuditorId(canonicalAuditor)) {
                         boolean exists = false;
                         for (ApAuditCaseEntity ex : cases) {
@@ -201,9 +266,9 @@ public class CaseManagementController {
                     try {
                         List<mor.itas.domain.model.ap.User> allUsers = userManagementUseCase.getAllUsers();
                         for (mor.itas.domain.model.ap.User u : allUsers) {
-                            boolean matches = (u.getUsername() != null && u.getUsername().equalsIgnoreCase(auditor))
-                                           || (u.getUserId() != null && u.getUserId().toString().equalsIgnoreCase(auditor))
-                                           || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(auditor));
+                            boolean matches = (u.getUsername() != null && u.getUsername().equalsIgnoreCase(effectiveAuditor))
+                                           || (u.getUserId() != null && u.getUserId().toString().equalsIgnoreCase(effectiveAuditor))
+                                           || (u.getEmail() != null && u.getEmail().equalsIgnoreCase(effectiveAuditor));
                             if (matches) {
                                 if (u.getUserId() != null) {
                                     for (ApAuditCaseEntity c : caseRepository.findByAssignedAuditorId(u.getUserId().toString())) {
@@ -450,7 +515,10 @@ public class CaseManagementController {
 
             if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
                     && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())
-                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())) {
+                    && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())
+                    && !"HANDED_OFF".equals(entity.getStatus())
+                    && !"ASSIGNED".equals(entity.getStatus())
+                    && !"AUDITOR_ASSIGNED".equals(entity.getStatus())) {
                 return ResponseEntity.ok(GenericResponse.error("INVALID_STATE",
                         "Case must be assigned to team leader before auditor assignment. Status: " + entity.getStatus()));
             }
@@ -911,8 +979,32 @@ public class CaseManagementController {
         // u-aud-aa1a → addis_ababa-tc1 → TC-AA-01
         if (userId != null) {
             String lower = userId.toLowerCase();
-            if (lower.contains("fed") || lower.contains("federal")) {
+            if (lower.contains("fed2") || lower.contains("fed-lto2") || lower.contains("federal-lto2") || lower.contains("tc-fed-02")) {
+                return "federal-lto2";
+            }
+            if (lower.contains("fed-lto1") || lower.contains("federal-lto1") || lower.contains("tc-fed-01") || lower.contains("fed.ja")) {
                 return "federal-lto1";
+            }
+            if (lower.contains("federal") || lower.contains("fed")) {
+                return "federal-lto1";
+            }
+            if (lower.contains("aa1") || lower.contains("addis_ababa-tc1") || lower.contains("tc-aa-01")) {
+                return "TC-AA-01";
+            }
+            if (lower.contains("aa2") || lower.contains("addis_ababa-tc2") || lower.contains("tc-aa-02")) {
+                return "TC-AA-02";
+            }
+            if (lower.contains("aa3") || lower.contains("addis_ababa-tc3") || lower.contains("tc-aa-03")) {
+                return "TC-AA-03";
+            }
+            if (lower.contains("or1") || lower.contains("oromia-tc1") || lower.contains("tc-bb-01")) {
+                return "TC-BB-01";
+            }
+            if (lower.contains("or2") || lower.contains("oromia-tc2") || lower.contains("tc-bb-02")) {
+                return "TC-BB-02";
+            }
+            if (lower.contains("or3") || lower.contains("oromia-tc3") || lower.contains("tc-bb-03")) {
+                return "TC-BB-03";
             }
             // Extract region+tc number from user ID
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:tc|tl|aud)(?:om)?-([a-z]{2})(\\d)").matcher(lower);
@@ -920,6 +1012,17 @@ public class CaseManagementController {
                 String region = m.group(1).toUpperCase();
                 String tcNum = m.group(2);
                 return "TC-" + region + "-" + "0" + tcNum;
+            }
+            if (userManagementUseCase != null) {
+                try {
+                    mor.itas.domain.model.ap.User u = userManagementUseCase.getUserByUsername(userId);
+                    if (u == null) {
+                        try { u = userManagementUseCase.getUserById(UUID.fromString(userId)); } catch (Exception ignored) {}
+                    }
+                    if (u != null && u.getAssignedLocation() != null) {
+                        return normalizeTaxCenterCode(u.getAssignedLocation());
+                    }
+                } catch (Exception ignored) {}
             }
         }
         return null;
@@ -1030,6 +1133,20 @@ public class CaseManagementController {
         };
     }
 
+    private boolean matchesAuditType(String actual, String expected) {
+        if (actual == null || expected == null) return false;
+        if (actual.equalsIgnoreCase(expected)) return true;
+        if ((actual.equalsIgnoreCase("JOINT") || actual.equalsIgnoreCase("JOINT_AUDIT"))
+                && (expected.equalsIgnoreCase("JOINT") || expected.equalsIgnoreCase("JOINT_AUDIT"))) {
+            return true;
+        }
+        if ((actual.equalsIgnoreCase("TP") || actual.equalsIgnoreCase("TRANSFER_PRICING"))
+                && (expected.equalsIgnoreCase("TP") || expected.equalsIgnoreCase("TRANSFER_PRICING"))) {
+            return true;
+        }
+        return false;
+    }
+
     private String resolveAuditorCanonicalId(String auditorIdentifier) {
         if (auditorIdentifier == null || auditorIdentifier.isBlank()) return null;
         String lower = auditorIdentifier.trim().toLowerCase();
@@ -1037,6 +1154,23 @@ public class CaseManagementController {
         // Check common aliases
         if (lower.contains("michael.abera") || lower.contains("michael.desta") || lower.contains("tolera.getachew")) {
             return "u-aud-addis_ababa-tc1-tp-1-1";
+        }
+
+        if (userJpaRepository != null) {
+            try {
+                try {
+                    UUID uId = UUID.fromString(auditorIdentifier.trim());
+                    Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> entityOpt = userJpaRepository.findById(uId);
+                    if (entityOpt.isPresent()) {
+                        return entityOpt.get().getUsername();
+                    }
+                } catch (IllegalArgumentException ignored) {}
+
+                Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> entityOpt = userJpaRepository.findByUsername(auditorIdentifier.trim());
+                if (entityOpt.isPresent()) {
+                    return entityOpt.get().getUserId().toString();
+                }
+            } catch (Exception ignored) {}
         }
 
         if (userManagementUseCase != null) {
@@ -1060,6 +1194,23 @@ public class CaseManagementController {
 
         if (lower.contains("robel.girma") || lower.contains("robel")) {
             return "u-tl-addis_ababa-tc1-tp-1";
+        }
+
+        if (userJpaRepository != null) {
+            try {
+                try {
+                    UUID uId = UUID.fromString(tlIdentifier.trim());
+                    Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> entityOpt = userJpaRepository.findById(uId);
+                    if (entityOpt.isPresent()) {
+                        return entityOpt.get().getUsername();
+                    }
+                } catch (IllegalArgumentException ignored) {}
+
+                Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> entityOpt = userJpaRepository.findByUsername(tlIdentifier.trim());
+                if (entityOpt.isPresent()) {
+                    return entityOpt.get().getUserId().toString();
+                }
+            } catch (Exception ignored) {}
         }
 
         if (userManagementUseCase != null) {

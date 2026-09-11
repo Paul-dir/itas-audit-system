@@ -31,6 +31,14 @@ public interface CommitteeCaseRepository extends JpaRepository<CommitteeCaseEnti
     Optional<CommitteeCaseEntity> findByCaseCode(String caseCode);
 
     /**
+     * Find a committee case by its tax identification number.
+     * 
+     * @param taxIdNumber the taxpayer ID number
+     * @return Optional containing the case if found
+     */
+    Optional<CommitteeCaseEntity> findByTaxIdNumber(String taxIdNumber);
+
+    /**
      * Find all committee cases with a specific status.
      * Supports dashboard filtering and status-based queries.
      * 

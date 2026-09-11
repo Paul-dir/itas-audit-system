@@ -42,6 +42,7 @@ public class CascadePlanToCasesUseCase {
     private final RegionalDeploymentRepository deploymentRepository;
     private final TaxpayerPort taxpayerPort;
     private final UserManagementPort userManagementPort;
+    private final mor.itas.domain.service.ap.JointCaseRoutingBridgeService jointCaseRoutingBridge;
 
     // Audit type ID mapping (frontend → backend)
     private static final Map<String, String> AUDIT_TYPE_MAP = Map.of(
@@ -222,12 +223,13 @@ public class CascadePlanToCasesUseCase {
                 continue;
             }
 
-            // Group taxpayers by recommended audit type
+            // Group taxpayers by recommended audit type (normalized to uppercase backend type)
             Map<String, List<Map<String, Object>>> taxpayersByType = new HashMap<>();
             for (Map<String, Object> tp : taxpayers) {
                 if (tp == null || !(tp instanceof Map)) continue;
-                String recType = (String) tp.getOrDefault("recommendedAuditType", "desk_audit");
-                taxpayersByType.computeIfAbsent(recType, k -> new ArrayList<>()).add(tp);
+                String recType = (String) tp.getOrDefault("recommendedAuditType", "DESK_AUDIT");
+                String normRecType = AUDIT_TYPE_MAP.getOrDefault(recType.toLowerCase(), recType.toUpperCase());
+                taxpayersByType.computeIfAbsent(normRecType, k -> new ArrayList<>()).add(tp);
             }
 
             // Sort each group by risk score (highest first)
@@ -237,6 +239,7 @@ public class CascadePlanToCasesUseCase {
             );
 
             int tcCasesCreated = 0;
+            Set<String> usedTinsInTaxCenter = new HashSet<>();
 
             // Per tax center round-robin indices for team leaders (per audit type)
             Map<String, Integer> tlRoundRobin = new HashMap<>();
@@ -249,22 +252,31 @@ public class CascadePlanToCasesUseCase {
                 if (requiredCases <= 0) continue;
 
                 // If audit type filter is set, skip types not in the filter
-                String backendType = AUDIT_TYPE_MAP.getOrDefault(auditType, auditType.toUpperCase());
+                String backendType = AUDIT_TYPE_MAP.getOrDefault(auditType.toLowerCase(), auditType.toUpperCase());
                 if (allowedTypes != null && !allowedTypes.contains(backendType)) {
                     continue;
                 }
 
-                // Get taxpayers recommended for this audit type
-                List<Map<String, Object>> candidates = new ArrayList<>(taxpayersByType.getOrDefault(auditType, new ArrayList<>()));
+                // Get taxpayers recommended for this audit type (excluding already used in this tax center)
+                List<Map<String, Object>> candidates = new ArrayList<>();
+                for (Map<String, Object> tp : taxpayersByType.getOrDefault(backendType, Collections.emptyList())) {
+                    String tin = (String) tp.get("tin");
+                    if (tin != null && !usedTinsInTaxCenter.contains(tin)) {
+                        candidates.add(tp);
+                    }
+                }
 
-                // If not enough candidates, pull from desk_audit pool
+                // If not enough candidates, pull from other pools
                 if (candidates.size() < requiredCases) {
-                    List<Map<String, Object>> deskPool = taxpayersByType.getOrDefault("desk_audit", new ArrayList<>());
-                    for (Map<String, Object> tp : deskPool) {
-                        if (candidates.size() >= requiredCases) break;
-                        if (!candidates.contains(tp)) {
-                            candidates.add(tp);
+                    for (List<Map<String, Object>> pool : taxpayersByType.values()) {
+                        for (Map<String, Object> tp : pool) {
+                            if (candidates.size() >= requiredCases) break;
+                            String tin = (String) tp.get("tin");
+                            if (tin != null && !usedTinsInTaxCenter.contains(tin) && !candidates.contains(tp)) {
+                                candidates.add(tp);
+                            }
                         }
+                        if (candidates.size() >= requiredCases) break;
                     }
                 }
 
@@ -288,6 +300,7 @@ public class CascadePlanToCasesUseCase {
                 for (int i = 0; i < casesToCreate; i++) {
                     Map<String, Object> taxpayer = candidates.get(i);
                     String tin = (String) taxpayer.getOrDefault("tin", "UNKNOWN");
+                    usedTinsInTaxCenter.add(tin);
 
                     ApAuditCaseEntity caseEntity = new ApAuditCaseEntity();
                     caseEntity.setId(UUID.randomUUID());
@@ -326,9 +339,18 @@ public class CascadePlanToCasesUseCase {
                     caseEntity.setStatus(ApAuditCaseEntity.STATUS_PENDING_ASSIGNMENT);
 
                     // Save to database
-                    auditCaseRepository.save(caseEntity);
+                    ApAuditCaseEntity savedCase = auditCaseRepository.save(caseEntity);
                     tcCasesCreated++;
                     totalCasesCreated++;
+
+                    // Bridge Joint Audit cases into Joint Audit Committee system
+                    if (jointCaseRoutingBridge != null && jointCaseRoutingBridge.isJointAudit(backendType)) {
+                        try {
+                            jointCaseRoutingBridge.routeApCaseToCommittee(savedCase, backendTaxCenterCode);
+                        } catch (Exception e) {
+                            System.err.println("⚠️ Warning: Failed to route case to Joint Committee: " + e.getMessage());
+                        }
+                    }
 
                     casesByAuditType.merge(backendType, 1, Integer::sum);
 
@@ -494,12 +516,11 @@ public class CascadePlanToCasesUseCase {
     }
 
     private List<PlanAllocationEntity> autoGenerateMissingTaxCenterAllocations(AnnualAuditPlanEntity plan, List<PlanAllocationEntity> existingAllocations) {
-        List<PlanAllocationEntity> allAllocations = new ArrayList<>(existingAllocations);
-        Set<String> existingTcCodes = existingAllocations.stream()
-            .map(PlanAllocationEntity::getTaxCenterCode)
-            .filter(Objects::nonNull)
-            .map(String::toLowerCase)
-            .collect(Collectors.toSet());
+        if (existingAllocations != null && !existingAllocations.isEmpty()) {
+            return existingAllocations;
+        }
+        List<PlanAllocationEntity> allAllocations = new ArrayList<>();
+        Set<String> existingTcCodes = Collections.emptySet();
         
         Map<String, List<String>> regionToTaxCenters = Map.of(
             "FED", List.of("federal-lto1", "federal-lto2"),

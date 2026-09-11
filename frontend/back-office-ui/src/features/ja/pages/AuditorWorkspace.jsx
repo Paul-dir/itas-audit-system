@@ -18,10 +18,10 @@ import {
   FileSearch as SearchIcon, Scale, Building2, Hash, User, Target, Star
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext.jsx';
-import { useWorkflow } from '../teamleader/context/WorkflowContext.jsx';
-import { WORKFLOW_STEPS, WORKFLOW_STEP_IDS } from '../teamleader/data/workflowConstants.js';
-import WorkflowProgress from '../teamleader/components/WorkflowProgress.jsx';
-import StatusBadge from '../teamleader/components/StatusBadge.jsx';
+import { useWorkflow } from '../../teamleader/context/WorkflowContext.jsx';
+import { WORKFLOW_STEPS, WORKFLOW_STEP_IDS } from '../../teamleader/data/workflowConstants.js';
+import WorkflowProgress from '../../teamleader/components/WorkflowProgress.jsx';
+import StatusBadge from '../../teamleader/components/StatusBadge.jsx';
 import { Card, Button, Badge, Modal, Textarea, Input } from '../../../components/ui/index.jsx';
 import { auditorAPI } from '../services/auditorApi.js';
 
@@ -533,10 +533,10 @@ function ConclusionPanel({ caseData, onFinalize }) {
 }
 
 // ── Main Workspace Component ─────────────────────────────────────────────────
-export default function AuditorWorkspace({ caseData, onBack }) {
+export default function AuditorWorkspace({ caseData, onBack, initialStep }) {
   const { user } = useAuth();
   const { getWorkflow, getStepProgress, actions } = useWorkflow();
-  const [activeStep, setActiveStep] = useState('CASE_DETAIL');
+  const [activeStep, setActiveStep] = useState(initialStep || 'CASE_DETAIL');
 
   const caseId = caseData?.id || caseData?.caseId;
   const workflow = getWorkflow(caseId);
@@ -549,12 +549,14 @@ export default function AuditorWorkspace({ caseData, onBack }) {
     }
   }, [caseId, actions.loadWorkflow]);
 
-  // Set active step to current workflow step
+  // Set active step to initialStep or current workflow step
   useEffect(() => {
-    if (workflow.currentStep) {
+    if (initialStep) {
+      setActiveStep(initialStep);
+    } else if (workflow.currentStep) {
       setActiveStep(workflow.currentStep);
     }
-  }, [workflow.currentStep]);
+  }, [initialStep, workflow.currentStep]);
 
   // Get existing plan from workflow context
   const existingPlan = workflow.plan || null;
@@ -618,6 +620,25 @@ export default function AuditorWorkspace({ caseData, onBack }) {
   const handleFinalize = () => {
     actions.concludeCase(caseId, user.id);
   };
+
+  if (!caseData) {
+    return (
+      <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
+        <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+          <FileText size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Joint Audit Execution Workspace</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          Please select an assigned audit case from your dashboard or cases list to launch the 10-step statutory audit workspace.
+        </p>
+        {onBack && (
+          <Button variant="primary" onClick={onBack}>
+            Back to Assigned Cases
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   // Render current step content
   const renderStepContent = () => {

@@ -5,6 +5,8 @@
  * for authentication and UI components (App.jsx, Sidebar.jsx, TopBar.jsx).
  */
 
+import { SEED_USERS } from './seed.js';
+
 export function normalizeRole(role) {
   if (!role) return 'auditor';
   const r = role.toLowerCase().replace(/[\s-]+/g, '_');
@@ -14,7 +16,8 @@ export function normalizeRole(role) {
   if (r.includes('region')) return 'regional_director';
   if (r.includes('tax_center_mgr') || r.includes('tax_center_manager') || r.includes('tcm') || r.includes('tax_center') || r.includes('taxcenter') || r.startsWith('tc_') || r === 'tc') return 'tax_center_manager';
   if (r.includes('team_leader') || r.includes('teamleader') || r === 'tl' || r.startsWith('tl_')) return 'team_leader';
-  if (r.includes('committee')) return 'committee_member';
+  if (r.includes('chair') || r.includes('chairperson')) return 'committee_chair';
+  if (r.includes('committee') || r.includes('member')) return 'committee_member';
   if (r.includes('request')) return 'audit_requester';
   if (r.includes('taxpayer') || r.includes('portal')) return 'taxpayer';
   if (r.includes('admin')) return 'planning_team';
@@ -38,9 +41,9 @@ export function resolveRegion(loc) {
 export function resolveAuditType(str) {
   if (!str) return null;
   const s = str.toLowerCase();
-  if (s.includes('desk')) return 'desk_audit';
-  if (s.includes('joint') || s.includes('ja')) return 'joint_audit';
   if (s.includes('transfer') || s.includes('tp')) return 'transfer_pricing';
+  if (s.includes('joint') || s.includes('.ja') || s.includes('-ja') || s.includes('ja_') || s.includes('_ja') || s === 'ja') return 'joint_audit';
+  if (s.includes('desk')) return 'desk_audit';
   if (s.includes('comp')) return 'comprehensive';
   if (s.includes('issue')) return 'issue_audit';
   return str;
@@ -92,6 +95,7 @@ export function mapBackendUserToProfile(u) {
     'TEAM_LEADER': 'team_leader',
     'AUDITOR': 'auditor',
     'COMMITTEE_MEMBER': 'committee_member',
+    'COMMITTEE_CHAIR': 'committee_chair',
     'AUDIT_REQUESTER': 'audit_requester',
     'TAXPAYER': 'taxpayer'
   };
@@ -148,6 +152,19 @@ export function synthesizeUserFromPattern(identifier) {
   if (!identifier) return null;
   const input = identifier.trim().toLowerCase();
   const cleanInput = input.replace(/@mor\.gov\.et$/, '');
+
+  // 0. Direct match in SEED_USERS first
+  if (Array.isArray(SEED_USERS)) {
+    const foundInSeed = SEED_USERS.find(u => 
+      (u.id && u.id.toLowerCase() === cleanInput) ||
+      (u.username && u.username.toLowerCase() === cleanInput) ||
+      (u.email && u.email.toLowerCase() === input) ||
+      (u.email && u.email.toLowerCase() === `${cleanInput}@mor.gov.et`)
+    );
+    if (foundInSeed) {
+      return buildCompleteUserProfile(foundInSeed);
+    }
+  }
 
   // Pattern checks
   if (cleanInput === 'admin' || input.includes('admin@mor.gov.et')) {
@@ -250,20 +267,21 @@ export function synthesizeUserFromPattern(identifier) {
       });
     }
     if (type === 'com') {
+      const isChair = cleanInput.includes('chair');
       const isFed = cleanInput.includes('fed');
       let at = resolveAuditType(cleanInput);
       if (cleanInput.includes('fed-chair') && !cleanInput.includes('tp')) {
         at = 'joint_audit';
       }
-      const tc = isFed ? 'federal-lto1' : parts.slice(2, -1).join('-');
+      const tc = isFed ? 'federal-lto1' : parts.slice(2, isChair ? -1 : undefined).join('-');
       return buildCompleteUserProfile({
         id: cleanInput,
-        name: `${at ? at.replace(/_/g, ' ').toUpperCase() : ''} Committee Chair (${isFed ? 'Federal' : tc})`,
+        name: `${at ? at.replace(/_/g, ' ').toUpperCase() : ''} Committee ${isChair ? 'Chair' : 'Member'} (${isFed ? 'Federal' : tc})`,
         email: `${cleanInput}@mor.gov.et`,
-        role: 'committee_member',
+        role: isChair ? 'committee_chair' : 'committee_member',
         region: isFed ? 'federal_level' : resolveRegion(tc),
         taxCenter: tc,
-        auditType: at
+        auditType: at || 'joint_audit'
       });
     }
     if (type === 'tl') {
@@ -310,30 +328,98 @@ export function synthesizeUserFromPattern(identifier) {
     }
   }
 
-  // Semantic keyword heuristics if identifier doesn't use strict u- prefix
-  if (cleanInput.includes('tcm') || cleanInput.includes('tax_center') || cleanInput.includes('taxcenter') || cleanInput.includes('tc1') || cleanInput.includes('tc2') || cleanInput.includes('tc3') || cleanInput.includes('lto')) {
-    return buildCompleteUserProfile({
-      id: cleanInput,
-      name: input,
-      email: input.includes('@') ? input : `${cleanInput}@mor.gov.et`,
-      role: 'tax_center_manager'
-    });
+  // Dynamic Region & Tax Center Heuristics
+  let region = null;
+  let taxCenter = null;
+  if (cleanInput.includes('fed2') || cleanInput.includes('lto2')) {
+    region = 'federal_level';
+    taxCenter = 'federal-lto2';
+  } else if (cleanInput.includes('fed') || cleanInput.includes('lto1') || cleanInput.includes('lto')) {
+    region = 'federal_level';
+    taxCenter = 'federal-lto1';
+  } else if (cleanInput.includes('aa1') || cleanInput.includes('addis_ababa-tc1')) {
+    region = 'addis_ababa';
+    taxCenter = 'addis_ababa-tc1';
+  } else if (cleanInput.includes('aa2') || cleanInput.includes('addis_ababa-tc2')) {
+    region = 'addis_ababa';
+    taxCenter = 'addis_ababa-tc2';
+  } else if (cleanInput.includes('aa3') || cleanInput.includes('addis_ababa-tc3')) {
+    region = 'addis_ababa';
+    taxCenter = 'addis_ababa-tc3';
+  } else if (cleanInput.includes('aa') || cleanInput.includes('addis')) {
+    region = 'addis_ababa';
+    taxCenter = 'addis_ababa-tc1';
+  } else if (cleanInput.includes('or1') || cleanInput.includes('oromia-tc1')) {
+    region = 'oromia';
+    taxCenter = 'oromia-tc1';
+  } else if (cleanInput.includes('or2') || cleanInput.includes('oromia-tc2')) {
+    region = 'oromia';
+    taxCenter = 'oromia-tc2';
+  } else if (cleanInput.includes('or3') || cleanInput.includes('oromia-tc3')) {
+    region = 'oromia';
+    taxCenter = 'oromia-tc3';
+  } else if (cleanInput.includes('or') || cleanInput.includes('bb') || cleanInput.includes('oromia')) {
+    region = 'oromia';
+    taxCenter = 'oromia-tc1';
+  } else if (cleanInput.includes('ba1') || cleanInput.includes('amhara-tc1')) {
+    region = 'amhara';
+    taxCenter = 'amhara-tc1';
+  } else if (cleanInput.includes('ba2') || cleanInput.includes('amhara-tc2')) {
+    region = 'amhara';
+    taxCenter = 'amhara-tc2';
+  } else if (cleanInput.includes('ba3') || cleanInput.includes('amhara-tc3')) {
+    region = 'amhara';
+    taxCenter = 'amhara-tc3';
+  } else if (cleanInput.includes('ba') || cleanInput.includes('amhara')) {
+    region = 'amhara';
+    taxCenter = 'amhara-tc1';
+  } else if (cleanInput.includes('dd1') || cleanInput.includes('dire_dawa-tc1') || cleanInput.includes('dd') || cleanInput.includes('ab') || cleanInput.includes('dire')) {
+    region = 'dire_dawa';
+    taxCenter = 'dire_dawa-tc1';
+  } else if (cleanInput.includes('sn1') || cleanInput.includes('snnpr-tc1') || cleanInput.includes('sn') || cleanInput.includes('ca') || cleanInput.includes('snnpr')) {
+    region = 'snnpr';
+    taxCenter = 'snnpr-tc1';
+  } else if (cleanInput.includes('so1') || cleanInput.includes('somali-tc1') || cleanInput.includes('so') || cleanInput.includes('somali')) {
+    region = 'somali';
+    taxCenter = 'somali-tc1';
   }
 
-  if (cleanInput.includes('team_leader') || cleanInput.includes('teamleader') || cleanInput.includes('.tl') || cleanInput.startsWith('tl-')) {
-    return buildCompleteUserProfile({
-      id: cleanInput,
-      name: input,
-      email: input.includes('@') ? input : `${cleanInput}@mor.gov.et`,
-      role: 'team_leader'
-    });
+  // Dynamic Audit Type
+  let auditType = resolveAuditType(cleanInput);
+
+  // Dynamic Role Heuristics
+  let role = 'auditor';
+  if (cleanInput.includes('chair') || cleanInput.includes('chairperson')) {
+    role = 'committee_chair';
+    if (!auditType) auditType = 'joint_audit';
+  } else if (cleanInput.includes('member') || cleanInput.includes('com')) {
+    role = 'committee_member';
+    if (!auditType) auditType = 'joint_audit';
+  } else if (cleanInput.includes('tl') || cleanInput.includes('team_leader') || cleanInput.includes('teamleader')) {
+    role = 'team_leader';
+  } else if (cleanInput.includes('tcm') || cleanInput.includes('tax_center_manager') || cleanInput.includes('tc_mgr') || cleanInput.includes('taxcenter') || cleanInput.includes('tax_center')) {
+    role = 'tax_center_manager';
+  } else if (cleanInput.includes('rd') || cleanInput.includes('regional_director')) {
+    role = 'regional_director';
+  } else if (cleanInput.includes('ad') || cleanInput.includes('director') || cleanInput.includes('audit_director')) {
+    role = 'audit_director';
+  } else if (cleanInput.includes('sm') || cleanInput.includes('senior')) {
+    role = 'senior_management';
+  } else if (cleanInput.includes('pt') || cleanInput.includes('plan')) {
+    role = 'planning_team';
+  } else if (cleanInput.includes('req')) {
+    role = 'audit_requester';
   }
 
-  // Generic fallback with valid structure
+  const roleTitle = role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   return buildCompleteUserProfile({
     id: cleanInput,
-    name: input,
+    username: cleanInput,
+    name: `${roleTitle} (${taxCenter || region || cleanInput})`,
     email: input.includes('@') ? input : `${cleanInput}@mor.gov.et`,
-    role: 'auditor'
+    role,
+    region,
+    taxCenter,
+    auditType
   });
 }

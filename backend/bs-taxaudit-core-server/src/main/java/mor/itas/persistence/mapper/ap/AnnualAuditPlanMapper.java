@@ -51,6 +51,7 @@ public class AnnualAuditPlanMapper {
             ae.setTcFeedbackSubmitted(a.getTcFeedbackSubmitted());
             ae.setEstimatedRevenue(a.getEstimatedRevenue());
             ae.setRevenueByAuditType(a.getRevenueByAuditType());
+            ae.setAllocationByAuditType(a.getAllocationByAuditType());
             ae.setCreatedAt(a.getCreatedAt().toInstant().atOffset(java.time.ZoneOffset.UTC));
             return ae;
         }).collect(Collectors.toList());
@@ -76,6 +77,7 @@ public class AnnualAuditPlanMapper {
             allocation.setTcFeedbackSubmitted(ae.getTcFeedbackSubmitted());
             allocation.setEstimatedRevenue(ae.getEstimatedRevenue());
             allocation.setRevenueByAuditType(ae.getRevenueByAuditType());
+            allocation.setAllocationByAuditType(ae.getAllocationByAuditType());
             allocation.setCreatedAt(ae.getCreatedAt());
             return allocation;
         }).collect(Collectors.toList());

@@ -67,8 +67,10 @@ public class AuditWorkflowService {
         }
 
         // Validate user is a team leader
-        UserEntity user = userRepository.findById(UUID.fromString(teamLeaderId))
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + teamLeaderId));
+        UserEntity user = resolveUser(teamLeaderId);
+        if (user == null) {
+            throw new IllegalArgumentException("User not found: " + teamLeaderId);
+        }
         if (!"TEAM_LEADER".equals(user.getUserType()) || !"ACTIVE".equals(user.getStatus())) {
             throw new UnauthorizedAccessException(
                 "Only an active Team Leader can hand off a case. User " + teamLeaderId + " is role=" + user.getUserType());
@@ -80,7 +82,10 @@ public class AuditWorkflowService {
         if (auditCase.getAssignedTeamLeaderId() == null) {
             throw new IllegalStateException("Case is not assigned to a team leader");
         }
-        if (!teamLeaderId.equals(auditCase.getAssignedTeamLeaderId())) {
+        boolean tlMatches = teamLeaderId.equalsIgnoreCase(auditCase.getAssignedTeamLeaderId())
+                || user.getUserId().toString().equalsIgnoreCase(auditCase.getAssignedTeamLeaderId())
+                || (user.getUsername() != null && user.getUsername().equalsIgnoreCase(auditCase.getAssignedTeamLeaderId()));
+        if (!tlMatches) {
             throw new UnauthorizedAccessException(
                 "Case is assigned to a different team leader. Cannot hand off.");
         }
@@ -783,9 +788,27 @@ public class AuditWorkflowService {
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
 
+    private UserEntity resolveUser(String identifier) {
+        if (identifier == null || identifier.isBlank()) return null;
+        try {
+            UUID uuid = UUID.fromString(identifier.trim());
+            Optional<UserEntity> byId = userRepository.findById(uuid);
+            if (byId.isPresent()) return byId.get();
+        } catch (IllegalArgumentException ignored) {}
+        return userRepository.findByUsername(identifier.trim())
+                .or(() -> userRepository.findByEmail(identifier.trim()))
+                .orElse(null);
+    }
+
     private ApAuditCaseEntity getCaseOrThrow(UUID caseId) {
-        return caseRepository.findById(caseId)
-                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        Optional<ApAuditCaseEntity> opt = caseRepository.findById(caseId);
+        if (opt.isPresent()) return opt.get();
+        Optional<CommitteeCaseEntity> commOpt = committeeCaseRepository.findById(caseId);
+        if (commOpt.isPresent() && commOpt.get().getOriginalCaseId() != null) {
+            return caseRepository.findById(commOpt.get().getOriginalCaseId())
+                    .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        }
+        throw new IllegalArgumentException("Case not found: " + caseId);
     }
 
     private AuditPlanRecordEntity getLatestPlanOrThrow(UUID caseId, String expectedStatus) {

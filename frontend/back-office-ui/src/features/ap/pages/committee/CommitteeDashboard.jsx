@@ -56,22 +56,10 @@ export default function CommitteeDashboard({ view }) {
       const nextPhase = PHASE_MAP[view];
       setTpWorkspacePhase(nextPhase);
 
-      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER'));
-      const activeCase = tpCase || {
-        id: '0a4500d1-0842-4c07-a077-ceed404af705',
-        caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
-        taxpayerName: 'Crest Textiles SC',
-        taxpayerId: '1000080599',
-        sector: 'Textiles',
-        auditType: 'TRANSFER_PRICING',
-        riskLevel: 'HIGH',
-        riskScore: 99,
-        estimatedRevenue: 1468782000,
-        planYear: 2026,
-        status: 'IN_PROGRESS',
-        frontendStatus: 'IN_PROGRESS'
-      };
-      setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
+      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0] || null;
+      if (tpCase) {
+        setTpWorkspaceCase(prev => (prev?.id === tpCase.id ? prev : tpCase));
+      }
     } else if (view === 'deliberations') {
       setTpWorkspaceCase(null);
       setTpWorkspacePhase(null);
@@ -252,22 +240,11 @@ export default function CommitteeDashboard({ view }) {
           <button
             type="button"
             onClick={() => {
-              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || {
-                id: '0a4500d1-0842-4c07-a077-ceed404af705',
-                caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
-                taxpayerName: 'Crest Textiles SC',
-                taxpayerId: '1000080599',
-                sector: 'Textiles',
-                auditType: 'TRANSFER_PRICING',
-                riskLevel: 'HIGH',
-                riskScore: 99,
-                estimatedRevenue: 1468782000,
-                planYear: 2026,
-                status: 'IN_PROGRESS',
-                frontendStatus: 'IN_PROGRESS'
-              };
-              setTpWorkspacePhase('WORKING_HYPOTHESIS');
-              setTpWorkspaceCase(tpCase);
+              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0] || null;
+              if (tpCase) {
+                setTpWorkspacePhase('WORKING_HYPOTHESIS');
+                setTpWorkspaceCase(tpCase);
+              }
             }}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-xs transition cursor-pointer"
           >

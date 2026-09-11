@@ -5,11 +5,11 @@
  * Step 2: Plan Basic Info (name, year, description, strategy)
  * Step 3: Case Distribution (editable table, pre-filled from risk data)
  */
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { Activity, ArrowRight, BarChart2, CheckCircle, Shield, Clock } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Activity, ArrowRight, BarChart2, CheckCircle, Shield, Clock, RefreshCw } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Modal, Input, Textarea, Button, Alert, Select } from '../../../../components/ui/index.jsx';
+import { Modal, Input, Textarea, Button, Alert, Select, Badge } from '../../../../components/ui/index.jsx';
 import { EditableDistributionTable } from '../shared/DistributionTable.jsx';
 import { REGIONS, AUDIT_TYPES } from '../../data/constants.js';
 import RiskAnalysisDashboard from './RiskAnalysisDashboard.jsx';
@@ -37,6 +37,7 @@ export default function CreatePlanModal({ open, onClose }) {
   const { planDefaults, source } = useRiskEngine();
 
   const [planningConfig, setPlanningConfig] = useState(DEFAULT_PLANNING_CONFIG);
+  const rawDefaultsRef = useRef(null);
 
   useEffect(() => {
     async function loadConfig() {
@@ -75,7 +76,7 @@ export default function CreatePlanModal({ open, onClose }) {
   const [form, setForm] = useState({
     name: '',
     year: getNextAvailableYear(),
-    targetPlanCases: 3500, // Scaled target size for quality-focused testing (3000 - 5000)
+    targetPlanCases: 1000,
     description: '',
     strategy: '',
     riskBased: false,
@@ -114,8 +115,48 @@ export default function CreatePlanModal({ open, onClose }) {
     return calculateCapacityMetrics(planningConfig);
   }, [planningConfig]);
 
-  const applyDefaults = useCallback((defaults, targetSize = 3500) => {
+  const scaleDistributionToTarget = useCallback((targetSize) => {
+    const baseSource = rawDefaultsRef.current || distribution;
+    let baseSum = 0;
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        baseSum += (baseSource[r.id]?.[a.id] || 0);
+      });
+    });
+
+    if (baseSum === 0) return;
+
+    const scaleFactor = targetSize / baseSum;
+    const scaled = buildEmptyDistribution(activeRegions, activeAuditTypes);
+    let scaledTotal = 0;
+    let maxCell = { regionId: activeRegions[0]?.id, auditTypeId: activeAuditTypes[0]?.id, val: -1 };
+
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        const rawVal = baseSource[r.id]?.[a.id] || 0;
+        const computed = Math.round(rawVal * scaleFactor);
+        scaled[r.id][a.id] = computed;
+        scaledTotal += computed;
+        if (computed > maxCell.val) {
+          maxCell = { regionId: r.id, auditTypeId: a.id, val: computed };
+        }
+      });
+    });
+
+    // Adjust any rounding diff on the largest cell so grand total matches EXACTLY targetSize
+    const diff = targetSize - scaledTotal;
+    if (diff !== 0 && maxCell.regionId && maxCell.auditTypeId) {
+      scaled[maxCell.regionId][maxCell.auditTypeId] = Math.max(0, scaled[maxCell.regionId][maxCell.auditTypeId] + diff);
+    }
+
+    setDistribution(scaled);
+    setUsedDefaults(true);
+  }, [activeRegions, activeAuditTypes, distribution]);
+
+  const applyDefaults = useCallback((defaults, targetSize) => {
     if (!defaults) return;
+    rawDefaultsRef.current = defaults;
+    const target = targetSize || form.targetPlanCases || 1000;
     
     // Calculate sum of raw defaults
     let rawSum = 0;
@@ -125,20 +166,35 @@ export default function CreatePlanModal({ open, onClose }) {
       });
     });
 
-    const scaleFactor = rawSum > 0 ? (targetSize / rawSum) : 1;
+    const scaleFactor = rawSum > 0 ? (target / rawSum) : 1;
 
     // Merge defaults into current distribution with scaling factor
     const merged = buildEmptyDistribution(activeRegions, activeAuditTypes);
+    let mergedTotal = 0;
+    let maxCell = { regionId: activeRegions[0]?.id, auditTypeId: activeAuditTypes[0]?.id, val: -1 };
+
     activeRegions.forEach(r => {
       activeAuditTypes.forEach(a => {
         const rawVal = defaults[r.id]?.[a.id] ?? 0;
-        merged[r.id][a.id] = Math.round(rawVal * scaleFactor);
+        const computed = Math.round(rawVal * scaleFactor);
+        merged[r.id][a.id] = computed;
+        mergedTotal += computed;
+        if (computed > maxCell.val) {
+          maxCell = { regionId: r.id, auditTypeId: a.id, val: computed };
+        }
       });
     });
+
+    // Exact adjustment
+    const diff = target - mergedTotal;
+    if (diff !== 0 && maxCell.regionId && maxCell.auditTypeId) {
+      merged[maxCell.regionId][maxCell.auditTypeId] = Math.max(0, merged[maxCell.regionId][maxCell.auditTypeId] + diff);
+    }
+
     setDistribution(merged);
     setUsedDefaults(true);
     setStep(2);
-  }, [activeRegions, activeAuditTypes]);
+  }, [activeRegions, activeAuditTypes, form.targetPlanCases]);
 
   const handleCreate = async () => {
     console.log('📝 Handling plan creation...');
@@ -240,6 +296,9 @@ export default function CreatePlanModal({ open, onClose }) {
                 <Button onClick={() => {
                   if (!form.name.trim()) { setError('Plan name is required'); return; }
                   setError('');
+                  if (form.targetPlanCases > 0) {
+                    scaleDistributionToTarget(form.targetPlanCases);
+                  }
                   setStep(3);
                 }}>Next: Distribution →</Button>
               </>
@@ -360,6 +419,14 @@ export default function CreatePlanModal({ open, onClose }) {
               {usedDefaults && (
                 <Badge color="green" dot>Risk-based defaults</Badge>
               )}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={RefreshCw}
+                onClick={() => scaleDistributionToTarget(form.targetPlanCases)}
+              >
+                Scale to Target ({form.targetPlanCases})
+              </Button>
               <div className="text-sm font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-900">
                 Total: {totalCases.toLocaleString()} cases
               </div>
@@ -400,20 +467,5 @@ export default function CreatePlanModal({ open, onClose }) {
         </div>
       )}
     </Modal>
-  );
-}
-
-// Re-export Badge since we use it inline
-function Badge({ color = 'gray', dot, children }) {
-  const colors = {
-    green: 'bg-green-100 text-green-700',
-    blue: 'bg-blue-100 text-blue-700',
-    gray: 'bg-gray-100 text-gray-600',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[color] || colors.gray}`}>
-      {dot && <span className={`w-1.5 h-1.5 rounded-full ${color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />}
-      {children}
-    </span>
   );
 }

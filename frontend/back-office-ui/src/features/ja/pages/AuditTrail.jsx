@@ -42,8 +42,8 @@ const ACTION_LABELS = {
 };
 
 export default function AuditTrail() {
-  const { authContext } = useAuth();
-  const taxCenter = authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
+  const { user, authContext } = useAuth();
+  const taxCenter = user?.taxCenter || authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
   const [viewMode, setViewMode] = useState('global'); // 'global' | 'case'
   const [caseId, setCaseId] = useState('');
   const [actionFilter, setActionFilter] = useState('All');

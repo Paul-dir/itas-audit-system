@@ -3,7 +3,7 @@
  * Manages dashboard metrics state
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { committeeAPI } from '../services/api';
 
 export function useDashboard(taxCenter) {
@@ -11,11 +11,7 @@ export function useDashboard(taxCenter) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchMetrics();
-  }, [taxCenter]);
-
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -27,7 +23,11 @@ export function useDashboard(taxCenter) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [taxCenter]);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   return {
     metrics,

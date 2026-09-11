@@ -1,5 +1,6 @@
 package mor.itas.persistence.jpa.entity.ap;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import mor.itas.persistence.jpa.entity.tp.*;
@@ -142,38 +143,47 @@ public class ApAuditCaseEntity {
     private OffsetDateTime updatedAt;
 
     // ── TP-Specific Child Entities (Changed to OneToMany to avoid N+1 issue) ──
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpRiskAssessmentEntity> tpRiskAssessments = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpWorkingHypothesisEntity> tpWorkingHypotheses = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditPlanEntity> tpAuditPlans = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpPlanningMeetingEntity> tpPlanningMeetings = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpFieldWorkDataEntity> tpFieldWorkDatas = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAnalysisDataEntity> tpAnalysisDatas = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditReportEntity> tpAuditReports = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpAuditNoticeEntity> tpAuditNotices = new java.util.ArrayList<>();
 
+    @JsonIgnore
     @Builder.Default
     @OneToMany(mappedBy = "auditCase", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private java.util.List<TpObjectionEntity> tpObjections = new java.util.ArrayList<>();

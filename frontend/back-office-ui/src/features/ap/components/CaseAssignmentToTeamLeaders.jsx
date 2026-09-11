@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertCircle, CheckCircle, Users, Send, Filter, Download, Loader, ShieldCheck, MapPin, Briefcase, Calendar } from 'lucide-react';
 import { Card, Button, Modal, Badge, Alert, Input, Select } from '../../../components/ui/index.jsx';
+import CaseDetailModal from '../pages/shared/CaseDetailModal.jsx';
 
 /**
  * Normalizes Tax Center code to canonical identifier (e.g. TC-AA-01 <-> addis_ababa-tc1)
@@ -115,6 +116,7 @@ export default function CaseAssignmentToTeamLeaders({ committee, auditType, taxC
   const [selectedTeamLeader, setSelectedTeamLeader] = useState('');
   const [assignModal, setAssignModal] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [viewingCase, setViewingCase] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   // Extract home tax center from prop or committee actor ID (e.g. u-com-addis_ababa-tc1-tp -> addis_ababa-tc1)
@@ -920,8 +922,18 @@ export default function CaseAssignmentToTeamLeaders({ committee, auditType, taxC
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName || c.taxpayerId}</p>
-                          <p className="text-xs text-gray-500">{c.sector || 'Commercial'} • TIN: {c.taxpayerId}</p>
+                          <button
+                            onClick={() => setViewingCase(c)}
+                            className="text-left group cursor-pointer focus:outline-none"
+                            title="View authentic taxpayer profile and filing history"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:underline">
+                              {c.taxpayerName || c.taxpayerId}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {c.sector || 'Commercial'} • TIN: <span className="font-mono text-blue-600 dark:text-blue-400 font-semibold">{c.taxpayerId}</span>
+                            </p>
+                          </button>
                         </td>
                         <td className="px-4 py-3 text-xs font-mono text-gray-600 dark:text-slate-300">
                           <Badge color="slate" size="xs" className="font-mono font-bold">
@@ -961,17 +973,27 @@ export default function CaseAssignmentToTeamLeaders({ committee, auditType, taxC
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button
-                            size="xs"
-                            variant="secondary"
-                            onClick={() => {
-                              setSelectedCases(new Set([c.id]));
-                              setSelectedTeamLeader('');
-                              setAssignModal(true);
-                            }}
-                          >
-                            Assign
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => setViewingCase(c)}
+                              title="View authentic taxpayer dossier & 16 data tabs"
+                            >
+                              Details
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedCases(new Set([c.id]));
+                                setSelectedTeamLeader('');
+                                setAssignModal(true);
+                              }}
+                            >
+                              Assign
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1155,6 +1177,14 @@ export default function CaseAssignmentToTeamLeaders({ committee, auditType, taxC
             )}
           </div>
         </Modal>
+      )}
+
+      {/* Authentic Taxpayer Dossier Modal */}
+      {viewingCase && (
+        <CaseDetailModal
+          caseData={viewingCase}
+          onClose={() => setViewingCase(null)}
+        />
       )}
     </div>
   );

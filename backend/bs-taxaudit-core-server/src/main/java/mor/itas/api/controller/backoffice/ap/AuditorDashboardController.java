@@ -30,6 +30,7 @@ public class AuditorDashboardController {
     private final AuditFindingRepository findingRepository;
     private final AuditPlanRecordRepository planRepository;
     private final DocumentRequestRecordRepository docRequestRepository;
+    private final mor.itas.persistence.jpa.repository.ap.UserJpaRepository userJpaRepository;
 
     /**
      * Get auditor dashboard with metrics and case summaries
@@ -40,7 +41,13 @@ public class AuditorDashboardController {
             @RequestParam String auditorId) {
 
         // Fetch all cases assigned to this auditor
-        List<ApAuditCaseEntity> allCases = caseRepository.findByAssignedAuditorId(auditorId);
+        List<ApAuditCaseEntity> allCases = new ArrayList<>(caseRepository.findByAssignedAuditorId(auditorId));
+        if (allCases.isEmpty() && auditorId != null && !auditorId.isBlank()) {
+            String altId = resolveAltAuditorId(auditorId);
+            if (altId != null && !altId.equalsIgnoreCase(auditorId)) {
+                allCases.addAll(caseRepository.findByAssignedAuditorId(altId));
+            }
+        }
 
         // Compute metrics
         long totalAssigned = allCases.size();
@@ -181,5 +188,22 @@ public class AuditorDashboardController {
         OffsetDateTime dueDate = entity.getStartedAt().plusDays(30);
         long days = java.time.temporal.ChronoUnit.DAYS.between(OffsetDateTime.now(), dueDate);
         return (int) Math.max(0, days);
+    }
+
+    private String resolveAltAuditorId(String id) {
+        if (id == null || id.isBlank()) return null;
+        try {
+            if (userJpaRepository != null) {
+                try {
+                    UUID uId = UUID.fromString(id.trim());
+                    Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> opt = userJpaRepository.findById(uId);
+                    if (opt.isPresent()) return opt.get().getUsername();
+                } catch (IllegalArgumentException ignored) {}
+
+                Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> opt = userJpaRepository.findByUsername(id.trim());
+                if (opt.isPresent()) return opt.get().getUserId().toString();
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

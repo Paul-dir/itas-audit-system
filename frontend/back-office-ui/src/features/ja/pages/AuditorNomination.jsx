@@ -28,8 +28,47 @@ const SENIORITY_OPTIONS = ['All', 'JUNIOR', 'MID_LEVEL', 'SENIOR', 'PRINCIPAL'];
 export default function TeamFormation() {
   /* ── Hook for fetching auditor & team leader pools ─────────────── */
   const {
-    auditors, teamLeaders, loading, error, search,
+    auditors, teamLeaders, loading, error, search, formedTeams, fetchTeams, fetchTeamLeaders,
   } = useAuditors(''); // empty caseId — we only use the pool
+
+  /* ── Formed Team Member IDs (already in active teams) ─────────── */
+  /* ── Formed Team Member IDs (already in active teams) ─────────── */
+  const formedLeaderIds = new Set();
+  const formedAuditorIds = new Set();
+  (formedTeams || []).forEach(team => {
+    if (team.teamLeaderId) {
+      formedLeaderIds.add(String(team.teamLeaderId).toLowerCase().trim());
+    }
+    if (team.teamLeaderName) {
+      formedLeaderIds.add(String(team.teamLeaderName).toLowerCase().trim());
+    }
+    let aids = team.auditorIds;
+    if (typeof aids === 'string') {
+      try {
+        aids = JSON.parse(aids);
+      } catch {
+        aids = aids.replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+      }
+    }
+    if (Array.isArray(aids)) {
+      aids.forEach(id => {
+        if (id) formedAuditorIds.add(String(id).toLowerCase().trim());
+      });
+    }
+    let anames = team.auditorNames;
+    if (typeof anames === 'string') {
+      try {
+        anames = JSON.parse(anames);
+      } catch {
+        anames = anames.replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+      }
+    }
+    if (Array.isArray(anames)) {
+      anames.forEach(name => {
+        if (name) formedAuditorIds.add(String(name).toLowerCase().trim());
+      });
+    }
+  });
 
   /* ── Local state for team being built ──────────────────────────── */
   const [teamAuditors, setTeamAuditors] = useState([]);      // [{id, name, email, expertise, seniority, taxCenter, reason}]
@@ -53,8 +92,11 @@ export default function TeamFormation() {
   const [showFormTeamConfirm, setShowFormTeamConfirm] = useState(false);
   const [apiError, setApiError] = useState('');
 
-  /* ── Filtered pools ──────────────────────────────────────────── */
+  /* ── Filtered pools (excluding already formed members) ────────── */
   const filteredAuditors = auditors.filter(a => {
+    const aid = String(a.id || a.auditorId || '').toLowerCase().trim();
+    const aname = String(a.name || '').toLowerCase().trim();
+    if (formedAuditorIds.has(aid) || (aname && formedAuditorIds.has(aname))) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (a.name || '').toLowerCase().includes(q) ||
@@ -63,6 +105,10 @@ export default function TeamFormation() {
   });
 
   const filteredTeamLeaders = teamLeaders.filter(tl => {
+    const tlid = String(tl.id || '').toLowerCase().trim();
+    const tlname = String(tl.name || '').toLowerCase().trim();
+    const tluname = String(tl.username || '').toLowerCase().trim();
+    if (formedLeaderIds.has(tlid) || (tlname && formedLeaderIds.has(tlname)) || (tluname && formedLeaderIds.has(tluname))) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (tl.name || '').toLowerCase().includes(q) ||
@@ -154,9 +200,20 @@ export default function TeamFormation() {
         capacity: teamCapacity,
         description: teamDescription || `Team led by ${teamLeader.name}`,
       });
-      setFormedTeam(result);
+      setFormedTeam({
+        ...result,
+        teamLeaderName: teamLeader.name,
+        auditorCount: teamAuditors.length,
+      });
       setTeamFormed(true);
       setShowFormTeamConfirm(false);
+      // Clear current selection so Chair can immediately form the next team
+      setTeamAuditors([]);
+      setTeamLeader(null);
+      // Refresh teams and pools so formed leader and auditors immediately disappear!
+      await fetchTeams();
+      await search({});
+      await fetchTeamLeaders();
     } catch (err) {
       setApiError(err.message || 'Failed to form team');
     }
@@ -234,10 +291,58 @@ export default function TeamFormation() {
             <div>
               <h3 className="text-lg font-bold text-green-900 dark:text-green-100">Team Formed Successfully!</h3>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Team <span className="font-semibold">{formedTeam.teamLeaderName}</span> created with {teamAuditors.length} auditor(s).
-                Capacity: {formedTeam.capacity || teamCapacity} cases.
+                Team <span className="font-semibold">{formedTeam.teamLeaderName}</span> created with {formedTeam.auditorCount || 5} auditor(s).
+                Capacity: {formedTeam.capacity || teamCapacity} cases. The selected members have been assigned and removed from the candidate pool.
               </p>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Formed Teams Overview */}
+      {formedTeams && formedTeams.length > 0 && (
+        <Card className="p-5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="font-bold text-gray-900 dark:text-white text-base">
+                Formed Audit Teams ({formedTeams.length})
+              </h3>
+            </div>
+            <span className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100 dark:bg-emerald-900/50 px-2.5 py-1 rounded-full">
+              Active in Tax Center
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {formedTeams.map((t, idx) => {
+              let names = t.auditorNames;
+              if (typeof names === 'string') {
+                try { names = JSON.parse(names); } catch { names = names.replace(/[\[\]"]/g, '').split(',').map(s => s.trim()); }
+              }
+              return (
+                <div key={t.teamId || idx} className="p-3.5 bg-white dark:bg-gray-800 rounded-lg border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+                      <Crown size={15} className="text-amber-500" />
+                      {t.teamLeaderName || 'Team Leader'}
+                    </span>
+                    <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-medium">
+                      Capacity: {t.capacity} cases
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 font-medium">
+                    Assigned Auditors ({Array.isArray(names) ? names.length : 0}):
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.isArray(names) && names.map((name, i) => (
+                      <span key={i} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}

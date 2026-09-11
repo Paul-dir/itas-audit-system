@@ -80,9 +80,101 @@ public class MockUserManagementAdapter implements UserManagementPort {
         addUser("u-sm-02", "u-sm-02", "biruk.assefa@mor.gov.et",
                 "Senior Manager 2", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
 
+        // ── Federal LTO-1 Joint Audit Personnel ──
+        addUser("20000000-0000-0000-0099-000000000001", "fed.ja.chair", "fed.ja.chair@mor.gov.et",
+                "Dr. Solomon Desta", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("20000000-0000-0000-0099-000000000002", "fed.ja.member", "fed.ja.member@mor.gov.et",
+                "Eleni Tesfaye", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("10000000-0000-0000-0099-000000000001", "fed.ja.tl", "fed.ja.tl@mor.gov.et",
+                "Addis Zewde", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("10000000-0000-0000-0099-000000000002", "fed.ja.tl2", "fed.ja.tl2@mor.gov.et",
+                "Nardos Negash", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000001", "fed.ja.auditor1", "fed.ja.auditor1@mor.gov.et",
+                "Fikremariam Tilahun", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000002", "fed.ja.auditor2", "fed.ja.auditor2@mor.gov.et",
+                "Saron Assefa", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000003", "fed.ja.auditor3", "fed.ja.auditor3@mor.gov.et",
+                "Bikila Worku", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000004", "fed.ja.auditor4", "fed.ja.auditor4@mor.gov.et",
+                "Michael Zewde", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000005", "fed.ja.auditor5", "fed.ja.auditor5@mor.gov.et",
+                "Saron Negash", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000006", "fed.ja.auditor6", "fed.ja.auditor6@mor.gov.et",
+                "Almaw Tesfa", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000007", "fed.ja.auditor7", "fed.ja.auditor7@mor.gov.et",
+                "Tigist Alemu", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000008", "fed.ja.auditor8", "fed.ja.auditor8@mor.gov.et",
+                "Ephrem Bekele", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000009", "fed.ja.auditor9", "fed.ja.auditor9@mor.gov.et",
+                "Meron Kebede", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+        addUser("a0000001-0000-0000-0099-000000000010", "fed.ja.auditor10", "fed.ja.auditor10@mor.gov.et",
+                "Bereket Mekonnen", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+
+        // ── Federal LTO-2 Joint Audit Personnel ──
+        addUser("20000000-0000-0000-0098-000000000001", "fed2.ja.chair", "fed2.ja.chair@mor.gov.et",
+                "Dr. Worku Alemayehu", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("20000000-0000-0000-0098-000000000002", "fed2.ja.member", "fed2.ja.member@mor.gov.et",
+                "Tigist Hailu", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("10000000-0000-0000-0098-000000000001", "fed2.ja.tl", "fed2.ja.tl@mor.gov.et",
+                "Berhanu Bekele", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("10000000-0000-0000-0098-000000000002", "fed2.ja.tl2", "fed2.ja.tl2@mor.gov.et",
+                "Eleni Banti", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000001", "fed2.ja.auditor1", "fed2.ja.auditor1@mor.gov.et",
+                "Dawit Mengistu", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000002", "fed2.ja.auditor2", "fed2.ja.auditor2@mor.gov.et",
+                "Eden Tadesse", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000003", "fed2.ja.auditor3", "fed2.ja.auditor3@mor.gov.et",
+                "Henok Girma", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000004", "fed2.ja.auditor4", "fed2.ja.auditor4@mor.gov.et",
+                "Meron Kebede", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000005", "fed2.ja.auditor5", "fed2.ja.auditor5@mor.gov.et",
+                "Natnael Assefa", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000006", "fed2.ja.auditor6", "fed2.ja.auditor6@mor.gov.et",
+                "Fikadu Wolde", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000007", "fed2.ja.auditor7", "fed2.ja.auditor7@mor.gov.et",
+                "Genet Alemu", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000008", "fed2.ja.auditor8", "fed2.ja.auditor8@mor.gov.et",
+                "Habtamu Desta", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000009", "fed2.ja.auditor9", "fed2.ja.auditor9@mor.gov.et",
+                "Selam Haile", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+        addUser("a0000001-0000-0000-0098-000000000010", "fed2.ja.auditor10", "fed2.ja.auditor10@mor.gov.et",
+                "Getnet Alemayehu", "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "federal-lto2");
+
+        // ── Regional Committee Chairs (Joint & TP) ──
+        addUser("20000000-0000-0000-0001-000000000001", "aa1.chair", "aa1.chair@mor.gov.et",
+                "Dr. Abebe Kebede", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        addUser("20000000-0000-0000-0001-000000000002", "aa1.member", "aa1.member@mor.gov.et",
+                "Fatuma Ahmed", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        addUser("10000000-0000-0000-0001-000000000001", "aa1.tl", "aa1.tl@mor.gov.et",
+                "Dawit Tadesse", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        addUser("10000000-0000-0000-0001-000000000002", "aa1.tl2", "aa1.tl2@mor.gov.et",
+                "Robel Girma", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        for (int i = 1; i <= 10; i++) {
+            String audId = String.format("a0000001-0000-0000-0001-0000000000%02d", i);
+            String un = "aa1.auditor" + i;
+            addUser(audId, un, un + "@mor.gov.et",
+                    "AA1 Auditor " + i, "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        }
+        addUser("u-com-aa-tpchair", "u-com-aa-tpchair", "aa.tpchair@mor.gov.et",
+                "TP Committee Chair AA", "COMMITTEE_CHAIR", "TRANSFER_PRICING", "TAX_CENTER", "addis_ababa-tc1");
+        addUser("20000000-0000-0000-0004-000000000001", "or1.chair", "or1.chair@mor.gov.et",
+                "Dr. Chaltu Negash", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "oromia-tc1");
+        addUser("20000000-0000-0000-0004-000000000002", "or1.member", "or1.member@mor.gov.et",
+                "Diriba Lema", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "oromia-tc1");
+        addUser("20000000-0000-0000-0007-000000000001", "am1.chair", "am1.chair@mor.gov.et",
+                "Dr. Tadesse Kebede", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "amhara-tc1");
+        addUser("20000000-0000-0000-0007-000000000002", "am1.member", "am1.member@mor.gov.et",
+                "Almaz Kassa", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "amhara-tc1");
+        addUser("20000000-0000-0000-0010-000000000001", "dd1.chair", "dd1.chair@mor.gov.et",
+                "Dr. Yonas Mengistu", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "dire_dawa-tc1");
+        addUser("20000000-0000-0000-0013-000000000001", "sn1.chair", "sn1.chair@mor.gov.et",
+                "Dr. Tekle Lemma", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "snnpr-tc1");
+        addUser("20000000-0000-0000-0016-000000000001", "so1.chair", "so1.chair@mor.gov.et",
+                "Dr. Ibrahim Hassan", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "somali-tc1");
+
         // ── JA Committee (Federal) ──
         addUser("u-com-fed-chair", "u-com-fed-chair", "fed.committee1@mor.gov.et",
-                "Federal Joint Committee Chair", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
+                "Federal Joint Committee Chair", "COMMITTEE_CHAIR", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-mem1", "u-com-fed-mem1", "fed.committee2@mor.gov.et",
                 "Federal Joint Committee Member 1", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-mem2", "u-com-fed-mem2", "fed.committee3@mor.gov.et",
@@ -90,7 +182,7 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
         // ── TP Committee (Federal) ──
         addUser("u-com-fed-tpchair", "u-com-fed-tpchair", "fed.tpcommittee1@mor.gov.et",
-                "Federal TP Committee Chair", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
+                "Federal TP Committee Chair", "COMMITTEE_CHAIR", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-tpmem1", "u-com-fed-tpmem1", "fed.tpcommittee2@mor.gov.et",
                 "Federal TP Committee Member 1", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-tpmem2", "u-com-fed-tpmem2", "fed.tpcommittee3@mor.gov.et",
@@ -98,19 +190,19 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
         // ── Desk Audit Committee (Federal) ──
         addUser("u-com-fed-deskchair", "u-com-fed-deskchair", "fed.deskcommittee@mor.gov.et",
-                "Federal Desk Audit Committee Chair", "COMMITTEE_MEMBER", "DESK_AUDIT", "NATIONAL", "FEDERAL");
+                "Federal Desk Audit Committee Chair", "COMMITTEE_CHAIR", "DESK_AUDIT", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-deskmem1", "u-com-fed-deskmem1", "fed.deskmem1@mor.gov.et",
                 "Federal Desk Audit Committee Member 1", "COMMITTEE_MEMBER", "DESK_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── Comprehensive Audit Committee (Federal) ──
         addUser("u-com-fed-compchair", "u-com-fed-compchair", "fed.compcommittee@mor.gov.et",
-                "Federal Comprehensive Audit Committee Chair", "COMMITTEE_MEMBER", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
+                "Federal Comprehensive Audit Committee Chair", "COMMITTEE_CHAIR", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-compmem1", "u-com-fed-compmem1", "fed.compmem1@mor.gov.et",
                 "Federal Comprehensive Audit Committee Member 1", "COMMITTEE_MEMBER", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── Issue Audit Committee (Federal) ──
         addUser("u-com-fed-issuechair", "u-com-fed-issuechair", "fed.issuecommittee@mor.gov.et",
-                "Federal Issue Audit Committee Chair", "COMMITTEE_MEMBER", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
+                "Federal Issue Audit Committee Chair", "COMMITTEE_CHAIR", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
         addUser("u-com-fed-issuemem1", "u-com-fed-issuemem1", "fed.issuemem1@mor.gov.et",
                 "Federal Issue Audit Committee Member 1", "COMMITTEE_MEMBER", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
 
@@ -187,10 +279,14 @@ public class MockUserManagementAdapter implements UserManagementPort {
             addUser(tcmId, tcmId, tcmId + "@mor.gov.et",
                     "Tax Center Manager " + tcShort, "TAX_CENTER_MANAGER", null, "TAX_CENTER", tcId);
 
-            // JA Committee at this TC
-            String jaChairId = "u-com-" + tcId + "-ja";
-            addUser(jaChairId, jaChairId, jaChairId + "@mor.gov.et",
-                    "Joint Committee Chair (" + tcShort + ")", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", tcId);
+            // JA Committee at this TC (only if not already registered above)
+            if (!"federal-lto1".equals(tcId) && !"federal-lto2".equals(tcId) && !"addis_ababa-tc1".equals(tcId)
+                && !"oromia-tc1".equals(tcId) && !"amhara-tc1".equals(tcId) && !"dire_dawa-tc1".equals(tcId)
+                && !"snnpr-tc1".equals(tcId) && !"somali-tc1".equals(tcId)) {
+                String jaChairId = "u-com-" + tcId + "-ja";
+                addUser(jaChairId, jaChairId, jaChairId + "@mor.gov.et",
+                        "Joint Committee Chair (" + tcShort + ")", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", tcId);
+            }
             // TP Committee at this TC
             String tpChairId = "u-com-" + tcId + "-tp";
             addUser(tpChairId, tpChairId, tpChairId + "@mor.gov.et",
@@ -200,7 +296,28 @@ public class MockUserManagementAdapter implements UserManagementPort {
                 String auditType = atDef[0];
                 String atShort = atDef[1];
 
-                // 2 Team Leaders per audit type
+                if ("JOINT_AUDIT".equals(auditType)) {
+                    // If this tax center already has dedicated Joint Audit TLs and auditors, do not add duplicates!
+                    if ("federal-lto1".equals(tcId) || "federal-lto2".equals(tcId) || "addis_ababa-tc1".equals(tcId)) {
+                        continue;
+                    }
+                    // For all other tax centers, strictly 2 Joint TLs and 10 Joint Auditors
+                    for (int tl = 1; tl <= 2; tl++) {
+                        String tlId = "u-tl-" + tcId + "-joint-" + tl;
+                        String tlTitle = "Joint TL-" + tl + " (" + tcShort + ")";
+                        addUser(tlId, tlId, tlId + "@mor.gov.et",
+                                tlTitle, "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", tcId);
+                    }
+                    for (int a = 1; a <= 10; a++) {
+                        String audId = "u-aud-" + tcId + "-joint-" + a;
+                        String audTitle = "Joint Aud-" + a + " (" + tcShort + ")";
+                        addUser(audId, audId, audId + "@mor.gov.et",
+                                audTitle, "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", tcId);
+                    }
+                    continue;
+                }
+
+                // 2 Team Leaders per audit type (for non-joint audit types)
                 for (int tl = 1; tl <= 2; tl++) {
                     String tlId = "u-tl-" + tcId + "-" + atShort.toLowerCase() + "-" + tl;
                     String tlTitle = atShort + " TL-" + tl + " (" + tcShort + ")";

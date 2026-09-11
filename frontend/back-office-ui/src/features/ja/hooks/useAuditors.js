@@ -12,31 +12,63 @@ import { useAuth } from '../../../context/AuthContext';
  * Used as fallback when the backend is unreachable.
  */
 const DB_AUDITORS = [
-  { id: 'a0000001-0000-0000-0000-000000000001', name: 'Abebe Kebede',      email: 'abebe.kebede@mor.gov.et',       expertise: 'Corporate Tax',       seniority: 'SENIOR',    yearsOfExperience: 12, taxCenter: 'addis_ababa-tc1' },
-  { id: 'a0000001-0000-0000-0000-000000000002', name: 'Fatuma Ahmed',      email: 'fatuma.ahmed@mor.gov.et',        expertise: 'Transfer Pricing',    seniority: 'PRINCIPAL', yearsOfExperience: 15, taxCenter: 'addis_ababa-tc1' },
-  { id: 'a0000001-0000-0000-0000-000000000003', name: 'Dawit Tadesse',     email: 'dawit.tadesse@mor.gov.et',       expertise: 'International Tax',   seniority: 'SENIOR',    yearsOfExperience: 10, taxCenter: 'addis_ababa-tc2' },
-  { id: 'a0000001-0000-0000-0000-000000000004', name: 'Sara Mohammed',     email: 'sara.mohammed@mor.gov.et',       expertise: 'VAT Compliance',      seniority: 'MID_LEVEL', yearsOfExperience: 7,  taxCenter: 'addis_ababa-tc2' },
-  { id: 'a0000001-0000-0000-0000-000000000005', name: 'Yonas Berhanu',     email: 'yonas.berhanu@mor.gov.et',       expertise: 'Corporate Tax',       seniority: 'JUNIOR',    yearsOfExperience: 3,  taxCenter: 'addis_ababa-tc3' },
-  { id: 'a0000001-0000-0000-0000-000000000006', name: 'Hana Girma',        email: 'hana.girma@mor.gov.et',          expertise: 'Audit Investigation', seniority: 'SENIOR',    yearsOfExperience: 11, taxCenter: 'addis_ababa-tc3' },
-  { id: 'a0000001-0000-0000-0000-000000000007', name: 'Mulugeta Alemayehu',email: 'mulugeta.alemayehu@mor.gov.et',  expertise: 'Transfer Pricing',    seniority: 'MID_LEVEL', yearsOfExperience: 6,  taxCenter: 'oromia-tc1' },
-  { id: 'a0000001-0000-0000-0000-000000000008', name: 'Tigist Haile',      email: 'tigist.haile@mor.gov.et',        expertise: 'International Tax',   seniority: 'JUNIOR',    yearsOfExperience: 2,  taxCenter: 'oromia-tc1' },
+  // Federal LTO-1 (10 auditors)
+  { id: 'a0000001-0000-0000-0099-000000000001', name: 'Fikremariam Tilahun', email: 'fed.ja.auditor1@mor.gov.et',  expertise: 'Corporate Tax',       seniority: 'SENIOR',    yearsOfExperience: 8,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000002', name: 'Saron Assefa',        email: 'fed.ja.auditor2@mor.gov.et',  expertise: 'Transfer Pricing',    seniority: 'PRINCIPAL', yearsOfExperience: 12, taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000003', name: 'Bikila Worku',        email: 'fed.ja.auditor3@mor.gov.et',  expertise: 'VAT Compliance',      seniority: 'SENIOR',    yearsOfExperience: 9,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000004', name: 'Michael Zewde',       email: 'fed.ja.auditor4@mor.gov.et',  expertise: 'International Tax',   seniority: 'MID_LEVEL', yearsOfExperience: 5,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000005', name: 'Saron Negash',        email: 'fed.ja.auditor5@mor.gov.et',  expertise: 'Audit Investigation', seniority: 'SENIOR',    yearsOfExperience: 7,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000006', name: 'Almaw Tesfa',         email: 'fed.ja.auditor6@mor.gov.et',  expertise: 'Corporate Tax',       seniority: 'MID_LEVEL', yearsOfExperience: 6,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000007', name: 'Tigist Alemu',        email: 'fed.ja.auditor7@mor.gov.et',  expertise: 'VAT Compliance',      seniority: 'SENIOR',    yearsOfExperience: 8,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000008', name: 'Ephrem Bekele',       email: 'fed.ja.auditor8@mor.gov.et',  expertise: 'International Tax',   seniority: 'MID_LEVEL', yearsOfExperience: 5,  taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000009', name: 'Meron Kebede',        email: 'fed.ja.auditor9@mor.gov.et',  expertise: 'Transfer Pricing',    seniority: 'SENIOR',    yearsOfExperience: 10, taxCenter: 'federal-lto1' },
+  { id: 'a0000001-0000-0000-0099-000000000010', name: 'Bereket Mekonnen',    email: 'fed.ja.auditor10@mor.gov.et', expertise: 'Audit Investigation', seniority: 'PRINCIPAL', yearsOfExperience: 13, taxCenter: 'federal-lto1' },
+
+  // Federal LTO-2 (10 auditors)
+  { id: 'a0000001-0000-0000-0098-000000000001', name: 'Dawit Mengistu',      email: 'fed2.ja.auditor1@mor.gov.et',  expertise: 'Corporate Tax',       seniority: 'SENIOR',    yearsOfExperience: 10, taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000002', name: 'Eden Tadesse',        email: 'fed2.ja.auditor2@mor.gov.et',  expertise: 'Transfer Pricing',    seniority: 'PRINCIPAL', yearsOfExperience: 14, taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000003', name: 'Henok Girma',         email: 'fed2.ja.auditor3@mor.gov.et',  expertise: 'VAT Compliance',      seniority: 'MID_LEVEL', yearsOfExperience: 6,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000004', name: 'Meron Kebede',        email: 'fed2.ja.auditor4@mor.gov.et',  expertise: 'International Tax',   seniority: 'SENIOR',    yearsOfExperience: 9,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000005', name: 'Natnael Assefa',      email: 'fed2.ja.auditor5@mor.gov.et',  expertise: 'Audit Investigation', seniority: 'MID_LEVEL', yearsOfExperience: 5,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000006', name: 'Fikadu Wolde',        email: 'fed2.ja.auditor6@mor.gov.et',  expertise: 'Corporate Tax',       seniority: 'SENIOR',    yearsOfExperience: 8,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000007', name: 'Genet Alemu',         email: 'fed2.ja.auditor7@mor.gov.et',  expertise: 'VAT Compliance',      seniority: 'SENIOR',    yearsOfExperience: 9,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000008', name: 'Habtamu Desta',       email: 'fed2.ja.auditor8@mor.gov.et',  expertise: 'International Tax',   seniority: 'MID_LEVEL', yearsOfExperience: 6,  taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000009', name: 'Selam Haile',         email: 'fed2.ja.auditor9@mor.gov.et',  expertise: 'Transfer Pricing',    seniority: 'SENIOR',    yearsOfExperience: 11, taxCenter: 'federal-lto2' },
+  { id: 'a0000001-0000-0000-0098-000000000010', name: 'Getnet Alemayehu',    email: 'fed2.ja.auditor10@mor.gov.et', expertise: 'Audit Investigation', seniority: 'PRINCIPAL', yearsOfExperience: 12, taxCenter: 'federal-lto2' },
+
+  // Addis Ababa TC-1 (10 auditors)
+  { id: 'a0000001-0000-0000-0001-000000000001', name: 'Sara Mohammed',       email: 'aa1.auditor1@mor.gov.et',     expertise: 'Corporate Tax',       seniority: 'SENIOR',    yearsOfExperience: 11, taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000002', name: 'Yonas Berhanu',       email: 'aa1.auditor2@mor.gov.et',     expertise: 'Transfer Pricing',    seniority: 'PRINCIPAL', yearsOfExperience: 13, taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000003', name: 'Hana Girma',          email: 'aa1.auditor3@mor.gov.et',     expertise: 'VAT Compliance',      seniority: 'SENIOR',    yearsOfExperience: 8,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000004', name: 'Mulugeta Alemayehu',  email: 'aa1.auditor4@mor.gov.et',     expertise: 'International Tax',   seniority: 'MID_LEVEL', yearsOfExperience: 7,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000005', name: 'Tigist Haile',        email: 'aa1.auditor5@mor.gov.et',     expertise: 'Audit Investigation', seniority: 'SENIOR',    yearsOfExperience: 9,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000006', name: 'Chaltu Bekele',       email: 'aa1.auditor6@mor.gov.et',     expertise: 'Corporate Tax',       seniority: 'MID_LEVEL', yearsOfExperience: 6,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000007', name: 'Diriba Lema',         email: 'aa1.auditor7@mor.gov.et',     expertise: 'VAT Compliance',      seniority: 'SENIOR',    yearsOfExperience: 9,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000008', name: 'Fikadu Desta',        email: 'aa1.auditor8@mor.gov.et',     expertise: 'International Tax',   seniority: 'MID_LEVEL', yearsOfExperience: 5,  taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000009', name: 'Gemechu Negash',      email: 'aa1.auditor9@mor.gov.et',     expertise: 'Transfer Pricing',    seniority: 'SENIOR',    yearsOfExperience: 10, taxCenter: 'addis_ababa-tc1' },
+  { id: 'a0000001-0000-0000-0001-000000000010', name: 'Haile Mengistu',      email: 'aa1.auditor10@mor.gov.et',    expertise: 'Audit Investigation', seniority: 'PRINCIPAL', yearsOfExperience: 12, taxCenter: 'addis_ababa-tc1' },
 ];
 
 /**
  * Mock team leaders matching SEED_USERS team_leader entries.
- * Used as fallback when the backend is unreachable.
+ * Exactly 2 Joint Team Leaders per tax center.
  */
 const DB_TEAM_LEADERS = [
-  { id: 'u-tl-aa1a', name: 'Henok Belay',     email: 'henok.belay@mor.gov.et',     auditType: 'desk_audit',  taxCenter: 'addis_ababa-tc1' },
-  { id: 'u-tl-aa1b', name: 'Tigist Alemu',    email: 'tigist.alemu@mor.gov.et',    auditType: 'field_audit', taxCenter: 'addis_ababa-tc3' },
-  { id: 'u-tl-aa2a', name: 'Fikadu Desta',    email: 'fikadu.desta@mor.gov.et',    auditType: 'desk_audit',  taxCenter: 'addis_ababa-tc2' },
-  { id: 'u-tl-or1a', name: 'Lalisa Wakjira',  email: 'lalisa.wakjira@mor.gov.et',  auditType: 'desk_audit',  taxCenter: 'oromia-tc1' },
+  // Federal LTO-1
+  { id: '10000000-0000-0000-0099-000000000001', username: 'fed.ja.tl',  name: 'Addis Zewde',    email: 'fed.ja.tl@mor.gov.et',  auditType: 'joint_audit', taxCenter: 'federal-lto1' },
+  { id: '10000000-0000-0000-0099-000000000002', username: 'fed.ja.tl2', name: 'Nardos Negash',  email: 'fed.ja.tl2@mor.gov.et', auditType: 'joint_audit', taxCenter: 'federal-lto1' },
+  // Federal LTO-2
+  { id: '10000000-0000-0000-0098-000000000001', username: 'fed2.ja.tl',  name: 'Berhanu Bekele', email: 'fed2.ja.tl@mor.gov.et',  auditType: 'joint_audit', taxCenter: 'federal-lto2' },
+  { id: '10000000-0000-0000-0098-000000000002', username: 'fed2.ja.tl2', name: 'Eleni Banti',    email: 'fed2.ja.tl2@mor.gov.et', auditType: 'joint_audit', taxCenter: 'federal-lto2' },
+  // Addis Ababa TC-1
+  { id: '10000000-0000-0000-0001-000000000001', username: 'aa1.tl',      name: 'Dawit Tadesse',  email: 'aa1.tl@mor.gov.et',      auditType: 'joint_audit', taxCenter: 'addis_ababa-tc1' },
+  { id: '10000000-0000-0000-0001-000000000002', username: 'aa1.tl2',     name: 'Robel Girma',    email: 'aa1.tl2@mor.gov.et',     auditType: 'joint_audit', taxCenter: 'addis_ababa-tc1' },
 ];
 
 export function useAuditors(caseId) {
-  const { authContext } = useAuth();
+  const { user, authContext } = useAuth();
   // Committee members are scoped to their tax center
-  const userTaxCenter = authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
+  const userTaxCenter = user?.taxCenter || authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
 
   const [auditors, setAuditors] = useState([]);
   const [teamLeaders, setTeamLeaders] = useState([]);
@@ -67,14 +99,39 @@ export function useAuditors(caseId) {
   // Hardcoded auditor→taxCenter map matching V13 seed data
   // Used as frontend safety net when t_auditor.tax_center is not yet populated
   const AUDITOR_TAX_CENTER_MAP = {
-    'a0000001-0000-0000-0000-000000000001': 'addis_ababa-tc1',
-    'a0000001-0000-0000-0000-000000000002': 'addis_ababa-tc1',
-    'a0000001-0000-0000-0000-000000000003': 'addis_ababa-tc2',
-    'a0000001-0000-0000-0000-000000000004': 'addis_ababa-tc2',
-    'a0000001-0000-0000-0000-000000000005': 'addis_ababa-tc3',
-    'a0000001-0000-0000-0000-000000000006': 'addis_ababa-tc3',
-    'a0000001-0000-0000-0000-000000000007': 'oromia-tc1',
-    'a0000001-0000-0000-0000-000000000008': 'oromia-tc1',
+    // Addis Ababa TC-1 (1..10)
+    'a0000001-0000-0000-0001-000000000001': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000002': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000003': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000004': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000005': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000006': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000007': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000008': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000009': 'addis_ababa-tc1',
+    'a0000001-0000-0000-0001-000000000010': 'addis_ababa-tc1',
+    // LTO-1 (1..10)
+    'a0000001-0000-0000-0099-000000000001': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000002': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000003': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000004': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000005': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000006': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000007': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000008': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000009': 'federal-lto1',
+    'a0000001-0000-0000-0099-000000000010': 'federal-lto1',
+    // LTO-2 (1..10)
+    'a0000001-0000-0000-0098-000000000001': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000002': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000003': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000004': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000005': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000006': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000007': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000008': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000009': 'federal-lto2',
+    'a0000001-0000-0000-0098-000000000010': 'federal-lto2',
   };
 
   /** Enrich and filter auditors by user's tax center on the client side.
@@ -84,6 +141,7 @@ export function useAuditors(caseId) {
     return auditorList
       .map(a => ({
         ...a,
+        id: a.id || a.auditorId,
         // If backend didn't return taxCenter, fill from hardcoded map
         taxCenter: a.taxCenter || AUDITOR_TAX_CENTER_MAP[a.id] || AUDITOR_TAX_CENTER_MAP[a.auditorId] || null,
       }))
@@ -114,6 +172,17 @@ export function useAuditors(caseId) {
       setLoading(false);
     }
   }, [filterMockAuditors, enrichAndFilterAuditors, userTaxCenter]);
+
+  const [formedTeams, setFormedTeams] = useState([]);
+  const fetchTeams = useCallback(async () => {
+    try {
+      const data = await committeeAPI.getTeams();
+      setFormedTeams(Array.isArray(data) ? data.filter(t => t.active !== false) : []);
+    } catch (err) {
+      console.warn('[useAuditors] Could not fetch active teams:', err.message);
+      setFormedTeams([]);
+    }
+  }, []);
 
   const fetchNominations = useCallback(async () => {
     if (!caseId) return;
@@ -150,15 +219,21 @@ export function useAuditors(caseId) {
 
   const fetchTeamLeaders = useCallback(async (filters = {}) => {
     try {
-      // Always pass taxCenter to restrict team leaders to the committee's tax center
-      const data = await committeeAPI.searchTeamLeaders({ ...filters, taxCenter: userTaxCenter });
-      setTeamLeaders(Array.isArray(data) ? data : []);
+      // Strictly query joint audit team leaders in this committee's tax center
+      const data = await committeeAPI.searchTeamLeaders({ auditType: 'JOINT_AUDIT', taxCenter: userTaxCenter, ...filters });
+      const list = Array.isArray(data) ? data : [];
+      // Filter strictly by auditType and tax center
+      const filtered = list.filter(tl => {
+        const at = (tl.auditType || '').toLowerCase().replace(/_/g, '');
+        const matchType = !tl.auditType || at === 'jointaudit';
+        const matchTc = !userTaxCenter || tl.taxCenter === userTaxCenter;
+        return matchType && matchTc;
+      });
+      setTeamLeaders(filtered);
     } catch (err) {
       // Fallback to mock team leaders when backend is unreachable
       console.warn('[useAuditors] Backend unavailable, using mock team leaders:', err.message);
       let result = DB_TEAM_LEADERS;
-      if (filters.auditType) result = result.filter(tl => tl.auditType === filters.auditType);
-      // Filter by user's tax center for mock fallback
       if (userTaxCenter) {
         result = result.filter(tl => tl.taxCenter === userTaxCenter);
       } else if (filters.taxCenter) {
@@ -174,7 +249,8 @@ export function useAuditors(caseId) {
     fetchAuditorNominations();
     search({});
     fetchTeamLeaders();
-  }, [caseId, fetchNominations, fetchTeamLeaderNominations, fetchAuditorNominations, search, fetchTeamLeaders]);
+    fetchTeams();
+  }, [caseId, userTaxCenter]);
 
   const nominate = async (auditorId, reason = '', role = 'AUDITOR') => {
     try {
@@ -252,7 +328,9 @@ export function useAuditors(caseId) {
     nominate,
     removeNomination,
     getProfile,
-    selectTeamLeader,
+    formedTeams,
+    fetchTeams,
+    fetchTeamLeaders,
     refreshNominations: fetchNominations,
     refreshTeamLeaderNominations: fetchTeamLeaderNominations,
     refreshAuditorNominations: fetchAuditorNominations,

@@ -4,11 +4,12 @@
  * All endpoints return { data, error, meta } envelope.
  */
 
-const TAXPAYER_BASE = 'https://project--d0918d51-a625-4432-b108-ecc84cb59ed8.lovable.app';
+const TAXPAYER_BASE = '';
 
 class TaxpayerClient {
   async _request(endpoint, params = {}) {
-    const url = new URL(`${TAXPAYER_BASE}${endpoint}`);
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
+    const url = new URL(`${base}${endpoint}`);
     Object.entries(params).forEach(([k, v]) => v !== undefined && url.searchParams.set(k, v));
     const res = await fetch(url.toString(), {
       headers: { 'Accept': 'application/json' },

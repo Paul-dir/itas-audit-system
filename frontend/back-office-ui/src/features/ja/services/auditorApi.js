@@ -9,16 +9,26 @@ const CASE_API_BASE = `${API_BASE}/cases`;
 const AUDITOR_API_BASE = `${API_BASE}/auditor`;
 
 // Map frontend auditor IDs to backend UUIDs
-const AUDITOR_ID_MAP = {
+export const AUDITOR_ID_MAP = {
   'u-aud-aa1a': 'a0000001-0000-0000-0000-000000000001',
   'u-aud-db02': 'a0000001-0000-0000-0000-000000000002',
   'u-aud-db03': 'a0000001-0000-0000-0000-000000000003',
   'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
   'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
   'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+  'fed.ja.auditor1': 'a0000001-0000-0000-0099-000000000001',
+  'fed.ja.auditor2': 'a0000001-0000-0000-0099-000000000002',
+  'fed.ja.auditor3': 'a0000001-0000-0000-0099-000000000003',
+  'fed.ja.auditor4': 'a0000001-0000-0000-0099-000000000004',
+  'fed.ja.auditor5': 'a0000001-0000-0000-0099-000000000005',
+  'fed2.ja.auditor1': 'a0000001-0000-0000-0098-000000000001',
+  'fed2.ja.auditor2': 'a0000001-0000-0000-0098-000000000002',
+  'fed2.ja.auditor3': 'a0000001-0000-0000-0098-000000000003',
+  'fed2.ja.auditor4': 'a0000001-0000-0000-0098-000000000004',
+  'fed2.ja.auditor5': 'a0000001-0000-0000-0098-000000000005',
 };
 
-function resolveAuditorId(frontendId) {
+export function resolveAuditorId(frontendId) {
   return AUDITOR_ID_MAP[frontendId] || frontendId;
 }
 

@@ -104,22 +104,10 @@ export default function TeamLeaderDashboard({ view }) {
       const nextPhase = PHASE_MAP[view];
       setTpWorkspacePhase(nextPhase);
 
-      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER'));
-      const activeCase = tpCase || {
-        id: '0a4500d1-0842-4c07-a077-ceed404af705',
-        caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
-        taxpayerName: 'Crest Textiles SC',
-        taxpayerId: '1000080599',
-        sector: 'Textiles',
-        auditType: 'TRANSFER_PRICING',
-        riskLevel: 'HIGH',
-        riskScore: 99,
-        estimatedRevenue: 1468782000,
-        planYear: 2026,
-        status: 'IN_PROGRESS',
-        frontendStatus: 'IN_PROGRESS'
-      };
-      setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
+      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0] || null;
+      if (tpCase) {
+        setTpWorkspaceCase(prev => (prev?.id === tpCase.id ? prev : tpCase));
+      }
     } else if (view === 'tp-tasks') {
       setTpWorkspaceCase(null);
       setTpWorkspacePhase(null);
@@ -201,16 +189,6 @@ export default function TeamLeaderDashboard({ view }) {
         const strictlyMine = mapped.filter(a => (a.username || a.id || '').startsWith(tlAuditorPrefix));
         if (strictlyMine.length > 0) {
           mapped = strictlyMine;
-        }
-      }
-
-      // Fallback defaults if API returned empty
-      if (mapped.length === 0) {
-        if (tlUsername.includes('addis_ababa-tc1') && (tlUsername.includes('tp') || (user?.auditType || '').includes('TRANSFER'))) {
-          mapped = [
-            { id: 'u-aud-addis_ababa-tc1-tp-1-1', userId: 'u-aud-addis_ababa-tc1-tp-1-1', username: 'u-aud-addis_ababa-tc1-tp-1-1', name: 'Michael Abera (TP Aud-1)', email: 'michael.abera@mor.gov.et', role: 'auditor', taxCenter: 'addis_ababa-tc1', auditType: 'TRANSFER_PRICING' },
-            { id: 'u-aud-addis_ababa-tc1-tp-1-2', userId: 'u-aud-addis_ababa-tc1-tp-1-2', username: 'u-aud-addis_ababa-tc1-tp-1-2', name: 'Mahlet Mideksa (TP Aud-2)', email: 'mahlet.mideksa@mor.gov.et', role: 'auditor', taxCenter: 'addis_ababa-tc1', auditType: 'TRANSFER_PRICING' },
-          ];
         }
       }
 
@@ -397,22 +375,11 @@ export default function TeamLeaderDashboard({ view }) {
           <button
             type="button"
             onClick={() => {
-              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || {
-                id: '0a4500d1-0842-4c07-a077-ceed404af705',
-                caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
-                taxpayerName: 'Crest Textiles SC',
-                taxpayerId: '1000080599',
-                sector: 'Textiles',
-                auditType: 'TRANSFER_PRICING',
-                riskLevel: 'HIGH',
-                riskScore: 99,
-                estimatedRevenue: 1468782000,
-                planYear: 2026,
-                status: 'IN_PROGRESS',
-                frontendStatus: 'IN_PROGRESS'
-              };
-              setTpWorkspacePhase('WORKING_HYPOTHESIS');
-              setTpWorkspaceCase(tpCase);
+              const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0] || null;
+              if (tpCase) {
+                setTpWorkspacePhase('WORKING_HYPOTHESIS');
+                setTpWorkspaceCase(tpCase);
+              }
             }}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-xs cursor-pointer"
           >

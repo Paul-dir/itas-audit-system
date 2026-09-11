@@ -35,6 +35,23 @@ async function fetchBackendDirectoryUsers() {
   return [];
 }
 
+function mergeUserPools(primaryList, secondaryList) {
+  const map = new Map();
+  (secondaryList || []).forEach(u => {
+    if (u) {
+      const key = (u.id || u.username || '').toLowerCase();
+      if (key) map.set(key, u);
+    }
+  });
+  (primaryList || []).forEach(u => {
+    if (u) {
+      const key = (u.id || u.username || '').toLowerCase();
+      if (key) map.set(key, u);
+    }
+  });
+  return Array.from(map.values());
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +66,7 @@ export const AuthProvider = ({ children }) => {
         const cachedRaw = storage.get(STORE_KEYS.USERS, []);
         const cached = (Array.isArray(cachedRaw) ? cachedRaw : []).map(buildCompleteUserProfile);
         const seedList = SEED_USERS.map(buildCompleteUserProfile);
-        let pool = [...cached, ...seedList];
+        let pool = mergeUserPools(cached, seedList);
         directoryUsersRef.current = pool;
 
         let currentUser = null;
@@ -74,13 +91,14 @@ export const AuthProvider = ({ children }) => {
         // Fetch full directory of system accounts from backend
         const backendUsers = await fetchBackendDirectoryUsers();
         if (backendUsers && backendUsers.length > 0) {
-          directoryUsersRef.current = backendUsers;
-          storage.set(STORE_KEYS.USERS, backendUsers);
+          const merged = mergeUserPools(backendUsers, seedList);
+          directoryUsersRef.current = merged;
+          storage.set(STORE_KEYS.USERS, merged);
 
           // Re-resolve active session with authoritative backend profile
           if (saved && (saved.id || saved.email || saved.username)) {
             const targetId = (saved.id || saved.email || saved.username).toLowerCase();
-            const matched = backendUsers.find(u =>
+            const matched = merged.find(u =>
               (u.id && u.id.toLowerCase() === targetId) ||
               (u.username && u.username.toLowerCase() === targetId) ||
               (u.email && u.email.toLowerCase() === targetId)
@@ -135,9 +153,8 @@ export const AuthProvider = ({ children }) => {
         const cachedRaw = storage.get(STORE_KEYS.USERS, []);
         allUsers = (Array.isArray(cachedRaw) ? cachedRaw : []).map(buildCompleteUserProfile);
       }
-      if (allUsers.length === 0) {
-        allUsers = SEED_USERS.map(buildCompleteUserProfile);
-      }
+      const seedList = SEED_USERS.map(buildCompleteUserProfile);
+      allUsers = mergeUserPools(allUsers, seedList);
 
       // Search directory
       let found = allUsers.find(u => 
@@ -153,9 +170,10 @@ export const AuthProvider = ({ children }) => {
       if (!found) {
         const freshUsers = await fetchBackendDirectoryUsers();
         if (freshUsers && freshUsers.length > 0) {
-          directoryUsersRef.current = freshUsers;
-          storage.set(STORE_KEYS.USERS, freshUsers);
-          found = freshUsers.find(u => 
+          const merged = mergeUserPools(freshUsers, seedList);
+          directoryUsersRef.current = merged;
+          storage.set(STORE_KEYS.USERS, merged);
+          found = merged.find(u => 
             (u.id && u.id.toLowerCase() === inputLower) ||
             (u.username && u.username.toLowerCase() === inputLower) ||
             (u.username && u.username.toLowerCase() === inputBase) ||

@@ -70,13 +70,19 @@ function StepHeader({ step, stepData, isCurrent, isCompleted }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function CaseExecution({ caseId, caseData, onBack }) {
+export default function CaseExecution({ caseId, caseData, onBack, initialStep }) {
   const { user } = useAuth();
   const { getWorkflow, getStepProgress, actions } = useWorkflow();
-  const [activeStepTab, setActiveStepTab] = useState(null);
+  const [activeStepTab, setActiveStepTab] = useState(initialStep || null);
 
   const workflow = getWorkflow(caseId);
   const progress = getStepProgress(caseId);
+
+  useEffect(() => {
+    if (initialStep) {
+      setActiveStepTab(initialStep);
+    }
+  }, [initialStep]);
 
   // Hydrate workflow state from backend on mount
   useEffect(() => {
@@ -193,7 +199,7 @@ export default function CaseExecution({ caseId, caseData, onBack }) {
   // ── Render step content based on current step ─────────────────────────
 
   const renderStepContent = () => {
-    const currentStep = workflow.currentStep;
+    const currentStep = activeStepTab || workflow.currentStep;
 
     switch (currentStep) {
       case 'CASE_DETAIL':
@@ -628,7 +634,11 @@ export default function CaseExecution({ caseId, caseData, onBack }) {
 
       {/* Workflow Progress */}
       <Card className="p-6 overflow-x-auto">
-        <WorkflowProgress currentStep={workflow.currentStep} stepStatuses={stepStatuses} />
+        <WorkflowProgress
+          currentStep={activeStepTab || workflow.currentStep}
+          stepStatuses={stepStatuses}
+          onStepClick={(stepId) => setActiveStepTab(stepId)}
+        />
       </Card>
 
       {/* Progress Bar */}
@@ -657,9 +667,11 @@ export default function CaseExecution({ caseId, caseData, onBack }) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Current Step</p>
+            <p className="text-xs text-gray-500 uppercase font-semibold">
+              {activeStepTab && activeStepTab !== workflow.currentStep ? 'Viewing Step' : 'Current Step'}
+            </p>
             <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
-              {WORKFLOW_STEPS.find(s => s.id === workflow.currentStep)?.label || 'N/A'}
+              {WORKFLOW_STEPS.find(s => s.id === (activeStepTab || workflow.currentStep))?.label || 'N/A'}
             </p>
           </div>
         </div>

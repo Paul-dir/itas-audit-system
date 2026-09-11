@@ -39,6 +39,11 @@ public class UserManagementUseCase implements UserManagementPort {
     }
 
     @Override
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username).orElse(null);
+    }
+
+    @Override
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }

@@ -36,13 +36,21 @@ public class MockDataSeeder implements CommandLineRunner {
                 String assignedLocation = (String) mockUser.get("assignedLocation");
                 String email = (String) mockUser.get("email");
                 String fullName = (String) mockUser.get("fullName");
+                String rawUserId = (String) mockUser.get("userId");
 
-                User domainUser;
-                if (auditType != null && !auditType.isBlank()) {
-                    domainUser = new User(username, email, fullName, userType, auditType, assignedLevel, assignedLocation, "system-seeder");
-                } else {
-                    domainUser = new User(username, email, fullName, userType, assignedLevel, assignedLocation, "system-seeder");
+                java.util.UUID userId = null;
+                if (rawUserId != null) {
+                    try {
+                        userId = java.util.UUID.fromString(rawUserId);
+                    } catch (IllegalArgumentException ignored) {}
                 }
+                if (userId == null) {
+                    userId = java.util.UUID.nameUUIDFromBytes(("itas-user:" + username).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+
+                User domainUser = new User(userId, username, email, fullName, userType, auditType,
+                                           assignedLevel, assignedLocation, "ACTIVE",
+                                           java.time.OffsetDateTime.now(), java.time.OffsetDateTime.now(), "system-seeder");
                 
                 userRepository.save(domainUser);
                 count++;

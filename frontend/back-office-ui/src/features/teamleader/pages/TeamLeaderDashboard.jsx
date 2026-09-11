@@ -27,7 +27,7 @@ import {
 export default function TeamLeaderDashboard() {
   const { user } = useAuth();
   const { state, actions, selectors } = useApp();
-  const { metrics, teamMembers, loading, error, refresh } = useDashboard(user?.id);
+  const { metrics, teamMembers, loading, error, refresh } = useDashboard(user?.id || user?.username);
   const [selectedCase, setSelectedCase] = useState(null);
   const [assignModal, setAssignModal] = useState(null);
 

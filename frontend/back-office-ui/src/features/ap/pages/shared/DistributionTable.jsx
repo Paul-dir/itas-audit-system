@@ -159,13 +159,6 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
   // Show ALL regions (no filtering)
   const regionsToDisplay = regions;
 
-  // Calculate Federal Level (for federal-licensed taxpayers only - smaller subset)
-  const federalTotals = {};
-  activeAuditTypes.forEach(a => {
-    federalTotals[a.id] = regionsToDisplay.reduce((sum, r) => sum + (distribution[r.id]?.[a.id] || 0), 0);
-  });
-  const federalGrandTotal = Object.values(federalTotals).reduce((s, v) => s + v, 0);
-
   // Regional totals
   const totals = {};
   activeAuditTypes.forEach(a => {
@@ -175,43 +168,8 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
 
   return (
     <div className="space-y-6">
-      {/* Federal Level Summary */}
+      {/* Regional & Federal Distribution */}
       <div>
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">🏛️ Federal Level Summary</h3>
-        <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Taxpayers with federal business license</p>
-        <div className="overflow-x-auto rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950">
-          <table className="min-w-full text-xs">
-            <thead className="bg-blue-100 dark:bg-blue-900">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-bold text-blue-900 dark:text-blue-100 min-w-[120px]">Federal Level</th>
-                {activeAuditTypes.map(a => (
-                  <th key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100 min-w-[70px] whitespace-nowrap">
-                    {a.shortName || a.name?.slice(0, 5) || a.id}
-                  </th>
-                ))}
-                <th className="px-3 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100">Total</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-blue-950">
-              <tr>
-                <td className="px-3 py-2.5 font-bold text-blue-900 dark:text-blue-100">Federal Taxpayers</td>
-                {activeAuditTypes.map(a => (
-                  <td key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-200 tabular-nums">
-                    {federalTotals[a.id]}
-                  </td>
-                ))}
-                <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 tabular-nums text-base">
-                  {federalGrandTotal}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Regional Distribution */}
-      <div>
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">🗺️ Regional Distribution</h3>
         <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-600">
           <table className="min-w-full text-xs">
             <thead className="bg-gray-50 dark:bg-slate-700">

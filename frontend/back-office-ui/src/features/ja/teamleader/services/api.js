@@ -24,7 +24,16 @@ const ID_MAP = {
   'u-cm-aa1': '20000000-0000-0000-0000-000000000001',
   'u-cm-aa2': '20000000-0000-0000-0000-000000000002',
   'u-cm-aa3': '20000000-0000-0000-0000-000000000003',
-  'u-cm-or1': '20000000-0000-0000-0000-000000000004',
+  'aa1.tl': '10000000-0000-0000-0001-000000000001',
+  'aa1.tl2': '10000000-0000-0000-0001-000000000002',
+  'fed.ja.chair': '20000000-0000-0000-0099-000000000001',
+  'fed.ja.member': '20000000-0000-0000-0099-000000000002',
+  'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
+  'fed.ja.tl2': '10000000-0000-0000-0099-000000000002',
+  'fed2.ja.chair': '20000000-0000-0000-0098-000000000001',
+  'fed2.ja.member': '20000000-0000-0000-0098-000000000002',
+  'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
+  'fed2.ja.tl2': '10000000-0000-0000-0098-000000000002',
 };
 
 const AUDITOR_ID_MAP = {
@@ -34,6 +43,16 @@ const AUDITOR_ID_MAP = {
   'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
   'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
   'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+  'fed.ja.auditor1': 'a0000001-0000-0000-0099-000000000001',
+  'fed.ja.auditor2': 'a0000001-0000-0000-0099-000000000002',
+  'fed.ja.auditor3': 'a0000001-0000-0000-0099-000000000003',
+  'fed.ja.auditor4': 'a0000001-0000-0000-0099-000000000004',
+  'fed.ja.auditor5': 'a0000001-0000-0000-0099-000000000005',
+  'fed2.ja.auditor1': 'a0000001-0000-0000-0098-000000000001',
+  'fed2.ja.auditor2': 'a0000001-0000-0000-0098-000000000002',
+  'fed2.ja.auditor3': 'a0000001-0000-0000-0098-000000000003',
+  'fed2.ja.auditor4': 'a0000001-0000-0000-0098-000000000004',
+  'fed2.ja.auditor5': 'a0000001-0000-0000-0098-000000000005',
 };
 
 function resolveId(frontendId) {
@@ -41,7 +60,7 @@ function resolveId(frontendId) {
 }
 
 function resolveUserId(frontendId) {
-  return resolveId(frontendId) || AUDITOR_ID_MAP[frontendId] || frontendId;
+  return AUDITOR_ID_MAP[frontendId] || ID_MAP[frontendId] || frontendId;
 }
 
 function getHeaders() {
@@ -121,7 +140,8 @@ export const teamLeaderAPI = {
    */
   getAssignedCases: async (teamLeaderId, filters = {}) => {
     // Resolve frontend ID to backend UUID for DB query
-    const params = new URLSearchParams({ assignedTeamLeader: resolveId(teamLeaderId) });
+    const tlId = resolveId(teamLeaderId);
+    const params = new URLSearchParams({ teamLeader: tlId, assignedTeamLeader: tlId });
     if (filters.status) params.append('status', filters.status);
     
     const response = await fetch(`${CASE_API_BASE}?${params}`, {
@@ -276,11 +296,15 @@ export const teamLeaderAPI = {
    * Returns team info with auditor details
    */
   getMyTeam: async (teamLeaderId) => {
-    // Use X-Actor-Id header to identify the user (backend resolves from auth context)
-    // Do NOT pass frontend user IDs as query params — the backend expects UUIDs
-    const response = await fetch(`${COMMITTEE_API_BASE}/teams/my-team`, {
-      headers: getHeaders(),
-    });
+    const actorId = ID_MAP[teamLeaderId] || teamLeaderId;
+    const url = actorId
+      ? `${COMMITTEE_API_BASE}/teams/my-team?teamLeaderId=${encodeURIComponent(actorId)}`
+      : `${COMMITTEE_API_BASE}/teams/my-team`;
+    const headers = getHeaders();
+    if (actorId) {
+      headers['X-Actor-Id'] = actorId;
+    }
+    const response = await fetch(url, { headers });
     if (!response.ok) throw new Error('Failed to fetch team');
     return response.json();
   },

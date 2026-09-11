@@ -251,14 +251,9 @@ public class TeamFormationUseCase {
     public Page<AuditorProfileResponse> searchAuditors(String expertise, String seniority, String taxCenter, Pageable pageable) {
         log.info("Searching auditors with expertise={}, seniority={}, taxCenter={}", expertise, seniority, taxCenter);
 
-        List<AuditorEntity> filtered = auditorRepository.searchByExpertiseAndSeniorityAndTaxCenter(expertise, seniority, taxCenter);
-
-        // Fallback: if tax center filter returned nothing, retry without it
-        // This handles the case where t_auditor.tax_center is not yet populated
-        if (filtered.isEmpty() && taxCenter != null) {
-            log.info("No auditors found for taxCenter={}, falling back to unfiltered search", taxCenter);
-            filtered = auditorRepository.searchByExpertiseAndSeniority(expertise, seniority);
-        }
+        List<AuditorEntity> filtered = (taxCenter != null && !taxCenter.isBlank())
+            ? auditorRepository.searchByExpertiseAndSeniorityAndTaxCenter(expertise, seniority, taxCenter)
+            : auditorRepository.searchByExpertiseAndSeniority(expertise, seniority);
 
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), filtered.size());

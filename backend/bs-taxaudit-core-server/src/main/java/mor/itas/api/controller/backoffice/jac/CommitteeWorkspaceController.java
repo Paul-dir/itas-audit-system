@@ -58,10 +58,27 @@ public class CommitteeWorkspaceController {
         try {
             String actorId = mor.itas.observability.audit.ActorContextHolder.getActorId();
             if (actorId != null && !"SYSTEM".equals(actorId)) {
-                UUID userId = UUID.fromString(actorId);
-                var user = userManagementUseCase.getUserById(userId);
-                if (user != null && user.getAssignedLocation() != null) {
-                    return user.getAssignedLocation();
+                String lower = actorId.toLowerCase();
+                if (lower.contains("fed2") || lower.contains("lto2")) return "federal-lto2";
+                if (lower.contains("fed") || lower.contains("lto1")) return "federal-lto1";
+                if (lower.contains("aa1") || lower.contains("addis1")) return "addis_ababa-tc1";
+                if (lower.contains("aa2") || lower.contains("addis2")) return "addis_ababa-tc2";
+                if (lower.contains("aa3") || lower.contains("addis3")) return "addis_ababa-tc3";
+                if (lower.contains("or1") || lower.contains("oromia1")) return "oromia-tc1";
+                if (lower.contains("or2") || lower.contains("oromia2")) return "oromia-tc2";
+                if (lower.contains("or3") || lower.contains("oromia3")) return "oromia-tc3";
+
+                try {
+                    UUID userId = UUID.fromString(actorId);
+                    var user = userManagementUseCase.getUserById(userId);
+                    if (user != null && user.getAssignedLocation() != null) {
+                        return user.getAssignedLocation();
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    var user = userManagementUseCase.getUserByUsername(actorId);
+                    if (user != null && user.getAssignedLocation() != null) {
+                        return user.getAssignedLocation();
+                    }
                 }
             }
         } catch (Exception e) {
@@ -82,10 +99,11 @@ public class CommitteeWorkspaceController {
             @RequestParam(required = false) String segment,
             @RequestParam(required = false) String taxCenter,
             Pageable pageable) {
+        String resolvedTaxCenter = (taxCenter != null && !taxCenter.isBlank()) ? taxCenter : resolveUserTaxCenter();
         log.info("Fetching cases with status={}, riskPriority={}, taxpayerName={}, segment={}, taxCenter={}, page={}", 
-                 status, riskPriority, taxpayerName, segment, taxCenter, pageable.getPageNumber());
+                 status, riskPriority, taxpayerName, segment, resolvedTaxCenter, pageable.getPageNumber());
         Page<CommitteeCaseResponse> cases = fetchCommitteeCasesUseCase.execute(
-                status, riskPriority, taxpayerName, segment, taxCenter, pageable);
+                status, riskPriority, taxpayerName, segment, resolvedTaxCenter, pageable);
         return ResponseEntity.ok(cases);
     }
 

@@ -8,14 +8,9 @@ import { storage, STORE_KEYS } from '../features/ap/services/storage';
  * Custom hook for user validation and test user discovery.
  * Synchronized with Database, Seed Users, and ITAS Canonical Directory.
  */
-export const useUserValidation = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [validatedUser, setValidatedUser] = useState(null);
-
-  // Recommended test users representing all core roles in the system,
-  // with complete federal leadership, committee members, and specialized team leaders.
-  const recommendedUsers = [
+// Recommended test users representing all core roles in the system,
+// with complete federal leadership, committee members, and specialized team leaders.
+const recommendedUsers = [
     // ── 1. Planning Team (Federal) ──────────────────────────────────────────
     { username: 'u-pt-01', fullName: 'Eden Haile', email: 'planning.auditor1@mor.gov.et', role: 'PLANNING_TEAM', category: 'Planning Team', auditType: 'NATIONAL_PLANNING', assignedLocation: 'FEDERAL', description: 'National Planning Team Lead (Eden Haile - Creates & Amends Plans)' },
     { username: 'u-pt-02', fullName: 'Samuel Worku', email: 'abebe.tadesse@mor.gov.et', role: 'PLANNING_TEAM', category: 'Planning Team', auditType: 'NATIONAL_PLANNING', assignedLocation: 'FEDERAL', description: 'National Planning Team Member (Samuel Worku - Risk Modeling & Quotas)' },
@@ -36,15 +31,53 @@ export const useUserValidation = () => {
     { username: 'u-tcm-federal-lto1', fullName: 'Tsega Mulugeta', email: 'tsega.mulugeta@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Federal Tax Centers', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'federal-lto1', description: 'Tax Center Manager (Tsega Mulugeta - Federal Large Taxpayers Office 1)' },
     { username: 'u-tcm-federal-lto2', fullName: 'Berihun Tesfaye', email: 'berihun.tesfaye@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Federal Tax Centers', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'federal-lto2', description: 'Tax Center Manager (Berihun Tesfaye - Federal Large Taxpayers Office 2)' },
 
+    // ── 0. Addis Ababa Tax Center 1 (Joint Audit Statutory Roster) ──────────
+    { username: 'aa1.chair', fullName: 'Dr. Abebe Kebede', email: 'aa1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'Addis Ababa TC1 Joint Committee Chairperson (Dr. Abebe Kebede)' },
+    { username: 'aa1.member', fullName: 'Fatuma Ahmed', email: 'aa1.member@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'Addis Ababa TC1 Joint Committee Member (Fatuma Ahmed)' },
+    { username: 'aa1.tl', fullName: 'Dawit Tadesse', email: 'aa1.tl@mor.gov.et', role: 'TEAM_LEADER', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'Addis Ababa TC1 Joint Team Leader (Dawit Tadesse)' },
+    { username: 'aa1.auditor1', fullName: 'Sara Mohammed', email: 'aa1.auditor1@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'AA TC1 Joint Auditor 1 (Sara Mohammed - Customs & Tariffs)' },
+    { username: 'aa1.auditor2', fullName: 'Yonas Berhanu', email: 'aa1.auditor2@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'AA TC1 Joint Auditor 2 (Yonas Berhanu - Cross-Border)' },
+    { username: 'aa1.auditor3', fullName: 'Hana Girma', email: 'aa1.auditor3@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'AA TC1 Joint Auditor 3 (Hana Girma - VAT & Sales)' },
+    { username: 'aa1.auditor4', fullName: 'Mulugeta Alemayehu', email: 'aa1.auditor4@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'AA TC1 Joint Auditor 4 (Mulugeta Alemayehu - CIT & Deductions)' },
+    { username: 'aa1.auditor5', fullName: 'Tigist Haile', email: 'aa1.auditor5@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Addis Ababa TC1', auditType: 'JOINT_AUDIT', assignedLocation: 'addis_ababa-tc1', description: 'AA TC1 Joint Auditor 5 (Tigist Haile - Forensics & Investigation)' },
+    { username: 'aa1.manager', fullName: 'Manager Addis Ababa TC1', email: 'aa1.manager@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Joint Audit — Addis Ababa TC1', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'addis_ababa-tc1', description: 'Addis Ababa TC1 Manager (Reviews & Cascades Quotas)' },
+
+    // ── 0. Federal Tax Center 1 (Joint Audit Statutory Roster) ───────────────
+    { username: 'fed.ja.chair', fullName: 'Dr. Solomon Desta', email: 'fed.ja.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Committee Chair (Dr. Solomon Desta)' },
+    { username: 'fed.ja.member', fullName: 'Eleni Tesfaye', email: 'fed.ja.member@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Committee Member (Eleni Tesfaye)' },
+    { username: 'fed.ja.tl', fullName: 'Addis Zewde', email: 'fed.ja.tl@mor.gov.et', role: 'TEAM_LEADER', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Team Leader (Addis Zewde)' },
+    { username: 'fed.ja.auditor1', fullName: 'Fikremariam Tilahun', email: 'fed.ja.auditor1@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Auditor 1 (Fikremariam Tilahun - Customs & Valuation)' },
+    { username: 'fed.ja.auditor2', fullName: 'Saron Assefa', email: 'fed.ja.auditor2@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Auditor 2 (Saron Assefa - Cross-Border)' },
+    { username: 'fed.ja.auditor3', fullName: 'Bikila Worku', email: 'fed.ja.auditor3@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Auditor 3 (Bikila Worku - VAT & Sales)' },
+    { username: 'fed.ja.auditor4', fullName: 'Michael Zewde', email: 'fed.ja.auditor4@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Auditor 4 (Michael Zewde - CIT & Deductions)' },
+    { username: 'fed.ja.auditor5', fullName: 'Saron Negash', email: 'fed.ja.auditor5@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO1', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO1 Joint Auditor 5 (Saron Negash - Forensics)' },
+
+    // ── 0. Federal Tax Center 2 (Joint Audit Statutory Roster) ───────────────
+    { username: 'fed2.ja.chair', fullName: 'Dr. Worku Alemayehu', email: 'fed2.ja.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Committee Chair (Dr. Worku Alemayehu)' },
+    { username: 'fed2.ja.member', fullName: 'Tigist Desta', email: 'fed2.ja.member@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Committee Member (Tigist Desta)' },
+    { username: 'fed2.ja.tl', fullName: 'Nardos Wakjira', email: 'fed2.ja.tl@mor.gov.et', role: 'TEAM_LEADER', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Team Leader (Nardos Wakjira)' },
+    { username: 'fed2.ja.auditor1', fullName: 'Dawit Mengistu', email: 'fed2.ja.auditor1@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Auditor 1 (Dawit Mengistu - Customs & Tariffs)' },
+    { username: 'fed2.ja.auditor2', fullName: 'Birtukan Kassa', email: 'fed2.ja.auditor2@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Auditor 2 (Birtukan Kassa - Cross-Border)' },
+    { username: 'fed2.ja.auditor3', fullName: 'Genet Worku', email: 'fed2.ja.auditor3@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Auditor 3 (Genet Worku - VAT & Sales)' },
+    { username: 'fed2.ja.auditor4', fullName: 'Henok Abera', email: 'fed2.ja.auditor4@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Auditor 4 (Henok Abera - CIT & Deductions)' },
+    { username: 'fed2.ja.auditor5', fullName: 'Gemechu Getachew', email: 'fed2.ja.auditor5@mor.gov.et', role: 'AUDITOR', category: 'Joint Audit — Federal LTO2', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO2 Joint Auditor 5 (Gemechu Getachew - Forensics)' },
+
     // ── 6. Federal Committees (Transfer Pricing & Joint Audit) ──────────────
-    { username: 'u-com-fed-tpchair', fullName: 'Fikadu Belay', email: 'fed.tpcommittee1@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'TRANSFER_PRICING', assignedLocation: 'FEDERAL', description: 'Federal Transfer Pricing Committee Chair (Fikadu Belay)' },
+    { username: 'u-com-fed-tpchair', fullName: 'Fikadu Belay', email: 'fed.tpcommittee1@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'TRANSFER_PRICING', assignedLocation: 'FEDERAL', description: 'Federal Transfer Pricing Committee Chair (Fikadu Belay)' },
     { username: 'u-com-federal-lto1-tp', fullName: 'Natnael Bekele', email: 'natnael.bekele@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'TRANSFER_PRICING', assignedLocation: 'federal-lto1', description: 'Federal LTO 1 TP Committee Lead (Natnael Bekele)' },
     { username: 'u-com-federal-lto2-tp', fullName: 'Kassa Tadesse', email: 'kassa.tadesse@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'TRANSFER_PRICING', assignedLocation: 'federal-lto2', description: 'Federal LTO 2 TP Committee Lead (Kassa Tadesse)' },
     { username: 'u-com-fed-tpmem1', fullName: 'Dereje Kebede', email: 'fed.tpcommittee2@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'TRANSFER_PRICING', assignedLocation: 'FEDERAL', description: 'Federal TP Committee Member (Dereje Kebede)' },
-    { username: 'u-com-fed-chair', fullName: 'Nardos Belay', email: 'fed.committee1@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'FEDERAL', description: 'Federal Joint Audit Committee Chair (Nardos Belay)' },
+    { username: 'u-com-fed-chair', fullName: 'Nardos Belay', email: 'fed.committee1@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'FEDERAL', description: 'Federal Joint Audit Committee Chair (Nardos Belay)' },
     { username: 'u-com-federal-lto1-ja', fullName: 'Eleni Tesfaye', email: 'eleni.tesfaye@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto1', description: 'Federal LTO 1 Joint Audit Committee Lead (Eleni Tesfaye)' },
     { username: 'u-com-federal-lto2-ja', fullName: 'Tigist Desta', email: 'tigist.desta@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'federal-lto2', description: 'Federal LTO 2 Joint Audit Committee Lead (Tigist Desta)' },
     { username: 'u-com-fed-mem1', fullName: 'Fatuma Abera', email: 'fed.committee2@mor.gov.et', role: 'COMMITTEE_MEMBER', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'FEDERAL', description: 'Federal Joint Audit Committee Member (Fatuma Abera)' },
+
+    // ── Regional Joint Committee Chairs ─────────────────────────────────────
+    { username: 'or1.chair', fullName: 'Dr. Chaltu Negash', email: 'or1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'oromia-tc1', description: 'Oromia Joint Committee Chair (Dr. Chaltu Negash)' },
+    { username: 'ba1.chair', fullName: 'Dr. Tadesse Kebede', email: 'ba1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'amhara-tc1', description: 'Amhara Joint Committee Chair (Dr. Tadesse Kebede)' },
+    { username: 'dd1.chair', fullName: 'Dr. Yonas Mengistu', email: 'dd1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'dire_dawa-tc1', description: 'Dire Dawa Joint Committee Chair (Dr. Yonas Mengistu)' },
+    { username: 'sn1.chair', fullName: 'Dr. Tekle Lemma', email: 'sn1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'snnpr-tc1', description: 'SNNPR Joint Committee Chair (Dr. Tekle Lemma)' },
+    { username: 'so1.chair', fullName: 'Dr. Ibrahim Hassan', email: 'so1.chair@mor.gov.et', role: 'COMMITTEE_CHAIR', category: 'Committees (Joint & TP)', auditType: 'JOINT_AUDIT', assignedLocation: 'somali-tc1', description: 'Somali Joint Committee Chair (Dr. Ibrahim Hassan)' },
 
     // ── 7. Federal Team Leaders — Transfer Pricing ──────────────────────────
     { username: 'u-tl-federal-lto1-tp-1', fullName: 'Michael Abera', email: 'michael.abera@mor.gov.et', role: 'TEAM_LEADER', category: 'Team Leaders', auditType: 'TRANSFER_PRICING', assignedLocation: 'federal-lto1', description: 'Federal LTO-1 Transfer Pricing Team Leader 1 (Michael Abera)' },
@@ -133,6 +166,11 @@ export const useUserValidation = () => {
     { username: 'u-rd-aa', fullName: 'Getnet Alemu', email: 'getnet.alemu@mor.gov.et', role: 'REGIONAL_DIRECTOR', category: 'Regional Reference', auditType: 'REGIONAL_DIRECTORATE', assignedLocation: 'AA', description: 'Regional Director Reference (Addis Ababa)' },
     { username: 'u-tcm-addis_ababa-tc1', fullName: 'Mahlet Tesfa', email: 'mahlet.tesfa@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Regional Reference', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'addis_ababa-tc1', description: 'Tax Center Manager Reference (Addis Ababa TC 1)' }
   ];
+
+export const useUserValidation = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [validatedUser, setValidatedUser] = useState(null);
 
   // Check if username or email is valid
   const isUsernameValid = useCallback((identifier) => {

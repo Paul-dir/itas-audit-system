@@ -33,6 +33,7 @@ public class MockRiskEngineAdapter implements RiskEnginePort {
     @Override
     public Map<String, RiskDistribution> getRiskDistributionByRegion() {
         Map<String, RiskDistribution> regionalRisk = new HashMap<>();
+        regionalRisk.put("FED", new RiskDistribution(5_375L, 19_995L, 37_410L, 44_720L));
         regionalRisk.put("AA", new RiskDistribution(4_300L, 15_996L, 29_928L, 35_776L));
         regionalRisk.put("BA", new RiskDistribution(3_225L, 11_997L, 22_446L, 26_832L));
         regionalRisk.put("BB", new RiskDistribution(3_225L, 11_997L, 22_446L, 26_832L));

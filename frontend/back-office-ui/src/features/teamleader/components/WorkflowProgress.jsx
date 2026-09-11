@@ -23,7 +23,7 @@ const STEP_ICONS = {
   CONCLUSION:          CheckCircle,
 };
 
-export default function WorkflowProgress({ currentStep, stepStatuses = {} }) {
+export default function WorkflowProgress({ currentStep, stepStatuses = {}, onStepClick }) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.id === currentStep) ?? -1;
 
   return (
@@ -44,17 +44,22 @@ export default function WorkflowProgress({ currentStep, stepStatuses = {} }) {
             const stepState = stepStatuses[step.id] || 'upcoming';
             const isCompleted = stepState === 'completed';
             const isCurrent = step.id === currentStep;
-            const isUpcoming = !isCompleted && !isCurrent;
 
             return (
-              <div key={step.id} className="flex flex-col items-center z-10 relative" style={{ flex: 1 }}>
+              <button
+                type="button"
+                key={step.id}
+                onClick={() => onStepClick?.(step.id)}
+                className={`flex flex-col items-center z-10 relative group ${onStepClick ? 'cursor-pointer' : 'cursor-default'} focus:outline-none transition-transform`}
+                style={{ flex: 1 }}
+              >
                 {/* Step circle */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all group-hover:scale-110 ${
                   isCompleted
                     ? 'bg-green-600 border-green-600 text-white'
                     : isCurrent
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/40'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 group-hover:border-blue-400'
                 }`}>
                   {isCompleted ? (
                     <CheckCircle size={18} />
@@ -80,7 +85,7 @@ export default function WorkflowProgress({ currentStep, stepStatuses = {} }) {
                     {step.label}
                   </p>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -95,12 +100,14 @@ export default function WorkflowProgress({ currentStep, stepStatuses = {} }) {
           const isCurrent = step.id === currentStep;
 
           return (
-            <div
+            <button
+              type="button"
               key={step.id}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg ${
+              onClick={() => onStepClick?.(step.id)}
+              className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                 isCurrent ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' :
-                isCompleted ? 'bg-green-50 dark:bg-green-900/10' :
-                ''
+                isCompleted ? 'bg-green-50 dark:bg-green-900/10 hover:bg-gray-100 dark:hover:bg-gray-800' :
+                'hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -126,7 +133,7 @@ export default function WorkflowProgress({ currentStep, stepStatuses = {} }) {
               {isCurrent && (
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Active</span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>

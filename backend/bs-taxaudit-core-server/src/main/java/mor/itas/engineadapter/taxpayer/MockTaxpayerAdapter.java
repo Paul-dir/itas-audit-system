@@ -111,6 +111,8 @@ public class MockTaxpayerAdapter {
 
             DETAILED_TAXPAYERS.put(taxCenter, detailed);
         }
+
+        loadDeepTaxpayers();
     }
 
     /**
@@ -289,6 +291,52 @@ public class MockTaxpayerAdapter {
         return (long)(annualRevenue * rate);
     }
 
+    @SuppressWarnings("unchecked")
+    private static void loadDeepTaxpayers() {
+        try (java.io.InputStream is = MockTaxpayerAdapter.class.getResourceAsStream("/taxpayers_deep_550.json")) {
+            if (is != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> root = mapper.readValue(is, Map.class);
+                List<Map<String, Object>> list = (List<Map<String, Object>>) root.get("data");
+                if (list != null) {
+                    java.util.Set<String> cleared = new java.util.HashSet<>();
+                    for (Map<String, Object> tp : list) {
+                        String tc = (String) tp.get("tax_center_code");
+                        List<String> aliases = (List<String>) tp.get("aliases");
+                        if (tc != null && cleared.add(tc)) {
+                            DETAILED_TAXPAYERS.put(tc, new ArrayList<>());
+                        }
+                        if (aliases != null) {
+                            for (String a : aliases) {
+                                if (cleared.add(a)) {
+                                    DETAILED_TAXPAYERS.put(a, new ArrayList<>());
+                                }
+                            }
+                        }
+                    }
+
+                    for (Map<String, Object> tp : list) {
+                        String tin = (String) tp.get("tin");
+                        String tc = (String) tp.get("tax_center_code");
+                        TAXPAYERS.put(tin, tp);
+                        if (tc != null) {
+                            DETAILED_TAXPAYERS.computeIfAbsent(tc, k -> new ArrayList<>()).add(tp);
+                        }
+                        List<String> aliases = (List<String>) tp.get("aliases");
+                        if (aliases != null) {
+                            for (String a : aliases) {
+                                DETAILED_TAXPAYERS.computeIfAbsent(a, k -> new ArrayList<>()).add(tp);
+                            }
+                        }
+                    }
+                    System.err.println("✅ MockTaxpayerAdapter loaded " + list.size() + " deep isolated taxpayers from taxpayers_deep_550.json");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Could not load taxpayers_deep_550.json: " + e.getMessage());
+        }
+    }
+
     // ── Lookup methods ──
 
     public Map<String, Object> getTaxpayerById(String tin) { ensureInitialized(); return TAXPAYERS.get(tin); }
@@ -296,9 +344,15 @@ public class MockTaxpayerAdapter {
     public List<Map<String, Object>> getTaxpayersForTaxCenter(String taxCenter) {
         ensureInitialized();
         if (taxCenter == null || taxCenter.isEmpty()) return new ArrayList<>(TAXPAYERS.values());
+
+        List<Map<String, Object>> deep = DETAILED_TAXPAYERS.get(taxCenter);
+        if (deep != null && !deep.isEmpty()) {
+            return deep;
+        }
         
         List<Map<String, Object>> list = TAXPAYERS.values().stream()
-            .filter(tp -> taxCenter.equalsIgnoreCase((String) tp.get("taxCenter")))
+            .filter(tp -> taxCenter.equalsIgnoreCase((String) tp.get("taxCenter"))
+                       || taxCenter.equalsIgnoreCase((String) tp.get("tax_center_code")))
             .collect(Collectors.toList());
             
         if (!list.isEmpty()) return list;
@@ -313,6 +367,7 @@ public class MockTaxpayerAdapter {
         list = TAXPAYERS.values().stream()
             .filter(tp -> {
                 String tc = (String) tp.get("taxCenter");
+                if (tc == null) tc = (String) tp.get("tax_center_code");
                 return tc != null && (tc.equalsIgnoreCase(searchTc) || tc.contains(searchTc));
             })
             .collect(Collectors.toList());

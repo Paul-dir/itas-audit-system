@@ -8,12 +8,15 @@
  * action panels through the `sidebar` and `children` render props.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FileText, User, MapPin, AlertTriangle, TrendingUp,
   Shield, CheckCircle, ClipboardList, Users as UsersIcon,
+  Check, X, ShieldCheck, ExternalLink, Eye
 } from 'lucide-react';
 import Card from '../Card.jsx';
+import { Modal } from '../ui/index.jsx';
+import TaxpayerProfileView from '../../features/ap/components/taxpayer/TaxpayerProfileView.jsx';
 
 // ── Risk color helpers ──────────────────────────────────────────────────────
 const RISK_COLOR = {
@@ -98,29 +101,134 @@ function CaseOverviewSection({ caseData }) {
 
 // ── Section: Taxpayer Profile ──────────────────────────────────────────────
 function TaxpayerProfileSection({ caseData }) {
-  const tin = caseData.taxIdNumber || caseData.tin;
+  const tin = caseData.taxIdNumber || caseData.tin || caseData.taxpayerId;
+  const [taxpayer, setTaxpayer] = useState(null);
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [loadingTp, setLoadingTp] = useState(false);
+
+  useEffect(() => {
+    if (!tin) return;
+    let isMounted = true;
+    setLoadingTp(true);
+    fetch(`/api/public/v1/taxpayers/${tin}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (isMounted && json?.data) {
+          setTaxpayer(json.data);
+        }
+      })
+      .catch(e => console.warn('Could not fetch taxpayer details', e))
+      .finally(() => {
+        if (isMounted) setLoadingTp(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [tin]);
+
+  const legalName = taxpayer?.legal_name || taxpayer?.name || caseData.taxpayerName || 'Taxpayer Profile';
+  const tradeName = taxpayer?.trade_name || caseData.tradeName || '—';
+  const ownerName = taxpayer?.owner_name || caseData.ownerName || caseData.representatives?.[0]?.name || '—';
+  const legalForm = taxpayer?.legal_form || caseData.legalForm || 'Private Limited Company';
+  const sector = taxpayer?.sector_code
+    ? `${taxpayer.sector_code}${taxpayer.sub_sector ? ` · ${taxpayer.sub_sector}` : ''}`
+    : (caseData.sector || caseData.industry || '—');
+  const businessActivity = taxpayer?.business_activity || caseData.businessType || '—';
+  const incomeTaxCat = taxpayer?.income_tax_category || 'Category A';
+  const taxCenter = taxpayer?.tax_center_code || caseData.taxCenter || '—';
+  const region = taxpayer?.region_code || caseData.region || '—';
 
   return (
-    <Card className="p-6">
-      <SectionTitle icon={UsersIcon}>Taxpayer Profile</SectionTitle>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Taxpayer Name" value={caseData.taxpayerName} bold />
-        <Field label="TIN Number" value={tin} mono />
-        <Field
-          label="Total Amount"
-          value={caseData.totalAmount ? `ETB ${parseFloat(caseData.totalAmount).toLocaleString()}` : null}
-          bold
-        />
-        <Field label="Assessment Score" value={caseData.assessmentScore} />
-        <Field label="Business Type" value={caseData.businessType} />
-        <Field label="Sector / Industry" value={caseData.sector} />
-        <Field
-          label="Annual Revenue"
-          value={caseData.annualRevenue ? `ETB ${(caseData.annualRevenue / 1000000).toFixed(1)}M` : null}
-        />
-        <Field label="Number of Employees" value={caseData.employees} />
-      </div>
-    </Card>
+    <>
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+          <SectionTitle icon={UsersIcon} className="mb-0">Taxpayer Profile</SectionTitle>
+          <div className="flex items-center gap-2">
+            {taxpayer && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                <ShieldCheck size={12} />
+                SIGTAS / ITAS Registry Verified
+              </span>
+            )}
+            <button
+              onClick={() => setShowDossierModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800 shadow-sm"
+              title="Open full authentic taxpayer profile and 16 data tabs"
+            >
+              <FileText size={13} />
+              View Full Dossier (16 Tabs)
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Legal Taxpayer Name" value={legalName} bold />
+          <Field label="Trade Name" value={tradeName} />
+          <Field label="TIN Number" value={tin} mono bold />
+          <Field label="Legal Form" value={legalForm} />
+          <Field label="Owner / Representative" value={ownerName} />
+          <Field label="Sector / Industry" value={sector} />
+          <Field label="Business Activity" value={businessActivity} />
+          <Field label="Income Tax Category" value={incomeTaxCat} />
+          <Field label="Tax Center & Region" value={`${taxCenter} · ${region}`} />
+          <Field
+            label="Declared / Assessed Value"
+            value={caseData.totalAmount ? `ETB ${parseFloat(caseData.totalAmount).toLocaleString()}` : (taxpayer?.business_info?.annual_turnover ? `ETB ${parseFloat(taxpayer.business_info.annual_turnover).toLocaleString()}` : '—')}
+            bold
+          />
+        </div>
+
+        {/* Obligations & Status Pills */}
+        <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <label className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold block mb-2">
+            Tax Obligations & Compliance Registration
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: 'vat_registered', label: 'VAT' },
+              { key: 'paye_registered', label: 'PAYE' },
+              { key: 'withholding_registered', label: 'Withholding' },
+              { key: 'tot_registered', label: 'TOT' },
+              { key: 'excise_registered', label: 'Excise' },
+            ].map((ob) => {
+              const active = taxpayer ? !!taxpayer[ob.key] : true;
+              return (
+                <span
+                  key={ob.key}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                    active
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  {active ? <Check size={12} className="text-blue-600 dark:text-blue-400" /> : <X size={12} />}
+                  {ob.label}
+                </span>
+              );
+            })}
+            <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 font-mono">
+              Status: <strong className="text-emerald-600 dark:text-emerald-400 uppercase">{taxpayer?.status || 'Active'}</strong> · TIN <strong className="text-emerald-600 dark:text-emerald-400 uppercase">{taxpayer?.tin_status || 'Valid'}</strong>
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Complete Authentic Taxpayer Dossier Modal */}
+      {showDossierModal && (
+        <Modal
+          open={showDossierModal}
+          onClose={() => setShowDossierModal(false)}
+          title={`Authentic Taxpayer Dossier · TIN ${tin} · ${legalName}`}
+          size="full"
+        >
+          <TaxpayerProfileView
+            taxpayer={taxpayer || caseData}
+            caseData={caseData}
+            onClose={() => setShowDossierModal(false)}
+          />
+        </Modal>
+      )}
+    </>
   );
 }
 

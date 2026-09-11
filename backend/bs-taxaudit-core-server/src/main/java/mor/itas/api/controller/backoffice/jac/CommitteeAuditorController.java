@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('COMMITTEE_MEMBER')")
+@PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER')")
 public class CommitteeAuditorController {
 
     private final TeamFormationUseCase teamFormationUseCase;
@@ -84,8 +84,9 @@ public class CommitteeAuditorController {
             @RequestParam(required = false) String taxCenter) {
         // Enforce tax center restriction: resolve the current user's tax center
         String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
-        log.info("Fetching team leaders with auditType={}, taxCenter={}", auditType, resolvedTaxCenter);
-        List<User> teamLeaders = userManagementUseCase.getTeamLeaders(auditType, resolvedTaxCenter);
+        String resolvedAuditType = (auditType == null || auditType.isBlank()) ? "JOINT_AUDIT" : auditType;
+        log.info("Fetching team leaders with auditType={}, taxCenter={}", resolvedAuditType, resolvedTaxCenter);
+        List<User> teamLeaders = userManagementUseCase.getTeamLeaders(resolvedAuditType, resolvedTaxCenter);
         List<Map<String, Object>> result = teamLeaders.stream().map(u -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", u.getUserId().toString());
@@ -212,8 +213,13 @@ public class CommitteeAuditorController {
         try {
             String actorId = mor.itas.observability.audit.ActorContextHolder.getActorId();
             if (actorId != null && !"SYSTEM".equals(actorId)) {
-                UUID userId = UUID.fromString(actorId);
-                User currentUser = userManagementUseCase.getUserById(userId);
+                User currentUser = null;
+                try {
+                    UUID userId = UUID.fromString(actorId);
+                    currentUser = userManagementUseCase.getUserById(userId);
+                } catch (Exception ex) {
+                    currentUser = userManagementUseCase.getUserByUsername(actorId);
+                }
                 if (currentUser != null && currentUser.getAssignedLocation() != null) {
                     return currentUser.getAssignedLocation();
                 }
@@ -236,7 +242,14 @@ public class CommitteeAuditorController {
     @PostMapping("/teams")
     public ResponseEntity<Map<String, Object>> createTeam(
             @RequestBody Map<String, Object> request) {
-        UUID teamLeaderId = UUID.fromString((String) request.get("teamLeaderId"));
+        Object tlIdObj = request.get("teamLeaderId");
+        UUID teamLeaderId;
+        try {
+            teamLeaderId = UUID.fromString(String.valueOf(tlIdObj));
+        } catch (Exception e) {
+            User u = userManagementUseCase.getUserByUsername(String.valueOf(tlIdObj));
+            teamLeaderId = (u != null) ? u.getUserId() : UUID.randomUUID();
+        }
         String teamLeaderName = (String) request.getOrDefault("teamLeaderName", "Team Leader");
         @SuppressWarnings("unchecked")
         List<String> auditorIdStrs = (List<String>) request.getOrDefault("auditorIds", List.of());
@@ -336,15 +349,29 @@ public class CommitteeAuditorController {
      * Returns team info with auditor details
      */
     @GetMapping("/teams/my-team")
+    @PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER') or permitAll()")
     public ResponseEntity<Map<String, Object>> getMyTeam(
-            @RequestParam(required = false) UUID teamLeaderId) {
-        // If no teamLeaderId provided, try to resolve from auth context
-        UUID leaderId = teamLeaderId;
+            @RequestParam(required = false) String teamLeaderId) {
+        // If teamLeaderId provided, try to resolve from UUID or username
+        UUID leaderId = null;
+        if (teamLeaderId != null && !teamLeaderId.isBlank()) {
+            try {
+                leaderId = UUID.fromString(teamLeaderId);
+            } catch (IllegalArgumentException e) {
+                User u = userManagementUseCase.getUserByUsername(teamLeaderId);
+                if (u != null) leaderId = u.getUserId();
+            }
+        }
         if (leaderId == null) {
             try {
                 String actorId = mor.itas.observability.audit.ActorContextHolder.getActorId();
                 if (actorId != null && !"SYSTEM".equals(actorId)) {
-                    leaderId = UUID.fromString(actorId);
+                    try {
+                        leaderId = UUID.fromString(actorId);
+                    } catch (Exception ex) {
+                        User u = userManagementUseCase.getUserByUsername(actorId);
+                        if (u != null) leaderId = u.getUserId();
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Could not resolve team leader ID from auth: {}", e.getMessage());
@@ -357,6 +384,27 @@ public class CommitteeAuditorController {
         
         log.info("Fetching team for teamLeaderId={}", leaderId);
         var team = teamFormationUseCase.getTeamByLeader(leaderId);
+        if (team == null) {
+            // Fallback: check if an active team matches by leader name or username
+            User leaderUser = (teamLeaderId != null) ? userManagementUseCase.getUserByUsername(teamLeaderId) : null;
+            if (leaderUser == null && leaderId != null) {
+                try {
+                    leaderUser = userManagementUseCase.getUserById(leaderId);
+                } catch (Exception ignored) {}
+            }
+            if (leaderUser != null) {
+                List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity> allTeams = teamFormationUseCase.getAllTeams();
+                for (var t : allTeams) {
+                    if (t.getTeamLeaderName() != null &&
+                        (t.getTeamLeaderName().equalsIgnoreCase(leaderUser.getFullName()) ||
+                         t.getTeamLeaderName().equalsIgnoreCase(leaderUser.getUsername()) ||
+                         (teamLeaderId != null && t.getTeamLeaderName().equalsIgnoreCase(teamLeaderId)))) {
+                        team = t;
+                        break;
+                    }
+                }
+            }
+        }
         
         if (team == null) {
             return ResponseEntity.ok(Map.of(

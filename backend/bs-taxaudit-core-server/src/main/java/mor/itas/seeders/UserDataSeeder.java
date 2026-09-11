@@ -73,15 +73,69 @@ public class UserDataSeeder implements CommandLineRunner {
         seedUser("00000000-0000-0000-0005-000000000016", "so1.manager", "so1.manager@mor.gov.et", "Manager Somali TC1", "TAX_CENTER_MANAGER", null, "TAX_CENTER", "somali-tc1");
         seedUser("00000000-0000-0000-0005-000000000017", "so2.manager", "so2.manager@mor.gov.et", "Manager Somali TC2", "TAX_CENTER_MANAGER", null, "TAX_CENTER", "somali-tc2");
         seedUser("00000000-0000-0000-0005-000000000018", "so3.manager", "so3.manager@mor.gov.et", "Manager Somali TC3", "TAX_CENTER_MANAGER", null, "TAX_CENTER", "somali-tc3");
+        seedUser("00000000-0000-0000-0005-000000000099", "u-tcm-federal-lto1", "tsega.mulugeta@mor.gov.et", "Tsega Mulugeta", "TAX_CENTER_MANAGER", null, "TAX_CENTER", "federal-lto1");
 
         // ════════════════════════════════════════════════════════════════════════════
-        // 2. JOINT AUDIT PERSONNEL FOR ALL 18 TAX CENTERS (144 users, 90 auditors)
+        // 2. JOINT AUDIT PERSONNEL (Federal LTO1 & 18 Regional Tax Centers)
         // ════════════════════════════════════════════════════════════════════════════
+
+        // ── Federal Tax Center (federal-lto1) ──
+        seedUser("20000000-0000-0000-0099-000000000001", "fed.ja.chair", "fed.ja.chair@mor.gov.et", "Dr. Solomon Desta", "COMMITTEE_CHAIR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedUser("20000000-0000-0000-0099-000000000002", "fed.ja.member", "fed.ja.member@mor.gov.et", "Eleni Tesfaye", "COMMITTEE_MEMBER", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedUser("10000000-0000-0000-0099-000000000001", "fed.ja.tl", "fed.ja.tl@mor.gov.et", "Addis Zewde", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedUser("10000000-0000-0000-0099-000000000002", "fed.ja.tl2", "fed.ja.tl2@mor.gov.et", "Nardos Negash", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000001", "fed.ja.auditor1", "fed.ja.auditor1@mor.gov.et", "Fikremariam Tilahun", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000001", "Fikremariam", "Tilahun", "Customs & Tariffs Valuation", "SENIOR", 10, "fed.ja.auditor1@mor.gov.et", "+251-911-990001", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000002", "fed.ja.auditor2", "fed.ja.auditor2@mor.gov.et", "Saron Assefa", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000002", "Saron", "Assefa", "Cross-Border & Transfer Pricing", "PRINCIPAL", 14, "fed.ja.auditor2@mor.gov.et", "+251-911-990002", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000003", "fed.ja.auditor3", "fed.ja.auditor3@mor.gov.et", "Bikila Worku", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000003", "Bikila", "Worku", "Domestic VAT & Sales Reconciliation", "SENIOR", 9, "fed.ja.auditor3@mor.gov.et", "+251-911-990003", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000004", "fed.ja.auditor4", "fed.ja.auditor4@mor.gov.et", "Michael Zewde", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000004", "Michael", "Zewde", "Corporate Income Tax & Deductions", "MID_LEVEL", 6, "fed.ja.auditor4@mor.gov.et", "+251-911-990004", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000005", "fed.ja.auditor5", "fed.ja.auditor5@mor.gov.et", "Saron Negash", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000005", "Saron", "Negash", "Forensic & Investigation", "SENIOR", 11, "fed.ja.auditor5@mor.gov.et", "+251-911-990005", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000006", "fed.ja.auditor6", "fed.ja.auditor6@mor.gov.et", "Almaw Tesfa", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000006", "Almaw", "Tesfa", "Corporate Tax", "MID_LEVEL", 6, "fed.ja.auditor6@mor.gov.et", "+251-911-990006", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000007", "fed.ja.auditor7", "fed.ja.auditor7@mor.gov.et", "Tigist Alemu", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000007", "Tigist", "Alemu", "VAT Compliance", "SENIOR", 8, "fed.ja.auditor7@mor.gov.et", "+251-911-990007", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000008", "fed.ja.auditor8", "fed.ja.auditor8@mor.gov.et", "Ephrem Bekele", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000008", "Ephrem", "Bekele", "International Tax", "MID_LEVEL", 5, "fed.ja.auditor8@mor.gov.et", "+251-911-990008", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000009", "fed.ja.auditor9", "fed.ja.auditor9@mor.gov.et", "Meron Kebede", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000009", "Meron", "Kebede", "Transfer Pricing", "SENIOR", 10, "fed.ja.auditor9@mor.gov.et", "+251-911-990009", "federal-lto1");
+        seedUser("a0000001-0000-0000-0099-000000000010", "fed.ja.auditor10", "fed.ja.auditor10@mor.gov.et", "Bereket Mekonnen", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedAuditor("a0000001-0000-0000-0099-000000000010", "Bereket", "Mekonnen", "Audit Investigation", "PRINCIPAL", 13, "fed.ja.auditor10@mor.gov.et", "+251-911-990010", "federal-lto1");
+
+        // ── Federal Tax Center 2 (federal-lto2) ──
+        seedUser("20000000-0000-0000-0098-000000000001", "fed2.ja.chair", "fed2.ja.chair@mor.gov.et", "Dr. Worku Alemayehu", "COMMITTEE_CHAIR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedUser("20000000-0000-0000-0098-000000000002", "fed2.ja.member", "fed2.ja.member@mor.gov.et", "Tigist Hailu", "COMMITTEE_MEMBER", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedUser("10000000-0000-0000-0098-000000000001", "fed2.ja.tl", "fed2.ja.tl@mor.gov.et", "Berhanu Bekele", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedUser("10000000-0000-0000-0098-000000000002", "fed2.ja.tl2", "fed2.ja.tl2@mor.gov.et", "Eleni Banti", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000001", "fed2.ja.auditor1", "fed2.ja.auditor1@mor.gov.et", "Dawit Mengistu", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000001", "Dawit", "Mengistu", "Customs & Tariffs Valuation", "SENIOR", 10, "fed2.ja.auditor1@mor.gov.et", "+251-911-980001", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000002", "fed2.ja.auditor2", "fed2.ja.auditor2@mor.gov.et", "Eden Tadesse", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000002", "Eden", "Tadesse", "Cross-Border & Transfer Pricing", "PRINCIPAL", 14, "fed2.ja.auditor2@mor.gov.et", "+251-911-980002", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000003", "fed2.ja.auditor3", "fed2.ja.auditor3@mor.gov.et", "Henok Girma", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000003", "Henok", "Girma", "Domestic VAT & Sales Reconciliation", "SENIOR", 9, "fed2.ja.auditor3@mor.gov.et", "+251-911-980003", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000004", "fed2.ja.auditor4", "fed2.ja.auditor4@mor.gov.et", "Meron Kebede", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000004", "Meron", "Kebede", "Corporate Income Tax & Deductions", "MID_LEVEL", 6, "fed2.ja.auditor4@mor.gov.et", "+251-911-980004", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000005", "fed2.ja.auditor5", "fed2.ja.auditor5@mor.gov.et", "Natnael Assefa", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000005", "Natnael", "Assefa", "Forensic & Investigation", "SENIOR", 11, "fed2.ja.auditor5@mor.gov.et", "+251-911-980005", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000006", "fed2.ja.auditor6", "fed2.ja.auditor6@mor.gov.et", "Fikadu Wolde", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000006", "Fikadu", "Wolde", "Corporate Tax", "SENIOR", 8, "fed2.ja.auditor6@mor.gov.et", "+251-911-980006", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000007", "fed2.ja.auditor7", "fed2.ja.auditor7@mor.gov.et", "Genet Alemu", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000007", "Genet", "Alemu", "VAT Compliance", "SENIOR", 9, "fed2.ja.auditor7@mor.gov.et", "+251-911-980007", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000008", "fed2.ja.auditor8", "fed2.ja.auditor8@mor.gov.et", "Habtamu Desta", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000008", "Habtamu", "Desta", "International Tax", "MID_LEVEL", 6, "fed2.ja.auditor8@mor.gov.et", "+251-911-980008", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000009", "fed2.ja.auditor9", "fed2.ja.auditor9@mor.gov.et", "Selam Haile", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000009", "Selam", "Haile", "Transfer Pricing", "SENIOR", 11, "fed2.ja.auditor9@mor.gov.et", "+251-911-980009", "federal-lto2");
+        seedUser("a0000001-0000-0000-0098-000000000010", "fed2.ja.auditor10", "fed2.ja.auditor10@mor.gov.et", "Getnet Alemayehu", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto2");
+        seedAuditor("a0000001-0000-0000-0098-000000000010", "Getnet", "Alemayehu", "Audit Investigation", "PRINCIPAL", 12, "fed2.ja.auditor10@mor.gov.et", "+251-911-980010", "federal-lto2");
 
         // ── Addis Ababa TC1 (addis_ababa-tc1) ──
         seedUser("20000000-0000-0000-0001-000000000001", "aa1.chair", "aa1.chair@mor.gov.et", "Dr. Abebe Kebede", "COMMITTEE_CHAIR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
         seedUser("20000000-0000-0000-0001-000000000002", "aa1.member", "aa1.member@mor.gov.et", "Fatuma Ahmed", "COMMITTEE_MEMBER", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
         seedUser("10000000-0000-0000-0001-000000000001", "aa1.tl", "aa1.tl@mor.gov.et", "Dawit Tadesse", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedUser("10000000-0000-0000-0001-000000000002", "aa1.tl2", "aa1.tl2@mor.gov.et", "Robel Girma", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
         seedUser("a0000001-0000-0000-0001-000000000001", "aa1.auditor1", "aa1.auditor1@mor.gov.et", "Sara Mohammed", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
         seedAuditor("a0000001-0000-0000-0001-000000000001", "Sara", "Mohammed", "Customs & Tariffs Valuation", "SENIOR", 10, "aa1.auditor1@mor.gov.et", "+251-911-010001", "addis_ababa-tc1");
         seedUser("a0000001-0000-0000-0001-000000000002", "aa1.auditor2", "aa1.auditor2@mor.gov.et", "Yonas Berhanu", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
@@ -92,6 +146,16 @@ public class UserDataSeeder implements CommandLineRunner {
         seedAuditor("a0000001-0000-0000-0001-000000000004", "Mulugeta", "Alemayehu", "Corporate Income Tax & Deductions", "MID_LEVEL", 6, "aa1.auditor4@mor.gov.et", "+251-911-010004", "addis_ababa-tc1");
         seedUser("a0000001-0000-0000-0001-000000000005", "aa1.auditor5", "aa1.auditor5@mor.gov.et", "Tigist Haile", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
         seedAuditor("a0000001-0000-0000-0001-000000000005", "Tigist", "Haile", "Forensic & Investigation", "SENIOR", 11, "aa1.auditor5@mor.gov.et", "+251-911-010005", "addis_ababa-tc1");
+        seedUser("a0000001-0000-0000-0001-000000000006", "aa1.auditor6", "aa1.auditor6@mor.gov.et", "Chaltu Bekele", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedAuditor("a0000001-0000-0000-0001-000000000006", "Chaltu", "Bekele", "Corporate Tax", "MID_LEVEL", 6, "aa1.auditor6@mor.gov.et", "+251-911-010006", "addis_ababa-tc1");
+        seedUser("a0000001-0000-0000-0001-000000000007", "aa1.auditor7", "aa1.auditor7@mor.gov.et", "Diriba Lema", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedAuditor("a0000001-0000-0000-0001-000000000007", "Diriba", "Lema", "VAT Compliance", "SENIOR", 9, "aa1.auditor7@mor.gov.et", "+251-911-010007", "addis_ababa-tc1");
+        seedUser("a0000001-0000-0000-0001-000000000008", "aa1.auditor8", "aa1.auditor8@mor.gov.et", "Fikadu Desta", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedAuditor("a0000001-0000-0000-0001-000000000008", "Fikadu", "Desta", "International Tax", "MID_LEVEL", 5, "aa1.auditor8@mor.gov.et", "+251-911-010008", "addis_ababa-tc1");
+        seedUser("a0000001-0000-0000-0001-000000000009", "aa1.auditor9", "aa1.auditor9@mor.gov.et", "Gemechu Negash", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedAuditor("a0000001-0000-0000-0001-000000000009", "Gemechu", "Negash", "Transfer Pricing", "SENIOR", 10, "aa1.auditor9@mor.gov.et", "+251-911-010009", "addis_ababa-tc1");
+        seedUser("a0000001-0000-0000-0001-000000000010", "aa1.auditor10", "aa1.auditor10@mor.gov.et", "Haile Mengistu", "AUDITOR", "joint_audit", "TAX_CENTER", "addis_ababa-tc1");
+        seedAuditor("a0000001-0000-0000-0001-000000000010", "Haile", "Mengistu", "Audit Investigation", "PRINCIPAL", 12, "aa1.auditor10@mor.gov.et", "+251-911-010010", "addis_ababa-tc1");
 
         // ── Addis Ababa TC2 (addis_ababa-tc2) ──
         seedUser("20000000-0000-0000-0002-000000000001", "aa2.chair", "aa2.chair@mor.gov.et", "Dr. Henok Belay", "COMMITTEE_CHAIR", "joint_audit", "TAX_CENTER", "addis_ababa-tc2");
@@ -347,6 +411,49 @@ public class UserDataSeeder implements CommandLineRunner {
         seedAuditor("a0000001-0000-0000-0018-000000000004", "Kassaye", "Zewdu", "Corporate Income Tax & Deductions", "MID_LEVEL", 6, "so3.auditor4@mor.gov.et", "+251-911-180004", "somali-tc3");
         seedUser("a0000001-0000-0000-0018-000000000005", "so3.auditor5", "so3.auditor5@mor.gov.et", "Negussie Admasu", "AUDITOR", "joint_audit", "TAX_CENTER", "somali-tc3");
         seedAuditor("a0000001-0000-0000-0018-000000000005", "Negussie", "Admasu", "Forensic & Investigation", "SENIOR", 11, "so3.auditor5@mor.gov.et", "+251-911-180005", "somali-tc3");
+
+        // Ensure every other tax center (tcNum 2 to 18) also has TL2 and 10 auditors
+        String[][] otherTcs = {
+            {"addis_ababa-tc2", "aa2", "2"},
+            {"addis_ababa-tc3", "aa3", "3"},
+            {"oromia-tc1",      "or1", "4"},
+            {"oromia-tc2",      "or2", "5"},
+            {"oromia-tc3",      "or3", "6"},
+            {"amhara-tc1",      "am1", "7"},
+            {"amhara-tc2",      "am2", "8"},
+            {"amhara-tc3",      "am3", "9"},
+            {"dire_dawa-tc1",   "dd1", "10"},
+            {"dire_dawa-tc2",   "dd2", "11"},
+            {"dire_dawa-tc3",   "dd3", "12"},
+            {"snnpr-tc1",       "sn1", "13"},
+            {"snnpr-tc2",       "sn2", "14"},
+            {"snnpr-tc3",       "sn3", "15"},
+            {"somali-tc1",      "so1", "16"},
+            {"somali-tc2",      "so2", "17"},
+            {"somali-tc3",      "so3", "18"},
+        };
+        for (String[] tcInfo : otherTcs) {
+            String tcId = tcInfo[0];
+            String prefix = tcInfo[1];
+            int num = Integer.parseInt(tcInfo[2]);
+
+            // TL2
+            String tl2Id = String.format("10000000-0000-0000-%04d-000000000002", num);
+            seedUser(tl2Id, prefix + ".tl2", prefix + ".tl2@mor.gov.et",
+                     prefix.toUpperCase() + " Team Leader 2", "TEAM_LEADER", "joint_audit", "TAX_CENTER", tcId);
+
+            // Auditors 6 to 10
+            for (int a = 6; a <= 10; a++) {
+                String audId = String.format("a0000001-0000-0000-%04d-0000000000%02d", num, a);
+                String un = prefix + ".auditor" + a;
+                seedUser(audId, un, un + "@mor.gov.et",
+                         prefix.toUpperCase() + " Auditor " + a, "AUDITOR", "joint_audit", "TAX_CENTER", tcId);
+                seedAuditor(audId, prefix.toUpperCase() + "Auditor" + a, "Staff",
+                            a % 2 == 0 ? "Corporate Tax" : "VAT Compliance",
+                            a > 8 ? "PRINCIPAL" : "SENIOR", 8 + (a % 4),
+                            un + "@mor.gov.et", "+251-911-" + String.format("%02d00%02d", num, a), tcId);
+            }
+        }
 
         log.info("[UserDataSeeder] ✓ Seeded {} total users into t_user and {} auditors into t_auditor",
                  userJpaRepo.count(), auditorRepo.count());

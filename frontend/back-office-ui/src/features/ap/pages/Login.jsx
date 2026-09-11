@@ -24,18 +24,25 @@ export default function Login() {
   useEffect(() => {
     try {
       const recommended = getRecommendedTestUsers();
-      const demoList = recommended.map(user => ({
-        label: user.username,
-        username: user.username,
-        fullName: user.fullName || user.username,
-        email: user.username,
-        userEmail: user.email,
-        role: user.role ? user.role.replace(/_/g, ' ') : (user.auditType ? user.auditType.replace(/_/g, ' ') : 'USER'),
-        category: user.category || 'Other',
-        auditType: user.auditType || '',
-        assignedLocation: user.assignedLocation || 'FEDERAL',
-        description: user.description
-      }));
+      const seen = new Set();
+      const demoList = [];
+      for (const user of recommended) {
+        if (user && user.username && !seen.has(user.username.toLowerCase())) {
+          seen.add(user.username.toLowerCase());
+          demoList.push({
+            label: user.username,
+            username: user.username,
+            fullName: user.fullName || user.username,
+            email: user.username,
+            userEmail: user.email,
+            role: user.role ? user.role.replace(/_/g, ' ') : (user.auditType ? user.auditType.replace(/_/g, ' ') : 'USER'),
+            category: user.category || 'Other',
+            auditType: user.auditType || '',
+            assignedLocation: user.assignedLocation || 'FEDERAL',
+            description: user.description
+          });
+        }
+      }
       setDemoAccounts(demoList);
     } catch (err) {
       console.error('Failed to load demo accounts', err);
@@ -43,13 +50,16 @@ export default function Login() {
   }, [getRecommendedTestUsers]);
 
   const categories = useMemo(() => [
-    { id: 'ALL', label: 'All Federal' },
+    { id: 'ALL', label: 'All Users' },
+    { id: 'Joint Audit — Addis Ababa TC1', label: 'AA TC1 (Joint)' },
+    { id: 'Joint Audit — Federal LTO1', label: 'Federal LTO1 (Joint)' },
+    { id: 'Joint Audit — Federal LTO2', label: 'Federal LTO2 (Joint)' },
+    { id: 'Committees (Joint & TP)', label: 'Committees' },
     { id: 'Planning Team', label: 'Planning Team' },
     { id: 'Audit Directorate', label: 'Audit Directorate' },
     { id: 'Senior Management', label: 'Senior Mgmt' },
     { id: 'Federal Regional Directorate', label: 'Fed Reg Dir' },
     { id: 'Federal Tax Centers', label: 'Federal LTOs' },
-    { id: 'Committees (Joint & TP)', label: 'Committees' },
     { id: 'Team Leaders', label: 'Team Leaders' },
     { id: 'Auditors', label: 'Auditors' },
   ], []);

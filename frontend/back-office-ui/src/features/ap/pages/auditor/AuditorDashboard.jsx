@@ -1,605 +1,647 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search as SearchIcon, Clock, CheckCircle, PlayCircle, Eye, BarChart3, Layers, Layers3, AlertTriangle } from 'lucide-react';
-import { useApp } from '../../../../context/AppContext.jsx';
+/**
+ * AuditorDashboard - Redesigned to match Team Leader dashboard layout
+ * 
+ * Dashboard shows: welcome banner, metric cards, active work, audit summary
+ * "My Audit Cases" uses a table layout matching Team Leader's My Cases
+ */
+
+import { useState, useMemo, useCallback } from 'react';
+import {
+  Search, Clock, CheckCircle, PlayCircle, Eye, FileText, AlertTriangle,
+  BarChart3, RefreshCw, Loader2, ArrowRight, Calendar, Users, Briefcase,
+  TrendingUp, AlertCircle, ChevronRight, ChevronLeft, Filter, LayoutGrid, List,
+  FileSearch, Cpu, TestTube, MessageSquare, Target, Activity, Download, ClipboardCheck, Database,
+} from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Card, StatCard, Button, Modal, Select, Badge, Table, Empty, Alert, Textarea, Input, Pagination } from '../../../../components/ui/index.jsx';
-import { AUDIT_TYPES, CASE_STATUS, normalizeBackendStatus, getAuditTypeDef, isAuditTypeMatch } from '../../data/constants.js';
-import CaseDetailModal from '../shared/CaseDetailModal.jsx';
-import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
-import IssueAuditWorkspace from '../../../issue/pages/IssueAuditWorkspace.jsx';
-import TpWorkflowTaskPanel from '../../../tp/components/TpWorkflowTaskPanel.jsx';
+import { useWorkflow } from '../../../teamleader/context/WorkflowContext.jsx';
+import { Card, StatCard, Button, Badge, Input, Empty, Alert } from '../../../../components/ui/index.jsx';
+import MetricCard from '../../../teamleader/components/MetricCard';
+import StatusBadge from '../../../teamleader/components/StatusBadge';
+import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
+import { WORKFLOW_STEPS } from '../../../teamleader/data/workflowConstants.js';
+import useAuditorData from './hooks/useAuditorData.js';
+import AuditorWorkspace from './AuditorWorkspace.jsx';
 
-const API = '/api/v1/backoffice/ap/cases';
+// ── Risk Level Colors ────────────────────────────────────────────────────────
+const RISK_COLORS = {
+  CRITICAL: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400' },
+  HIGH:     { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400' },
+  MEDIUM:   { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400' },
+  LOW:      { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400' },
+};
 
-export default function AuditorDashboard({ view }) {
-  const { state, actions, selectors } = useApp();
-  const { user } = useAuth();
-  const [cases, setCases] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [statusModal, setStatusModal] = useState(null);
-  const [newStatus, setNewStatus] = useState('');
-  const [notes, setNotes] = useState('');
-  const [selectedCase, setSelectedCase] = useState(null);
-  const [tpWorkspaceCase, setTpWorkspaceCase] = useState(null);
-  const [tpWorkspacePhase, setTpWorkspacePhase] = useState(null);
-  const [issueWorkspaceCase, setIssueWorkspaceCase] = useState(null);
-  const [initialPhase, setInitialPhase] = useState(null);
+// ── Risk Badge Helper ────────────────────────────────────────────────────────
+function getRiskBadge(risk) {
+  const riskLower = risk?.toLowerCase();
+  if (riskLower === 'critical' || riskLower === 'high') return <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 rounded text-xs font-medium"><span className="w-2 h-2 rounded-full bg-red-600 dark:bg-red-400"></span> {risk}</span>;
+  if (riskLower === 'medium') return <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 rounded text-xs font-medium"><span className="w-2 h-2 rounded-full bg-amber-600 dark:bg-amber-400"></span> {risk}</span>;
+  if (riskLower === 'low') return <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-200 rounded text-xs font-medium"><span className="w-2 h-2 rounded-full bg-green-600 dark:bg-green-400"></span> {risk}</span>;
+  return <span className="text-gray-600 dark:text-gray-400">N/A</span>;
+}
 
+// ── Segment Badge Helper ─────────────────────────────────────────────────────
+function getSegmentBadge(segment) {
+  const segmentUpper = segment?.toUpperCase();
+  if (segmentUpper === 'LARGE') return <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded-full text-xs font-semibold">LTO</span>;
+  if (segmentUpper === 'MEDIUM') return <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 rounded-full text-xs font-semibold">MTO</span>;
+  if (segmentUpper === 'SMALL') return <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-200 rounded-full text-xs font-semibold">STO</span>;
+  return <span className="text-gray-600 dark:text-gray-400">N/A</span>;
+}
+
+// ── Cases View (Table Layout matching Team Leader) ───────────────────────
+function CasesView({ cases, loading, refreshing, error, refresh, onExecuteCase }) {
   const [search, setSearch] = useState('');
-  const [selectedYear, setSelectedYear] = useState('ALL');
-  const [availablePlanYears, setAvailablePlanYears] = useState([2026, 2027, 2028, 2029, 2030, 2031, 2032]);
-  const [page, setPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
 
-  const PHASE_MAP = {
-    'phase-1': 'DETAILED_RISK_ASSESSMENT',
-    'phase-3': 'PLANNING',
-    'phase-4': 'FIELD_WORK',
-    'phase-5': 'ANALYSIS',
-    'phase-6': 'REPORT',
-    'phase-assessment': 'ASSESSMENT',
-    'phase-7': 'NOTICE',
-    'phase-8': 'COMPLETION'
-  };
-
-  const ISSUE_PHASE_MAP = {
-    'issue-phase-1': 'NOTIFICATION',
-    'issue-phase-2': 'EVIDENCE_GATHERING',
-    'issue-phase-3': 'REPORT_DRAFT',
-    'issue-phase-4': 'REVIEW_CHAIN',
-    'issue-phase-5': 'DIRECTOR_DECISION'
-  };
-
-  const [issueInitialPhase, setIssueInitialPhase] = useState('NOTIFICATION');
-
-  const fetchMyCases = useCallback(async () => {
-    if (!user?.id && !user?.username && !user?.email) return;
-    setLoading(true);
-    try {
-      const auditorParam = user.username || user.id || user.email;
-      let r = await fetch(`${API}?auditor=${encodeURIComponent(auditorParam)}`, {
-        headers: { 'X-Actor-Id': user.id || user.username || 'auditor' }
-      });
-      let res = r.ok ? await r.json() : null;
-      let data = res?.data || [];
-
-      // Fallback query if first identifier yielded 0 cases
-      if (data.length === 0 && user.email && user.email !== auditorParam) {
-        const r2 = await fetch(`${API}?auditor=${encodeURIComponent(user.email)}`, {
-          headers: { 'X-Actor-Id': user.id || user.username || 'auditor' }
-        });
-        if (r2.ok) {
-          const res2 = await r2.json();
-          if (res2?.data?.length > 0) data = res2.data;
-        }
-      }
-
-      if (data.length === 0 && user.id && user.id !== auditorParam) {
-        const r3 = await fetch(`${API}?auditor=${encodeURIComponent(user.id)}`, {
-          headers: { 'X-Actor-Id': user.id || user.username || 'auditor' }
-        });
-        if (r3.ok) {
-          const res3 = await r3.json();
-          if (res3?.data?.length > 0) data = res3.data;
-        }
-      }
-
-      const fetched = data.map(c => {
-        let planYear = c.planYear;
-        if (!planYear && c.caseNumber && c.caseNumber.includes('-')) {
-          const prefix = c.caseNumber.split('-')[0];
-          if (!isNaN(prefix) && prefix.length === 4) {
-            planYear = parseInt(prefix, 10);
-          }
-        }
-        if (!planYear && c.planName) {
-          const m = c.planName.match(/20\d\d/);
-          if (m) planYear = parseInt(m[0], 10);
-        }
-        planYear = planYear ? parseInt(planYear, 10) : 2026;
-
-        return {
-          ...c,
-          id: c.id || c.caseNumber,
-          taxpayerName: c.taxpayerName || c.taxpayerId,
-          tin: c.taxpayerId,
-          sector: c.sector || 'Unknown',
-          riskLevel: c.riskLevel || (c.riskScore >= 80 ? 'CRITICAL' : c.riskScore >= 60 ? 'HIGH' : 'MEDIUM'),
-          frontendStatus: c.frontendStatus || normalizeBackendStatus(c.status),
-          auditTypeDef: getAuditTypeDef(c.auditType),
-          planYear,
-        };
-      });
-      setCases(fetched);
-    } catch (e) {
-      console.error('fetchMyCases error', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, user?.username, user?.email]);
-
-  useEffect(() => {
-    fetchMyCases();
-  }, [fetchMyCases]);
-
-  useEffect(() => {
-    if (view && PHASE_MAP[view]) {
-      const nextPhase = PHASE_MAP[view];
-      setTpWorkspacePhase(nextPhase);
-      setInitialPhase(nextPhase);
-
-      const tpCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER'));
-      const activeCase = tpCase || {
-        id: '0a4500d1-0842-4c07-a077-ceed404af705',
-        caseNumber: '2026-841073e3-AA-TC-AA-01-0144',
-        taxpayerName: 'Crest Textiles SC',
-        taxpayerId: '1000080599',
-        sector: 'Textiles',
-        auditType: 'TRANSFER_PRICING',
-        riskLevel: 'HIGH',
-        riskScore: 99,
-        estimatedRevenue: 1468782000,
-        planYear: 2026,
-        status: 'IN_PROGRESS',
-        frontendStatus: 'IN_PROGRESS'
-      };
-      setTpWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
-    } else if (view && ISSUE_PHASE_MAP[view]) {
-      const nextPhase = ISSUE_PHASE_MAP[view];
-      setIssueInitialPhase(nextPhase);
-      const activeCase = (cases.length > 0 && (
-        cases.find(c => (c.auditType || '').toUpperCase().includes('ISSUE')) || cases[0]
-      )) || null;
-      if (activeCase) {
-        setIssueWorkspaceCase(prev => (prev?.id === activeCase.id ? prev : activeCase));
-      }
-    } else if (view === 'dashboard' || view === 'cases') {
-      setTpWorkspaceCase(null);
-      setTpWorkspacePhase(null);
-      setIssueWorkspaceCase(null);
-    }
-  }, [view, cases]);
-
-
-  // Strictly filter cases: must be assigned to this specific auditor AND match user's audit type specialization (if defined)
-  const myCases = useMemo(() => {
-    const raw = cases.length > 0 ? cases : selectors.getCasesForAuditor(user?.id);
-    const userIdentifiers = [user?.id, user?.userId, user?.username, user?.email].filter(Boolean);
-    return raw.filter(c => {
-      // Must be assigned to this specific auditor ID (or unassigned/demo auditor matching)
-      if (c.assignedAuditorId && userIdentifiers.length > 0 && !userIdentifiers.includes(c.assignedAuditorId)) {
-        return false;
-      }
-      // If user has a specific auditType specialization, filter out mismatching cases
-      if (user?.auditType) {
-        if (!isAuditTypeMatch(user.auditType, c.auditTypeDef?.id || c.auditType)) {
-          return false;
-        }
-      }
-      return true;
+  const filteredCases = useMemo(() => {
+    return cases.filter(c => {
+      const matchesSearch = !search || 
+        c.taxpayerName?.toLowerCase().includes(search.toLowerCase()) ||
+        c.taxpayerId?.includes(search) ||
+        c.tin?.includes(search) ||
+        c.caseNumber?.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus = statusFilter === 'All Statuses' || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [cases, selectors, user?.id, user?.userId, user?.username, user?.email, user?.auditType]);
-
-  
-  // Load distinct plan years from backend plans
-  useEffect(() => {
-    async function loadPlanYears() {
-      try {
-        const res = await fetch('/api/v1/backoffice/ap/plans');
-        if (res.ok) {
-          const json = await res.json();
-          const plans = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
-          const years = [...new Set(plans.map(p => p.planYear || p.year).filter(Boolean))].sort();
-          if (years.length > 0) {
-            setAvailablePlanYears(years);
-          }
-        }
-      } catch (e) {
-        // Fallback default years
-      }
-    }
-    loadPlanYears();
-  }, []);
-
-  // Combined available years
-  const availableYears = useMemo(() => {
-    const caseYears = myCases.map(c => c.planYear).filter(Boolean);
-    const combined = [...new Set([...availablePlanYears, ...caseYears])].sort((a, b) => b - a);
-    return combined;
-  }, [availablePlanYears, myCases]);
-
-  // Filter by year
-  const yearFilteredCases = useMemo(() => {
-    if (selectedYear === 'ALL') return myCases;
-    return myCases.filter(c => String(c.planYear || 2026) === String(selectedYear));
-  }, [myCases, selectedYear]);
-
-  const inProgress = yearFilteredCases.filter(c => c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS');
-  const completed = yearFilteredCases.filter(c => ['COMPLETED', 'CLOSED'].includes(c.frontendStatus || c.status));
-
-  const isIssueUser = ((user?.auditType || '').toUpperCase().includes('ISSUE') || myCases.some(c => ['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase())));
-  const issueReturnedCases = myCases.filter(c =>
-    ['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase()) &&
-    ['REVISION_REQUESTED', 'RETURNED_TO_AUDITOR'].includes(c.status)
-  );
-
-  const filtered = yearFilteredCases.filter(c =>
-    !search ||
-    (c.taxpayerName && c.taxpayerName.toLowerCase().includes(search.toLowerCase())) ||
-    (c.tin && c.tin.includes(search)) ||
-    (c.caseNumber && c.caseNumber.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const handleUpdateStatus = async () => {
-    if (!statusModal || !newStatus) return;
-    try {
-      await fetch(`${API}/${statusModal.id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Actor-Id': user?.username || user?.id || 'auditor'
-        },
-        body: JSON.stringify({ status: newStatus, notes })
-      });
-    } catch (e) {
-      console.error('Failed to update status on server', e);
-    }
-    actions.updateCaseStatus(statusModal.id, newStatus, notes);
-    setStatusModal(null);
-    setNewStatus('');
-    setNotes('');
-    fetchMyCases();
-  };
-
-  const riskColor = { CRITICAL: 'red', HIGH: 'orange', MEDIUM: 'yellow', LOW: 'blue' };
-  const statusOptions = [
-    { value: 'IN_PROGRESS', label: 'In Progress' },
-    { value: 'COMPLETED', label: 'Completed' },
-    { value: 'CLOSED', label: 'Closed' },
-  ];
-
-  const cols = [
-    { key: 'tin', label: 'TIN', render: v => <span className="font-mono text-xs">{v}</span> },
-    { key: 'taxpayerName', label: 'Taxpayer', render: (v, row) => (
-      <div>
-        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{v}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">{row.caseNumber || row.tin} • {row.sector}</p>
-      </div>
-    )},
-    { key: 'planYear', label: 'Plan Year', render: (_, row) => (
-      <Badge color="blue" size="xs">FY {row.planYear || 2026}</Badge>
-    )},
-    { key: 'auditType', label: 'Audit Type', render: v => {
-      const at = AUDIT_TYPES.find(a => a.id === v);
-      return <Badge color={at?.color || 'gray'}>{at?.shortName || v}</Badge>;
-    }},
-    { key: 'riskLevel', label: 'Risk', render: v => <Badge color={riskColor[v] || 'gray'} dot>{v}</Badge> },
-    { key: 'riskScore', label: 'Score', render: v => <span className="font-mono text-sm font-bold">{v}</span> },
-    { key: 'status', label: 'Status', render: v => {
-      const s = CASE_STATUS[v];
-      return s ? <Badge color={s.color} dot>{s.label}</Badge> : <Badge>{v}</Badge>;
-    }},
-    { key: 'startDate', label: 'Started', render: v => <span className="text-xs text-gray-400 dark:text-gray-500">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
-    { key: '_act', label: '', render: (_, row) => {
-      const isTp = isAuditTypeMatch('TRANSFER_PRICING', row.auditType) || isAuditTypeMatch('TRANSFER_PRICING', row.auditTypeDef?.id);
-      const isIssue = isAuditTypeMatch('ISSUE_AUDIT', row.auditType) || isAuditTypeMatch('ISSUE_AUDIT', row.auditTypeDef?.id);
-      return (
-        <div className="flex gap-1 justify-end items-center" onClick={e => e.stopPropagation()}>
-          {isTp ? (
-            <div className="flex items-center gap-1">
-              <Button size="xs" variant="primary" icon={Layers3} className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm" onClick={() => { setTpWorkspacePhase('DETAILED_RISK_ASSESSMENT'); setTpWorkspaceCase(row); }}>
-                Execute TP Audit
-              </Button>
-              <Button size="xs" variant="secondary" onClick={() => { setTpWorkspacePhase('ANALYSIS'); setTpWorkspaceCase(row); }}>
-                IQR Analysis
-              </Button>
-            </div>
-          ) : isIssue ? (
-            <Button size="xs" variant="primary" icon={Layers} className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setIssueWorkspaceCase(row)}>
-              Execute Issue Audit
-            </Button>
-          ) : (
-            <Button size="xs" variant="ghost" icon={Eye} onClick={() => setSelectedCase(row)}>View</Button>
-          )}
-          {['IN_PROGRESS'].includes(row.status || row.frontendStatus) && (
-            <Button size="xs" variant="secondary" icon={PlayCircle} onClick={() => { setStatusModal(row); setNewStatus('COMPLETED'); setNotes(''); }}>
-              Update
-            </Button>
-          )}
-        </div>
-      );
-    }},
-  ];
-
-  if (tpWorkspaceCase) {
-    return (
-      <TpAuditWorkspace
-        caseData={tpWorkspaceCase}
-        user={user}
-        initialPhase={tpWorkspacePhase || initialPhase}
-        onClose={() => { setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
-        onRefresh={() => {
-          fetchMyCases();
-          setTpWorkspaceCase(null);
-          setTpWorkspacePhase(null);
-        }}
-      />
-    );
-  }
-
-  if (issueWorkspaceCase) {
-    return (
-      <IssueAuditWorkspace
-        caseData={issueWorkspaceCase}
-        user={user}
-        initialPhase={issueInitialPhase}
-        onClose={() => setIssueWorkspaceCase(null)}
-        onRefresh={() => {
-          fetchMyCases();
-          setIssueWorkspaceCase(null);
-        }}
-      />
-    );
-  }
+  }, [cases, search, statusFilter]);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="My Cases" value={yearFilteredCases.length} icon={SearchIcon} color="blue" />
-        <StatCard label="In Progress" value={inProgress.length} icon={PlayCircle} color="yellow" sub="Active audits" />
-        <StatCard label="Completed" value={completed.length} icon={CheckCircle} color="green" sub="Audits done" />
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Audit Cases</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Cases assigned to you by your Team Leader. Click <strong>Continue Audit</strong> to proceed with the workflow.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={refresh} disabled={refreshing} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium">
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {/* ── TP 8-Phase Statutory Audit Progression Guide ───────────────────── */}
-      {((user?.auditType || '').toUpperCase().includes('TRANSFER') || cases.some(c => c.auditType === 'TRANSFER_PRICING')) && (
-        <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
-            <div>
-              <p className="text-xs font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers3 className="w-4 h-4 text-purple-600" />
-                <span>Transfer Pricing Field Audit Execution — 8 Statutory Phases (Directive No. 43/2015)</span>
-              </p>
-              <p className="text-xs text-purple-700 dark:text-purple-400 mt-0.5">
-                Select any audit milestone below to launch your assigned case directly into that specialized phase:
-              </p>
-            </div>
-            {cases.length > 0 && (
-              <Button
-                size="sm"
-                variant="primary"
-                icon={Layers3}
-                className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
-                onClick={() => {
-                  const targetCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0];
-                  setTpWorkspacePhase('DETAILED_RISK_ASSESSMENT');
-                  setTpWorkspaceCase(targetCase);
-                }}
-              >
-                Launch Primary TP Workspace
-              </Button>
-            )}
+      {/* Search and Filters */}
+      <Card className="p-6">
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by taxpayer name, TIN, or case number..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Status</label>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option>All Statuses</option>
+              <option>ASSIGNED</option>
+              <option>IN_PROGRESS</option>
+              <option>COMPLETED</option>
+              <option>CONCLUDED</option>
+            </select>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-2 border-t border-purple-200/60 dark:border-purple-800/60">
-            {[
-              { id: 'DETAILED_RISK_ASSESSMENT', num: '1', label: 'Risk Assessment' },
-              { id: 'PLANNING',                 num: '2', label: 'Audit Planning' },
-              { id: 'FIELD_WORK',               num: '3', label: 'Field Work' },
-              { id: 'ANALYSIS',                 num: '4', label: 'Economic Analysis' },
-              { id: 'REPORT',                   num: '5', label: 'TP Report' },
-              { id: 'ASSESSMENT',               num: '6', label: 'Assessment' },
-              { id: 'NOTICE',                   num: '7', label: 'Notice & Objection' },
-              { id: 'COMPLETION',               num: '8', label: 'Audit Closure' },
-            ].map(phase => (
-              <button
-                key={phase.id}
-                type="button"
-                onClick={() => {
-                  const targetCase = cases.find(c => (c.auditType || '').toUpperCase().includes('TP') || (c.auditType || '').toUpperCase().includes('TRANSFER')) || cases[0];
-                  if (targetCase) {
-                    setTpWorkspacePhase(phase.id);
-                    setTpWorkspaceCase(targetCase);
-                  }
-                }}
-                className="p-2 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-700 text-center transition group cursor-pointer shadow-xs"
-              >
-                <span className="block text-[10px] font-bold text-purple-600 dark:text-purple-400 font-mono">Phase {phase.num}</span>
-                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-700 dark:group-hover:text-purple-300 mt-0.5 truncate">{phase.label}</span>
-              </button>
-            ))}
-          </div>
+        </div>
+      </Card>
+
+      {/* Cases Table */}
+      {!loading && filteredCases.length > 0 && (
+        <div className="overflow-x-auto">
+          <Card className="p-0 border border-gray-200 dark:border-gray-700">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Case ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Taxpayer (TIN & Segment)</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Source</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Risk</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Workflow Step</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredCases.map((caseItem) => {
+                  const caseId = caseItem.id || caseItem.caseId;
+                  const currentStep = caseItem.currentStep || 'PLANNING';
+                  const stepName = WORKFLOW_STEPS.find(s => s.id === currentStep)?.label || currentStep;
+
+                  return (
+                    <tr key={caseId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                          {caseItem.caseNumber || `AU-${String(caseId).substring(0, 8)}`}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{caseItem.taxpayerName || 'Taxpayer'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">TIN: {caseItem.taxpayerId || caseItem.tin || 'N/A'}</div>
+                        <div className="mt-2">{getSegmentBadge(caseItem.segment || caseItem.sector)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded text-xs font-medium">
+                          AP System
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">{getRiskBadge(caseItem.riskPriority || caseItem.riskLevel)}</td>
+                      <td className="px-6 py-4"><StatusBadge status={caseItem.status} /></td>
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{stepName}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => onExecuteCase(caseItem)}
+                            className="inline-flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shadow-blue-500/20"
+                          >
+                            <PlayCircle size={14} />
+                            Continue Audit
+                          </button>
+                          <button
+                            onClick={() => onExecuteCase(caseItem)}
+                            className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
+                          >
+                            <Eye size={14} />
+                            Details
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
         </div>
       )}
 
-      {/* ── TP Workflow Tasks Routed Back to Auditor ───────────────────── */}
-      {(user?.auditType || '').toUpperCase().includes('TRANSFER') && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <p className="text-sm font-bold text-slate-800 dark:text-white">TP Workflow — Items Returned to You</p>
+      {/* Loading State */}
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && filteredCases.length === 0 && (
+        <Card className="p-12 text-center">
+          <AlertCircle className="w-12 h-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400 mb-2">No cases found</p>
+          <p className="text-sm text-gray-500 dark:text-gray-500">
+            {cases.length === 0
+              ? "Cases will appear here once your Team Leader assigns them to you."
+              : 'Try adjusting your filters or search criteria'}
+          </p>
+        </Card>
+      )}
+
+      {/* Pagination Footer */}
+      {!loading && filteredCases.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {filteredCases.length} of {cases.length} cases.
           </div>
-          <TpWorkflowTaskPanel
-            role="auditor"
-            user={user}
-            onOpenWorkspace={(caseData, targetPhase) => {
-              setTpWorkspacePhase(targetPhase);
-              setTpWorkspaceCase(caseData);
-            }}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Active Work Item ─────────────────────────────────────────────────────────
+function ActiveWorkItem({ caseItem, onExecute }) {
+  const risk = RISK_COLORS[caseItem.riskPriority] || RISK_COLORS.MEDIUM;
+  const currentStep = caseItem.currentStep || 'PLANNING';
+  const stepIdx = WORKFLOW_STEPS.findIndex(s => s.id === currentStep);
+  const progress = stepIdx >= 0 ? Math.round(((stepIdx) / WORKFLOW_STEPS.length) * 100) : 0;
+
+  return (
+    <div
+      className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors cursor-pointer group"
+      onClick={() => onExecute(caseItem)}
+    >
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${risk.bg}`}>
+        <span className={`text-xs font-bold ${risk.text}`}>
+          {(caseItem.taxpayerName || 'TX')[0]}
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+            {caseItem.taxpayerName || 'Taxpayer'}
+          </h4>
+          <Badge color={caseItem.riskPriority === 'HIGH' ? 'red' : caseItem.riskPriority === 'CRITICAL' ? 'red' : 'yellow'} dot>
+            {caseItem.riskPriority || '—'}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">{caseItem.taxpayerId || caseItem.tin || '—'}</span>
+          <span className="text-gray-300 dark:text-gray-600">·</span>
+          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+            {WORKFLOW_STEPS.find(s => s.id === currentStep)?.label || currentStep}
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+          <div
+            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+      <ChevronRight size={16} className="text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
+    </div>
+  );
+}
+
+// ── Activity Item ────────────────────────────────────────────────────────────
+function ActivityItem({ step, action, timestamp }) {
+  const stepConfig = WORKFLOW_STEPS.find(s => s.id === step);
+  return (
+    <div className="flex items-start gap-3 pb-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-0">
+      <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-700 dark:text-gray-300">{action}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            Step {stepConfig?.number || '?'}: {stepConfig?.label || step}
+          </span>
+          <span className="text-gray-300 dark:text-gray-600">·</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {new Date(timestamp).toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard Component ─────────────────────────────────────────────────
+export default function AuditorDashboard({ view }) {
+  const { user } = useAuth();
+  const { getWorkflow, actions: workflowActions } = useWorkflow();
+  const [executingCase, setExecutingCase] = useState(null);
+
+  // Fetch data using the custom hook
+  const {
+    cases, metrics, loading, refreshing, error, refresh
+  } = useAuditorData(user?.id);
+
+  // Categorize cases
+  const activeCases = useMemo(() => 
+    cases.filter(c => c.status === 'IN_PROGRESS' || c.status === 'ASSIGNED'),
+    [cases]
+  );
+
+  const completedCases = useMemo(() => 
+    cases.filter(c => c.status === 'COMPLETED' || c.status === 'CONCLUDED'),
+    [cases]
+  );
+
+  // Get recent workflow events from active cases
+  const recentActivity = useMemo(() => {
+    const events = [];
+    activeCases.forEach(c => {
+      const wf = getWorkflow(c.id || c.caseId);
+      if (wf.timeline?.length > 0) {
+        wf.timeline.slice(-3).forEach(t => events.push(t));
+      }
+    });
+    return events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
+  }, [activeCases, getWorkflow]);
+
+  // Handlers
+  const handleExecuteCase = useCallback((caseItem) => {
+    const caseId = caseItem.id || caseItem.caseId;
+    const wf = getWorkflow(caseId);
+
+    if (wf.status === 'PENDING_HANDOFF' || !wf.steps?.CASE_DETAIL?.completedAt) {
+      workflowActions.importCase(caseId, user.id, {
+        taxpayerName: caseItem.taxpayerName,
+        importedAt: new Date().toISOString(),
+      });
+    }
+
+    setExecutingCase({
+      id: caseId,
+      taxpayerName: caseItem.taxpayerName,
+      riskLevel: caseItem.riskPriority || caseItem.riskLevel,
+      tin: caseItem.taxpayerId || caseItem.tin,
+      sector: caseItem.segment || caseItem.sector,
+      ...caseItem,
+    });
+  }, [getWorkflow, workflowActions, user?.id]);
+
+  // If executing a case, show the workspace
+  if (executingCase) {
+    return (
+      <AuditorWorkspace
+        caseData={executingCase}
+        onBack={() => setExecutingCase(null)}
+      />
+    );
+  }
+
+  // ── Cases View ──────────────────────────────────────────────────────────
+  if (view === 'cases') {
+    return (
+      <CasesView
+        cases={cases}
+        loading={loading}
+        refreshing={refreshing}
+        error={error}
+        refresh={refresh}
+        onExecuteCase={handleExecuteCase}
+      />
+    );
+  }
+
+  // ── Dashboard View (matching Team Leader style) ─────────────────────────
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Welcome Back, {user?.name}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            You are signed in as <span className="font-medium">Auditor</span>.
+            Cases assigned to you by your Team Leader appear here for execution.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium">
+            <Database size={16} />
+            <span>Database Synchronized</span>
+          </div>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Loading Indicator */}
+      {loading && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+          <Loader2 size={16} className="animate-spin" />
+          Loading your workspace...
+        </div>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <Alert type="warning" title="Data Loading Issue">
+          Some data may not be up to date. <button onClick={refresh} className="underline font-medium">Retry</button>
+        </Alert>
+      )}
+
+      {/* Metric Cards (same style as Team Leader) */}
+      {metrics && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <MetricCard
+            title="Active Cases"
+            value={metrics.inProgress}
+            subtitle="In progress"
+            icon={PlayCircle}
+            color="blue"
+          />
+          <MetricCard
+            title="Completed"
+            value={metrics.completed}
+            subtitle="Audits done"
+            icon={CheckCircle}
+            color="green"
+          />
+          <MetricCard
+            title="Total Assigned"
+            value={metrics.totalAssigned}
+            subtitle="All time"
+            icon={Briefcase}
+            color="purple"
+          />
+          <MetricCard
+            title="Audit Days"
+            value={metrics.totalAuditDays}
+            subtitle="Days worked"
+            icon={Calendar}
+            color="amber"
           />
         </div>
       )}
 
-      {/* ── Issue Audit 5-Phase Progression Guide (FR-04.6 / FR-04.7) ───────── */}
-      {isIssueUser && (
-        <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
-            <div>
-              <p className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <span>Issue Audit Execution Framework — 5 Statutory Phases (FR-04.6 / FR-04.7)</span>
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-                Targeted single-issue audit workflow. Routes strictly from Auditor → Team Leader → Tax Center Director (NO Committee):
-              </p>
+      {/* Two-Column Layout (matching Team Leader) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left Column: Active Work (2/3 width) */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Active Work Section */}
+          <Card className="p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Activity size={20} className="text-blue-600 dark:text-blue-400" />
+                  Active Work
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Cases currently assigned to you — continue your audit work.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                {activeCases.length} active
+              </span>
             </div>
-            {myCases.length > 0 && (
-              <Button
-                size="sm"
-                variant="primary"
-                icon={Layers}
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                onClick={() => {
-                  const targetCase = myCases.find(c => ['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase())) || myCases[0];
-                  setIssueInitialPhase('NOTIFICATION');
-                  setIssueWorkspaceCase(targetCase);
-                }}
-              >
-                Launch Primary Issue Workspace
-              </Button>
+
+            {activeCases.length > 0 ? (
+              <div className="space-y-3">
+                {activeCases.slice(0, 5).map((caseItem) => (
+                  <ActiveWorkItem
+                    key={caseItem.id || caseItem.caseId}
+                    caseItem={caseItem}
+                    onExecute={handleExecuteCase}
+                  />
+                ))}
+                {activeCases.length > 5 && (
+                  <p className="text-sm text-center text-gray-500 dark:text-gray-400 pt-2">
+                    +{activeCases.length - 5} more active cases
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-10 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
+                <Clock size={40} className="mx-auto mb-3 text-gray-400 dark:text-gray-600 opacity-50" />
+                <p className="text-gray-600 dark:text-gray-400 font-medium">No active cases</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                  Cases will appear when assigned by your Team Leader
+                </p>
+              </div>
             )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-2 border-t border-blue-200/60 dark:border-blue-800/60">
-            {[
-              { id: 'NOTIFICATION',       num: '1', label: 'Notify & Select' },
-              { id: 'EVIDENCE_GATHERING', num: '2', label: 'Evidence & Verification' },
-              { id: 'REPORT_DRAFT',       num: '3', label: 'Findings & Draft Report' },
-              { id: 'REVIEW_CHAIN',       num: '4', label: 'Team Leader Review' },
-              { id: 'DIRECTOR_DECISION',  num: '5', label: 'Directorate Follow-Up' },
-            ].map(phase => (
-              <button
-                key={phase.id}
-                type="button"
-                onClick={() => {
-                  const targetCase = myCases.find(c => ['ISSUE', 'ISSUE_AUDIT', 'issue_audit'].includes((c.auditType || '').toUpperCase())) || myCases[0];
-                  if (targetCase) {
-                    setIssueInitialPhase(phase.id);
-                    setIssueWorkspaceCase(targetCase);
-                  }
-                }}
-                className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-blue-100 dark:hover:bg-blue-900/40 border border-blue-200 dark:border-blue-700 text-center transition group cursor-pointer shadow-xs"
-              >
-                <span className="block text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono">Phase {phase.num}</span>
-                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-700 dark:group-hover:text-blue-300 mt-0.5 truncate">{phase.label}</span>
-              </button>
-            ))}
-          </div>
+
+            {/* Recent Activity — inline under Active Work */}
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Activity size={16} className="text-green-600 dark:text-green-400" />
+                Recent Activity
+              </h4>
+              <div className="space-y-3">
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((event, idx) => (
+                    <ActivityItem
+                      key={idx}
+                      step={event.step}
+                      action={event.action}
+                      timestamp={event.timestamp}
+                    />
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-3">No activity yet</p>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Recently Completed */}
+          {completedCases.length > 0 && (
+            <Card className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <CheckCircle size={18} className="text-green-600 dark:text-green-400" />
+                    Recently Completed
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Audits you've finished successfully.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {completedCases.slice(0, 3).map((caseItem) => (
+                  <div
+                    key={caseItem.id || caseItem.caseId}
+                    className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <CheckCircle size={16} className="text-green-500" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {caseItem.taxpayerName || 'Taxpayer'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {caseItem.taxpayerId || caseItem.tin || '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge color="green">{caseItem.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
-      )}
 
-      {/* ── Issue Audit Workflow — Revision Requests Alert ─────────────────── */}
-      {issueReturnedCases.length > 0 && (
-        <Alert
-          type="warning"
-          title={`⚠️ Issue Audit Revision Requested (${issueReturnedCases.length})`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span>
-              Your Issue Audit Team Leader has returned {issueReturnedCases.length} case(s) with revision directives before technical endorsement.
-            </span>
-            <Button
-              size="xs"
-              variant="primary"
-              className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 font-semibold"
-              onClick={() => {
-                setIssueInitialPhase('REPORT_DRAFT');
-                setIssueWorkspaceCase(issueReturnedCases[0]);
-              }}
-            >
-              Open Workspace to Revise →
-            </Button>
-          </div>
-        </Alert>
-      )}
+        {/* Right Column (1/3 width): Audit Summary & Activity */}
+        <div className="space-y-6">
 
-      {yearFilteredCases.length === 0 && (
-        <Alert type="info" title="No cases assigned yet">
-          Cases will appear here once your Team Leader assigns them to you.
-        </Alert>
-      )}
+          {/* Audit Summary */}
+          <Card className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <BarChart3 size={18} className="text-purple-600 dark:text-purple-400" />
+                  Audit Summary
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Your audit portfolio overview
+                </p>
+              </div>
+            </div>
 
-      {inProgress.length > 0 && (
-        <Alert type="info" title={`${inProgress.length} active audit${inProgress.length > 1 ? 's' : ''}`}>
-          Remember to update case status as you progress through the audit.
-        </Alert>
-      )}
+            <div className="space-y-4">
+              {/* Status Distribution */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">In Progress</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {metrics?.inProgress || 0}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Completed</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {metrics?.completed || 0}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Assigned</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {(metrics?.totalAssigned || 0) - (metrics?.inProgress || 0) - (metrics?.completed || 0)}
+                  </span>
+                </div>
+              </div>
 
-      <Card padding={false}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">My Audit Cases</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Track and update your assigned audit cases</p>
-          </div>
-          <div className="flex gap-3">
-            <Select value={selectedYear} onChange={(e) => { setSelectedYear(e.target.value); setPage(1); }}>
-              <option value="ALL">All Plan Years ({myCases.length})</option>
-              {availableYears.map(year => {
-                const count = myCases.filter(c => String(c.planYear || 2026) === String(year)).length;
+              {/* Total Cases */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Total Cases</span>
+                  <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    {metrics?.totalAssigned || 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Workflow Progress */}
+          <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Audit Workflow</h3>
+            <div className="space-y-3">
+              {WORKFLOW_STEPS.slice(0, 6).map((step, idx) => {
+                const isCurrent = idx === 0;
                 return (
-                  <option key={year} value={year}>
-                    FY {year} ({count})
-                  </option>
+                  <div key={step.id} className={`flex items-center gap-3 ${isCurrent ? 'bg-white dark:bg-slate-800 rounded-lg p-2 border border-blue-300 dark:border-blue-600' : ''}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isCurrent ? 'bg-blue-100 dark:bg-blue-800/50' : 'bg-gray-100 dark:bg-gray-800'
+                    }`}>
+                      <span className={`text-xs font-bold ${
+                        isCurrent ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+                      }`}>{idx + 1}</span>
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${isCurrent ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                        {step.label}
+                      </p>
+                      {isCurrent && <p className="text-xs text-blue-600 dark:text-blue-400">← Your next step</p>}
+                    </div>
+                  </div>
                 );
               })}
-            </Select>
-            <Input icon={SearchIcon} placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-        </div>
-        <div className="p-4">
-          {filtered.length === 0
-            ? <Empty icon={SearchIcon} title="No cases" description="Cases assigned to you will appear here." />
-            : (
-              <>
-                <Table columns={cols} rows={filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)} onRowClick={row => setSelectedCase(row)} />
-                <Pagination
-                  currentPage={page}
-                  totalPages={Math.ceil(filtered.length / itemsPerPage) || 1}
-                  totalItems={filtered.length}
-                  itemsPerPage={itemsPerPage}
-                  onPageChange={setPage}
-                  onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
-                />
-              </>
-            )
-          }
-        </div>
-      </Card>
-
-      <Modal open={!!statusModal} onClose={() => setStatusModal(null)} title="Update Case Status" size="sm"
-        footer={<>
-          <Button variant="secondary" onClick={() => setStatusModal(null)}>Cancel</Button>
-          <Button variant="primary" onClick={handleUpdateStatus} disabled={!newStatus}>Update Status</Button>
-        </>}
-      >
-        {statusModal && (
-          <div className="space-y-4">
-            <div className="bg-gray-50 rounded-xl p-3 dark:bg-slate-700">
-              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{statusModal.taxpayerName}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{statusModal.tin}</p>
             </div>
-            <Select
-              label="New Status"
-              value={newStatus}
-              onChange={e => setNewStatus(e.target.value)}
-              options={statusOptions}
-              placeholder="Select status..."
-            />
-            <Textarea
-              label="Progress Notes (optional)"
-              placeholder="Add any notes about this audit..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-            />
-          </div>
-        )}
-      </Modal>
+          </Card>
 
-      {selectedCase && (
-        <CaseDetailModal
-          caseData={state.cases.find(c => c.id === selectedCase.id) || selectedCase}
-          onClose={() => setSelectedCase(null)}
-          users={state.users}
-        />
-      )}
+
+        </div>
+      </div>
     </div>
   );
 }

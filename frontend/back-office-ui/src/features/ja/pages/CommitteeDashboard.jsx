@@ -14,7 +14,7 @@ import Card from '../../../components/Card';
 
 export default function CommitteeDashboard() {
   const { user, authContext } = useAuth();
-  const taxCenter = authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
+  const taxCenter = user?.taxCenter || authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
   const { metrics, loading, error, refresh } = useDashboard(taxCenter);
   const [liveActivities, setLiveActivities] = useState([]);
   const [sseConnected, setSseConnected] = useState(false);
@@ -80,7 +80,10 @@ export default function CommitteeDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome Back, {user?.name}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
-            You are signed in as <span className="font-medium">Director General & Chair of Joint Audit Committee</span>. 
+            You are signed in as <span className="font-semibold text-blue-600 dark:text-blue-400">
+              {user?.role === 'committee_chair' ? 'Joint Audit Committee Chair' : 'Joint Audit Committee Member'}
+            </span>
+            {taxCenter && <span className="text-gray-500 dark:text-gray-400 font-medium"> ({taxCenter})</span>}.
             Here is the active real-time stance of your tax viability portfolio.
           </p>
         </div>

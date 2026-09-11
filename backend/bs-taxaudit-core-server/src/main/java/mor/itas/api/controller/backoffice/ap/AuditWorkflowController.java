@@ -38,8 +38,29 @@ public class AuditWorkflowController {
     // STEP 1: CASE HANDOFF
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Step 1 handoff, import-from-committee and Step 2 assign-auditor are handled canonically by CaseManagementController
-    // to support both TP and Joint Audit multi-tier workflows.
+    @PostMapping("/handoff")
+    public ResponseEntity<GenericResponse<ApAuditCaseEntity>> handoffCase(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) HandoffRequest request,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        String comment = request != null ? request.getComment() : null;
+        ApAuditCaseEntity result = workflowService.handoffCase(caseId, actorId, comment);
+        return ResponseEntity.ok(GenericResponse.success(result));
+    }
+
+    @PostMapping("/import-from-committee")
+    public ResponseEntity<GenericResponse<ApAuditCaseEntity>> importCaseFromCommittee(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) ImportFromCommitteeRequest request,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        String teamLeaderId = request != null ? request.getTeamLeaderId() : null;
+        if (teamLeaderId == null || teamLeaderId.isEmpty() || "system".equals(teamLeaderId)) {
+            teamLeaderId = actorId;
+        }
+        ApAuditCaseEntity result = workflowService.importCaseFromCommittee(caseId, teamLeaderId);
+        return ResponseEntity.ok(GenericResponse.success(result));
+    }
+
     @PostMapping("/decline-handoff")
     public ResponseEntity<GenericResponse<ApAuditCaseEntity>> declineHandoff(
             @PathVariable UUID caseId,

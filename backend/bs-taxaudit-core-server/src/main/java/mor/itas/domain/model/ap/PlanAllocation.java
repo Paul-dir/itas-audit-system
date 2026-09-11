@@ -49,6 +49,7 @@ public class PlanAllocation {
     // Revenue
     private BigDecimal estimatedRevenue;
     private JsonNode revenueByAuditType;
+    private JsonNode allocationByAuditType;
 
     // Constructors
     public PlanAllocation() {
@@ -278,6 +279,14 @@ public class PlanAllocation {
 
     public void setRevenueByAuditType(JsonNode revenueByAuditType) {
         this.revenueByAuditType = revenueByAuditType;
+    }
+
+    public JsonNode getAllocationByAuditType() {
+        return allocationByAuditType;
+    }
+
+    public void setAllocationByAuditType(JsonNode allocationByAuditType) {
+        this.allocationByAuditType = allocationByAuditType;
     }
 
     @Override
