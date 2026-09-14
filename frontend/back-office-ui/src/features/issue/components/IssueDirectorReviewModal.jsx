@@ -119,7 +119,7 @@ export default function IssueDirectorReviewModal({
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                   Tax Center Directorate — Issue Audit Final Resolution
                 </h2>
-                <Badge color="blue" size="sm">FR-04.6-07 Statutory Authority</Badge>
+                <Badge color="blue" size="sm"> Statutory Authority</Badge>
                 <Badge color="teal" size="sm">Tax Center Direct Approval</Badge>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -201,11 +201,11 @@ export default function IssueDirectorReviewModal({
           </table>
         </div>
 
-        {/* ═══ STATUTORY FOLLOW-UP DECISION SELECTOR (FR-04.6-07) ═══ */}
+        {/* ═══ STATUTORY FOLLOW-UP DECISION SELECTOR ═══ */}
         <div className="space-y-3 bg-gray-50/70 dark:bg-slate-800/60 p-4 rounded-xl border border-gray-200 dark:border-slate-700">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
             <Scale size={14} className="text-blue-600" />
-            Select Statutory Follow-Up Determination (FR-04.6-07)
+            Select Statutory Follow-Up Determination
           </label>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

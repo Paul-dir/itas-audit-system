@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Clock, CheckCircle2, AlertTriangle, FileText, ShieldAlert, Send,
-  ArrowRight, RefreshCw, Eye, AlertOctagon, Scale, Users, BarChart2, X
+  ArrowRight, RefreshCw, Eye, AlertOctagon, Scale, Users, BarChart2, X,
+  FileCheck, ShieldCheck
 } from 'lucide-react';
 import { Card, Button, Badge, Alert, Modal, Textarea } from '../../../components/ui/index.jsx';
 
@@ -126,6 +127,60 @@ export default function TpWorkflowTaskPanel({ role, user, onOpenWorkspace }) {
             });
           }
 
+          // TP Audit Plan submitted for TL review / endorsement
+          if (c.status === 'AUDIT_PLAN_SUBMITTED_TL' || (phase === 'AUDIT_PLANNING' && caseStatus === 'SUBMITTED_FOR_REVIEW')) {
+            derived.push({
+              id: `${c.id}-audit-plan-review`,
+              type: 'AUDIT_PLAN_REVIEW',
+              caseId: c.id,
+              caseNumber: c.caseNumber,
+              taxpayerName: c.taxpayerName || c.taxpayerId,
+              phase: 'AUDIT_PLANNING',
+              title: 'TP Audit Plan — Supervisory Review & Endorsement Due',
+              description: `Lead auditor submitted the proposed audit program, materiality calculations, and sampling plan for your technical sign-off before transmittal to Review Committee.`,
+              urgency: 'CRITICAL',
+              action: 'REVIEW_PLAN',
+              targetPhase: 'AUDIT_PLANNING',
+              caseData: c,
+            });
+          }
+
+          // TP Detailed Risk Assessment submitted for TL review / endorsement
+          if (c.status === 'RISK_ASSESSMENT_SUBMITTED_TL' || (phase === 'DETAILED_RISK_ASSESSMENT' && caseStatus === 'SUBMITTED_FOR_REVIEW')) {
+            derived.push({
+              id: `${c.id}-risk-review`,
+              type: 'RISK_REVIEW',
+              caseId: c.id,
+              caseNumber: c.caseNumber,
+              taxpayerName: c.taxpayerName || c.taxpayerId,
+              phase: 'DETAILED_RISK_ASSESSMENT',
+              title: 'Detailed Risk Assessment — TL Review & Endorsement Due',
+              description: `Lead auditor completed and submitted the TP Detailed Risk Assessment and Working Hypothesis for supervisory sign-off.`,
+              urgency: 'HIGH',
+              action: 'REVIEW_RISK',
+              targetPhase: 'DETAILED_RISK_ASSESSMENT',
+              caseData: c,
+            });
+          }
+
+          // Case needs auditor assignment
+          if ((caseStatus === 'PLANNING_TRIGGERED' || caseStatus === 'ASSIGNMENT_PENDING') && !c.assignedAuditorId) {
+            derived.push({
+              id: `${c.id}-assign-auditor`,
+              type: 'AUDITOR_ASSIGNMENT',
+              caseId: c.id,
+              caseNumber: c.caseNumber,
+              taxpayerName: c.taxpayerName || c.taxpayerId,
+              phase: 'PLANNING',
+              title: 'TP Case Pending Auditor Assignment',
+              description: `Audit planning has been triggered. Assign a qualified Transfer Pricing auditor to initiate the detailed risk assessment and planning dossier.`,
+              urgency: 'HIGH',
+              action: 'ASSIGN_AUDITOR',
+              targetPhase: 'CASE_ASSIGNMENT',
+              caseData: c,
+            });
+          }
+
           // Planning meeting committee decision needed
           if (phase === 'PLANNING_MEETING' && caseStatus === 'AWAITING_COMMITTEE_DECISION') {
             derived.push({
@@ -214,6 +269,42 @@ export default function TpWorkflowTaskPanel({ role, user, onOpenWorkspace }) {
               urgency: 'CRITICAL',
               action: 'AUTHORIZE_NOTICE',
               targetPhase: 'NOTICE',
+              caseData: c,
+            });
+          }
+
+          // TP Audit Plan endorsed by TL — needs Committee statutory approval
+          if (c.status === 'AUDIT_PLAN_SUBMITTED_COMMITTEE' || (phase === 'AUDIT_PLANNING' && caseStatus === 'SUBMITTED_FOR_COMMITTEE')) {
+            derived.push({
+              id: `${c.id}-committee-plan-review`,
+              type: 'COMMITTEE_PLAN_REVIEW',
+              caseId: c.id,
+              caseNumber: c.caseNumber,
+              taxpayerName: c.taxpayerName || c.taxpayerId,
+              phase: 'AUDIT_PLANNING',
+              title: 'TP Audit Plan — Committee Statutory Approval Required',
+              description: `Team Leader endorsed the Audit Plan. The Review Committee must review the audit scope, sample design, and timeline, then grant final statutory sign-off.`,
+              urgency: 'CRITICAL',
+              action: 'COMMITTEE_APPROVE_PLAN',
+              targetPhase: 'AUDIT_PLANNING',
+              caseData: c,
+            });
+          }
+
+          // TP Detailed Risk Assessment endorsed by TL — needs Committee review
+          if (c.status === 'SUBMITTED_FOR_COMMITTEE' && (phase === 'DETAILED_RISK_ASSESSMENT' || phase === 'RISK_ASSESSMENT')) {
+            derived.push({
+              id: `${c.id}-committee-risk-review`,
+              type: 'COMMITTEE_RISK_REVIEW',
+              caseId: c.id,
+              caseNumber: c.caseNumber,
+              taxpayerName: c.taxpayerName || c.taxpayerId,
+              phase: 'DETAILED_RISK_ASSESSMENT',
+              title: 'Detailed Risk Assessment — Committee Review & Approval',
+              description: `Team Leader endorsed the Detailed Risk Assessment. Committee review is required before proceeding.`,
+              urgency: 'HIGH',
+              action: 'COMMITTEE_APPROVE_RISK',
+              targetPhase: 'DETAILED_RISK_ASSESSMENT',
               caseData: c,
             });
           }
@@ -307,6 +398,11 @@ export default function TpWorkflowTaskPanel({ role, user, onOpenWorkspace }) {
     REPORT_REVISION:        <AlertTriangle className="w-5 h-5 text-amber-600" />,
     IDR_ACKNOWLEDGMENT:     <CheckCircle2 className="w-5 h-5 text-emerald-600" />,
     IDR_OVERDUE:            <AlertOctagon className="w-5 h-5 text-rose-600" />,
+    AUDIT_PLAN_REVIEW:      <FileCheck className="w-5 h-5 text-amber-600" />,
+    RISK_REVIEW:            <ShieldCheck className="w-5 h-5 text-indigo-600" />,
+    AUDITOR_ASSIGNMENT:     <Users className="w-5 h-5 text-blue-600" />,
+    COMMITTEE_PLAN_REVIEW:  <FileCheck className="w-5 h-5 text-purple-600" />,
+    COMMITTEE_RISK_REVIEW:  <ShieldCheck className="w-5 h-5 text-purple-600" />,
   };
 
   const handleQuickAction = async (task, decision) => {

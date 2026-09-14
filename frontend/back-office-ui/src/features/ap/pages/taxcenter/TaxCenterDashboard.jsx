@@ -560,7 +560,7 @@ export default function TaxCenterDashboard({ view }) {
               ))}
             </div>
 
-            {/* ── Issue Audit Cases Awaiting Directorate Decision Banner (FR-04.6-07 / NO Committee) ── */}
+            {/* ── Issue Audit Cases Awaiting Directorate Decision Banner (Direct Directorate Route) ── */}
             {pendingDirectorDecisionCases.length > 0 && (
               <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-3">
@@ -572,7 +572,7 @@ export default function TaxCenterDashboard({ view }) {
                       Issue Audit Directorate Follow-Up Decisions Pending
                     </p>
                     <p className="text-xs text-indigo-700 dark:text-indigo-300">
-                      {pendingDirectorDecisionCases.length} case(s) have completed Issue Team Leader technical review. Under ITAS statutory governance (FR-04.6/07 - NO Committee), your final follow-up determination is required.
+                      {pendingDirectorDecisionCases.length} case(s) have completed Issue Team Leader technical review. Under ITAS statutory governance, your final follow-up determination is required.
                     </p>
                   </div>
                 </div>

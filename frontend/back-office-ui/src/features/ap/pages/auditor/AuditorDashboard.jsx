@@ -11,6 +11,8 @@ import {
   BarChart3, RefreshCw, Loader2, ArrowRight, Calendar, Users, Briefcase,
   TrendingUp, AlertCircle, ChevronRight, ChevronLeft, Filter, LayoutGrid, List,
   FileSearch, Cpu, TestTube, MessageSquare, Target, Activity, Download, ClipboardCheck, Database,
+  CheckSquare, Star, Building2, ClipboardList, Layers, FolderOpen, ArrowUpRight,
+  ShieldAlert, Scale, BarChart2, Calculator, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { useWorkflow } from '../../../teamleader/context/WorkflowContext.jsx';
@@ -21,6 +23,8 @@ import { AUDIT_TYPES, CASE_STATUS } from '../../data/constants.js';
 import { WORKFLOW_STEPS } from '../../../teamleader/data/workflowConstants.js';
 import useAuditorData from './hooks/useAuditorData.js';
 import AuditorWorkspace from './AuditorWorkspace.jsx';
+import TpAuditorWorkspace from '../../../tp/pages/TpAuditorWorkspace.jsx';
+import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 
 // ── Risk Level Colors ────────────────────────────────────────────────────────
 const RISK_COLORS = {
@@ -49,7 +53,7 @@ function getSegmentBadge(segment) {
 }
 
 // ── Cases View (Table Layout matching Team Leader) ───────────────────────
-function CasesView({ cases, loading, refreshing, error, refresh, onExecuteCase }) {
+function CasesView({ cases, loading, refreshing, error, refresh, onExecuteCase, onViewDossier }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
 
@@ -162,11 +166,11 @@ function CasesView({ cases, loading, refreshing, error, refresh, onExecuteCase }
                             Continue Audit
                           </button>
                           <button
-                            onClick={() => onExecuteCase(caseItem)}
+                            onClick={() => onViewDossier && onViewDossier(caseItem)}
                             className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
                           >
                             <Eye size={14} />
-                            Details
+                            Dossier
                           </button>
                         </div>
                       </td>
@@ -283,16 +287,293 @@ function ActivityItem({ step, action, timestamp }) {
   );
 }
 
+// ── Transfer Pricing Audit Execution Step Configurations ───────────────────────
+const STEP_CONFIG = {
+  'phase-1': {
+    gate: 'DETAILED_RISK_ASSESSMENT',
+    stepNumber: 'Phase 1 of 8',
+    title: '1. Risk Assessment & Evidence',
+    description: 'Review transfer pricing risk profile, score BEPS flags, materiality thresholds, and assemble baseline evidence.',
+    icon: ShieldAlert,
+    badgeColor: 'blue',
+  },
+  'phase-2': {
+    gate: 'AUDIT_PLANNING',
+    stepNumber: 'Phase 2 of 8',
+    title: '2. Audit Planning & Programming',
+    description: 'Define audit scope, timeline, taxpayer notification letters, and conduct preliminary engagement meetings.',
+    icon: Calendar,
+    badgeColor: 'indigo',
+  },
+  'phase-3': {
+    gate: 'FIELD_WORK',
+    stepNumber: 'Phase 3 of 8',
+    title: '3. Field Work & Facts',
+    description: 'Conduct on-site interviews, functional analysis (FAR), inspect books, and record formal statement of facts.',
+    icon: Layers,
+    badgeColor: 'amber',
+  },
+  'phase-4': {
+    gate: 'ANALYSIS',
+    stepNumber: 'Phase 4 of 8',
+    title: '4. Economic Analysis & IQR',
+    description: 'Select transfer pricing methodology (CUP, TNMM, Resale Price, Cost Plus, Profit Split) and compute interquartile ranges.',
+    icon: BarChart2,
+    badgeColor: 'purple',
+  },
+  'phase-5': {
+    gate: 'REPORT',
+    stepNumber: 'Phase 5 of 8',
+    title: '5. TP Audit Report & Exit Conference',
+    description: 'Synthesize audit findings, prepare comprehensive TP audit report, and conduct formal taxpayer exit conference.',
+    icon: FileText,
+    badgeColor: 'emerald',
+  },
+  'phase-6': {
+    gate: 'ASSESSMENT',
+    stepNumber: 'Phase 6 of 8',
+    title: '6. Assessment & Notice Draft',
+    description: 'Draft statutory assessment notice, calculate tax adjustments and penalties, and submit for endorsement.',
+    icon: Calculator,
+    badgeColor: 'rose',
+  },
+  'phase-assessment': {
+    gate: 'ASSESSMENT',
+    stepNumber: 'Phase 6 of 8',
+    title: '6. Assessment & Notice Draft',
+    description: 'Draft statutory assessment notice, calculate tax adjustments and penalties, and submit for endorsement.',
+    icon: Calculator,
+    badgeColor: 'rose',
+  },
+  'phase-7': {
+    gate: 'NOTICE',
+    stepNumber: 'Phase 7 of 8',
+    title: '7. Notice & Statutory Objection',
+    description: 'Issue formal assessment notice to taxpayer, monitor statutory 30-day objection window, and process taxpayer responses.',
+    icon: Scale,
+    badgeColor: 'orange',
+  },
+  'phase-8': {
+    gate: 'CLOSURE',
+    stepNumber: 'Phase 8 of 8',
+    title: '8. Audit Closure & Archival',
+    description: 'Finalize taxpayer settlement or objection resolution, archive case dossier, and record audit closure metrics.',
+    icon: CheckCircle2,
+    badgeColor: 'teal',
+  },
+};
+
+// ── Step-Based Dynamic Case Selector View ────────────────────────────────────
+function CaseStepSelectorView({ stepKey, stepConfig, cases, loading, onSelectCase, onNavigate }) {
+  const [search, setSearch] = useState('');
+  const [selectedCaseId, setSelectedCaseId] = useState('');
+
+  const filteredCases = useMemo(() => {
+    return cases.filter(c => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return (
+        c.taxpayerName?.toLowerCase().includes(s) ||
+        c.taxpayerId?.toLowerCase().includes(s) ||
+        c.tin?.toLowerCase().includes(s) ||
+        c.caseNumber?.toLowerCase().includes(s)
+      );
+    });
+  }, [cases, search]);
+
+  const StepIcon = stepConfig?.icon || FileSearch;
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Step Header Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-950 text-white rounded-2xl p-6 shadow-xl border border-blue-800/50">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center flex-shrink-0 text-blue-300">
+              <StepIcon size={26} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/30">
+                  {stepConfig?.stepNumber || 'Audit Execution'}
+                </span>
+                <span className="text-xs text-blue-200">· Transfer Pricing Audit Execution</span>
+              </div>
+              <h1 className="text-2xl font-bold mt-1 text-white">
+                {stepConfig?.title || 'Audit Step'}
+              </h1>
+              <p className="text-sm text-blue-100/80 mt-1 max-w-2xl">
+                {stepConfig?.description || 'Select an assigned transfer pricing audit case below to open this step.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-blue-200 bg-blue-800/40 px-3 py-1.5 rounded-lg border border-blue-700/50 font-medium">
+              {cases.length} Total Assigned Cases
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Case Selection & Filter Card */}
+      <Card className="p-5">
+        <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
+          {/* Search Input */}
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search assigned cases by taxpayer name, TIN, or case number..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Quick Select Dropdown */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap uppercase">
+              Quick Pick:
+            </span>
+            <select
+              value={selectedCaseId}
+              onChange={(e) => {
+                const target = cases.find(c => (c.id || c.caseId) === e.target.value);
+                if (target) {
+                  onSelectCase(target);
+                }
+              }}
+              className="px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[240px]"
+            >
+              <option value="">-- Select an Assigned Case --</option>
+              {cases.map((c) => (
+                <option key={c.id || c.caseId} value={c.id || c.caseId}>
+                  {c.taxpayerName || 'Taxpayer'} ({c.taxpayerId || c.tin || c.caseNumber})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Cases Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-5 animate-pulse">
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-3"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
+              <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </Card>
+          ))}
+        </div>
+      ) : filteredCases.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredCases.map((caseItem) => {
+            const caseId = caseItem.id || caseItem.caseId;
+            return (
+              <div
+                key={caseId}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all duration-200 flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+                      {caseItem.caseNumber || `AU-${String(caseId).substring(0, 8)}`}
+                    </div>
+                    {getRiskBadge(caseItem.riskPriority || caseItem.riskLevel)}
+                  </div>
+
+                  <h3 className="font-semibold text-gray-900 dark:text-white text-base group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
+                    {caseItem.taxpayerName || 'Taxpayer'}
+                  </h3>
+                  
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span>TIN: <strong className="font-mono text-gray-700 dark:text-gray-300">{caseItem.taxpayerId || caseItem.tin || 'N/A'}</strong></span>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-3">
+                    {getSegmentBadge(caseItem.segment || caseItem.sector)}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                      Transfer Pricing
+                    </span>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs flex items-center justify-between text-gray-500 dark:text-gray-400">
+                    <span>Status: <strong className="text-gray-700 dark:text-gray-200">{caseItem.status || 'ASSIGNED'}</strong></span>
+                    <span>Step: <strong className="text-blue-600 dark:text-blue-400">{caseItem.currentStep || 'PLANNING'}</strong></span>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <button
+                    onClick={() => onSelectCase(caseItem)}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20"
+                  >
+                    <PlayCircle size={16} />
+                    Open in {stepConfig?.title?.split('&')?.[0]?.trim() || 'Step'}
+                    <ArrowRight size={14} className="ml-0.5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Card className="p-12 text-center">
+          <AlertCircle className="w-12 h-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No Cases Found</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            {cases.length === 0
+              ? 'No transfer pricing audit cases are currently assigned to you.'
+              : 'No assigned cases matched your search query.'}
+          </p>
+          {cases.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setSearch('')}>
+              Clear Search
+            </Button>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard Component ─────────────────────────────────────────────────
-export default function AuditorDashboard({ view }) {
+export default function AuditorDashboard({ view, onNavigate }) {
   const { user } = useAuth();
   const { getWorkflow, actions: workflowActions } = useWorkflow();
-  const [executingCase, setExecutingCase] = useState(null);
+
+  // Active selected case for the active audit execution view
+  const [activeStepCase, setActiveStepCase] = useState(null);
+  const [lastStepView, setLastStepView] = useState(view);
+  const [dossierCase, setDossierCase] = useState(null);
+
+  // If user clicks a different phase in the sidebar, reset activeStepCase so they can select a case
+  if (view !== lastStepView) {
+    setLastStepView(view);
+    setActiveStepCase(null);
+  }
+
+  // Active selected case stored in sessionStorage for general workflow
+  const [selectedCaseId, setSelectedCaseId] = useState(() => {
+    return sessionStorage.getItem('auditor_active_case_id') || null;
+  });
+  const [executingCaseOverride, setExecutingCaseOverride] = useState(null);
 
   // Fetch data using the custom hook
   const {
     cases, metrics, loading, refreshing, error, refresh
   } = useAuditorData(user?.id);
+
+  // Derive activeCase
+  const activeCase = useMemo(() => {
+    if (executingCaseOverride && (!selectedCaseId || (executingCaseOverride.id || executingCaseOverride.caseId) === selectedCaseId)) {
+      return executingCaseOverride;
+    }
+    if (!selectedCaseId || !cases || cases.length === 0) return null;
+    return cases.find(c => (c.id || c.caseId) === selectedCaseId) || null;
+  }, [cases, selectedCaseId, executingCaseOverride]);
 
   // Categorize cases
   const activeCases = useMemo(() => 
@@ -318,33 +599,96 @@ export default function AuditorDashboard({ view }) {
   }, [activeCases, getWorkflow]);
 
   // Handlers
-  const handleExecuteCase = useCallback((caseItem) => {
+  const handleExecuteCase = useCallback((caseItem, targetStep) => {
     const caseId = caseItem.id || caseItem.caseId;
     const wf = getWorkflow(caseId);
 
     if (wf.status === 'PENDING_HANDOFF' || !wf.steps?.CASE_DETAIL?.completedAt) {
-      workflowActions.importCase(caseId, user.id, {
+      workflowActions.importCase(caseId, user?.id, {
         taxpayerName: caseItem.taxpayerName,
         importedAt: new Date().toISOString(),
       });
     }
 
-    setExecutingCase({
+    const fullCase = {
       id: caseId,
       taxpayerName: caseItem.taxpayerName,
       riskLevel: caseItem.riskPriority || caseItem.riskLevel,
       tin: caseItem.taxpayerId || caseItem.tin,
       sector: caseItem.segment || caseItem.sector,
       ...caseItem,
-    });
-  }, [getWorkflow, workflowActions, user?.id]);
+    };
 
-  // If executing a case, show the workspace
-  if (executingCase) {
+    setActiveStepCase(fullCase);
+    setSelectedCaseId(caseId);
+    sessionStorage.setItem('auditor_active_case_id', caseId);
+    setExecutingCaseOverride(fullCase);
+
+    if (targetStep && onNavigate) {
+      onNavigate(targetStep);
+    }
+  }, [getWorkflow, workflowActions, user?.id, onNavigate]);
+
+  const handleCloseWorkspace = useCallback(() => {
+    setActiveStepCase(null);
+    setSelectedCaseId(null);
+    setExecutingCaseOverride(null);
+    sessionStorage.removeItem('auditor_active_case_id');
+    if (onNavigate) {
+      onNavigate('cases');
+    }
+  }, [onNavigate]);
+
+  // Loading state when restoring a stored case
+  if (loading && selectedCaseId && !executingCaseOverride && cases.length === 0) {
     return (
-      <AuditorWorkspace
-        caseData={executingCase}
-        onBack={() => setExecutingCase(null)}
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500">
+        <Loader2 size={32} className="animate-spin text-blue-600 mb-3" />
+        <p className="text-sm font-medium">Loading case workspace...</p>
+      </div>
+    );
+  }
+
+  // ── TP AUDIT EXECUTION Steps ─────────────────────────────────────────────
+  if (view && STEP_CONFIG[view]) {
+    const step = STEP_CONFIG[view];
+
+    // If an assigned case is selected for this step, render the workspace at this gate
+    if (activeStepCase) {
+      const isTp = (activeStepCase.auditType || '').toUpperCase().includes('TP') ||
+                   (activeStepCase.auditType || '').toUpperCase().includes('TRANSFER') ||
+                   (user?.auditType || '').toUpperCase().includes('TP') ||
+                   (user?.username || '').toLowerCase().includes('tp');
+      if (isTp) {
+        return (
+          <TpAuditorWorkspace
+            caseData={activeStepCase}
+            user={user}
+            initialGate={step.gate}
+            assignedCases={cases}
+            onSwitchCase={(newCase) => setActiveStepCase(newCase)}
+            onClose={() => setActiveStepCase(null)}
+            onRefresh={refresh}
+          />
+        );
+      }
+      return (
+        <AuditorWorkspace
+          caseData={activeStepCase}
+          onBack={() => setActiveStepCase(null)}
+        />
+      );
+    }
+
+    // No case selected yet: Show dynamic case selection screen for this step!
+    return (
+      <CaseStepSelectorView
+        stepKey={view}
+        stepConfig={step}
+        cases={cases}
+        loading={loading}
+        onSelectCase={(selectedCase) => setActiveStepCase(selectedCase)}
+        onNavigate={onNavigate}
       />
     );
   }
@@ -352,14 +696,52 @@ export default function AuditorDashboard({ view }) {
   // ── Cases View ──────────────────────────────────────────────────────────
   if (view === 'cases') {
     return (
-      <CasesView
-        cases={cases}
-        loading={loading}
-        refreshing={refreshing}
-        error={error}
-        refresh={refresh}
-        onExecuteCase={handleExecuteCase}
-      />
+      <div className="space-y-6">
+        {activeCase && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                {activeCase.taxpayerName?.[0] || 'C'}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Currently Active: {activeCase.taxpayerName}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Case {activeCase.caseNumber || activeCase.id} · TIN: {activeCase.taxpayerId || activeCase.tin || '—'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedCaseId(null);
+                  setExecutingCaseOverride(null);
+                  sessionStorage.removeItem('auditor_active_case_id');
+                }}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              >
+                Clear Selection
+              </button>
+              <button
+                onClick={() => onNavigate && onNavigate('phase-1')}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                Open Workspace →
+              </button>
+            </div>
+          </div>
+        )}
+        <CasesView
+          cases={cases}
+          loading={loading}
+          refreshing={refreshing}
+          error={error}
+          refresh={refresh}
+          onExecuteCase={(c) => handleExecuteCase(c, 'phase-1')}
+          onViewDossier={(c) => setDossierCase(c)}
+        />
+      </div>
     );
   }
 
@@ -391,6 +773,52 @@ export default function AuditorDashboard({ view }) {
           </button>
         </div>
       </div>
+
+      {/* Active Selected Case Banner */}
+      {activeCase && (
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center font-bold text-lg text-white flex-shrink-0">
+              {activeCase.taxpayerName?.[0] || 'T'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider bg-white/20 border border-white/30 px-2 py-0.5 rounded font-bold">
+                  Active Selected Case
+                </span>
+                <span className="text-xs text-blue-100 font-mono">
+                  {activeCase.caseNumber || activeCase.id}
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white leading-snug mt-0.5">
+                {activeCase.taxpayerName}
+              </h3>
+              <p className="text-xs text-blue-100 mt-0.5">
+                TIN: <strong className="font-mono">{activeCase.taxpayerId || activeCase.tin || 'N/A'}</strong> · Segment: {activeCase.segment || activeCase.sector || 'LTO'} · Priority: {activeCase.riskPriority || activeCase.riskLevel || 'HIGH'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                setSelectedCaseId(null);
+                setExecutingCaseOverride(null);
+                sessionStorage.removeItem('auditor_active_case_id');
+              }}
+              className="px-3 py-2 text-xs text-blue-100 hover:text-white border border-white/30 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={() => onNavigate && onNavigate('phase-1')}
+              className="px-4 py-2 bg-white hover:bg-blue-50 text-blue-700 rounded-lg text-xs font-bold transition-all shadow-md inline-flex items-center gap-1.5"
+            >
+              <PlayCircle size={15} />
+              Resume Audit Workspace →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Loading Indicator */}
       {loading && (
@@ -470,7 +898,7 @@ export default function AuditorDashboard({ view }) {
                   <ActiveWorkItem
                     key={caseItem.id || caseItem.caseId}
                     caseItem={caseItem}
-                    onExecute={handleExecuteCase}
+                    onExecute={(c) => handleExecuteCase(c, 'phase-1')}
                   />
                 ))}
                 {activeCases.length > 5 && (
@@ -642,6 +1070,14 @@ export default function AuditorDashboard({ view }) {
 
         </div>
       </div>
+
+      {/* Taxpayer Dossier Modal */}
+      {dossierCase && (
+        <CaseDetailModal
+          caseData={dossierCase}
+          onClose={() => setDossierCase(null)}
+        />
+      )}
     </div>
   );
 }

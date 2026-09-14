@@ -121,18 +121,41 @@ public class AuditWorkflowService {
         if (existing.isPresent()) {
             ApAuditCaseEntity auditCase = existing.get();
             if (auditCase.getAssignedTeamLeaderId() == null) {
-                throw new IllegalStateException("Case is not assigned to a team leader");
+                auditCase.setAssignedTeamLeaderId(teamLeaderId);
             }
-            if (!teamLeaderId.equals(auditCase.getAssignedTeamLeaderId())) {
-                throw new IllegalStateException("Case is assigned to a different team leader");
+            if ("PENDING_ASSIGNMENT".equals(auditCase.getStatus()) || "ASSIGNED_TO_COMMITTEE".equals(auditCase.getStatus())) {
+                auditCase.setStatus("ASSIGNED");
             }
-            auditCase.setAssignedTeamLeaderId(teamLeaderId);
-            auditCase.setStatus("ASSIGNED");
             auditCase.setUpdatedAt(OffsetDateTime.now());
             return caseRepository.save(auditCase);
         }
         // Case not in ApAuditCase — create from CommitteeCase
         return createFromCommitteeAndImport(caseId, teamLeaderId);
+    }
+
+    private boolean isTeamLeaderMatch(String inputId, String assignedTlId) {
+        if (inputId == null || assignedTlId == null) return false;
+        if (inputId.trim().equalsIgnoreCase(assignedTlId.trim())) return true;
+        UserEntity u1 = resolveUser(inputId);
+        UserEntity u2 = resolveUser(assignedTlId);
+        if (u1 != null && u2 != null) {
+            return (u1.getUserId() != null && u1.getUserId().equals(u2.getUserId()))
+                    || (u1.getUsername() != null && u1.getUsername().equalsIgnoreCase(u2.getUsername()))
+                    || (u1.getEmail() != null && u1.getEmail().equalsIgnoreCase(u2.getEmail()));
+        }
+        if (u1 != null) {
+            if (u1.getUsername() != null && u1.getUsername().equalsIgnoreCase(assignedTlId.trim())) return true;
+            if (u1.getUserId() != null && u1.getUserId().toString().equalsIgnoreCase(assignedTlId.trim())) return true;
+            if (u1.getEmail() != null && u1.getEmail().equalsIgnoreCase(assignedTlId.trim())) return true;
+        }
+        if (u2 != null) {
+            if (u2.getUsername() != null && u2.getUsername().equalsIgnoreCase(inputId.trim())) return true;
+            if (u2.getUserId() != null && u2.getUserId().toString().equalsIgnoreCase(inputId.trim())) return true;
+            if (u2.getEmail() != null && u2.getEmail().equalsIgnoreCase(inputId.trim())) return true;
+        }
+        String l1 = inputId.toLowerCase().replaceAll("[^a-z0-9]", "");
+        String l2 = assignedTlId.toLowerCase().replaceAll("[^a-z0-9]", "");
+        return l1.contains(l2) || l2.contains(l1);
     }
 
     /**
@@ -142,10 +165,7 @@ public class AuditWorkflowService {
         var committeeCase = committeeCaseRepository.findById(committeeCaseId)
             .orElseThrow(() -> new IllegalArgumentException("Case not found: " + committeeCaseId));
 
-        if (committeeCase.getTeamLeadId() == null) {
-            throw new IllegalStateException("Case is not assigned to a team leader");
-        }
-        if (!committeeCase.getTeamLeadId().toString().equals(teamLeaderId)) {
+        if (committeeCase.getTeamLeadId() != null && !isTeamLeaderMatch(teamLeaderId, committeeCase.getTeamLeadId().toString())) {
             throw new IllegalStateException("Case is assigned to a different team leader");
         }
 

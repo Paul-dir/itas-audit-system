@@ -383,7 +383,7 @@ export default function TpCommitteeApprovalModal({ caseData, user, onClose, onRe
                     </tr>
                     <tr className="bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 font-bold">
                       <td className="p-2.5">Total Assessment Demand to be Authorized</td>
-                      <td className="p-2.5 text-center" colSpan={2}>Form FR-04.5-20 Official Demand</td>
+                      <td className="p-2.5 text-center" colSpan={2}>Statutory Assessment Notice Demand</td>
                       <td className="p-2.5 text-right text-sm font-extrabold text-purple-700 dark:text-purple-300">{formatRevenue(totalTaxDemand)} ETB</td>
                     </tr>
                   </tbody>

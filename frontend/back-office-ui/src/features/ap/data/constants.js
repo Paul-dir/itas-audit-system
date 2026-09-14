@@ -96,6 +96,10 @@ export const CASE_STATUS = {
   ASSIGNED_TO_COMMITTEE:      { id: 'ASSIGNED_TO_COMMITTEE',      label: 'Assigned to Committee',   color: 'purple' },
 
   // Workflow Approval States
+  PLANNING_TRIGGERED:         { id: 'PLANNING_TRIGGERED',         label: 'Planning Mandate Issued', color: 'indigo' },
+  RISK_ASSESSMENT_SUBMITTED_TL: { id: 'RISK_ASSESSMENT_SUBMITTED_TL', label: '⚡ Risk Assessment Awaiting TL', color: 'amber' },
+  AUDIT_PLAN_SUBMITTED_TL:      { id: 'AUDIT_PLAN_SUBMITTED_TL',      label: '⚡ Audit Plan Awaiting TL',      color: 'amber' },
+  AUDIT_PLAN_SUBMITTED_COMMITTEE: { id: 'AUDIT_PLAN_SUBMITTED_COMMITTEE', label: 'Plan Awaiting Committee', color: 'indigo' },
   SUBMITTED_FOR_TL_REVIEW:    { id: 'SUBMITTED_FOR_TL_REVIEW',    label: 'Pending TL Review',       color: 'purple' },
   SUBMITTED_TO_TL:            { id: 'SUBMITTED_TO_TL',            label: 'Pending TL Review',       color: 'purple' },
   REPORT_SUBMITTED_FOR_TL_REVIEW: { id: 'REPORT_SUBMITTED_FOR_TL_REVIEW', label: 'Report Pending TL Review', color: 'purple' },
@@ -180,6 +184,9 @@ export const normalizeBackendStatus = (backendStatus) => {
     case 'IN_PROGRESS':             return 'IN_PROGRESS';
     case 'COMPLETED':               return 'COMPLETED';
     case 'CLOSED':                  return 'COMPLETED';
+    case 'RISK_ASSESSMENT_SUBMITTED_TL': return 'RISK_ASSESSMENT_SUBMITTED_TL';
+    case 'AUDIT_PLAN_SUBMITTED_TL': return 'AUDIT_PLAN_SUBMITTED_TL';
+    case 'AUDIT_PLAN_SUBMITTED_COMMITTEE': return 'AUDIT_PLAN_SUBMITTED_COMMITTEE';
     default:                        return backendStatus || 'PENDING';
   }
 };

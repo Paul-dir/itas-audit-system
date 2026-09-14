@@ -387,7 +387,28 @@ public class CaseManagementController {
 
             if (targetTLId != null && !targetTLId.isBlank()) {
                 String canonicalTL = resolveTeamLeaderCanonicalId(targetTLId);
-                entity.setAssignedTeamLeaderId(canonicalTL != null ? canonicalTL : targetTLId);
+                String tlToCheck = canonicalTL != null ? canonicalTL : targetTLId;
+
+                // Enforce Strict Tax Center Isolation: Verify case's Tax Center matches Team Leader's Tax Center
+                String caseTc = entity.getTaxCenterCode();
+                if (caseTc != null && tlToCheck != null && tlToCheck.startsWith("u-tl-")) {
+                    List<String> caseTcVariants = getTaxCenterVariants(caseTc);
+                    boolean match = false;
+                    for (String variant : caseTcVariants) {
+                        String vLower = variant.toLowerCase().replace("-", "").replace("_", "");
+                        String tlLower = tlToCheck.toLowerCase().replace("-", "").replace("_", "");
+                        if (tlLower.contains(vLower)) {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (!match) {
+                        return ResponseEntity.badRequest().body(GenericResponse.error("TAX_CENTER_MISMATCH",
+                                "Cross-tax-center assignment not allowed. Team Leader " + tlToCheck + " does not belong to Tax Center " + caseTc));
+                    }
+                }
+
+                entity.setAssignedTeamLeaderId(tlToCheck);
                 entity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER);
             }
 
@@ -469,6 +490,26 @@ public class CaseManagementController {
 
             String canonicalTL = resolveTeamLeaderCanonicalId(teamLeaderId);
             String targetTLId = canonicalTL != null ? canonicalTL : teamLeaderId;
+
+            // Enforce Strict Tax Center Isolation: Verify case's Tax Center matches Team Leader's Tax Center
+            String caseTc = entity.getTaxCenterCode();
+            if (caseTc != null && targetTLId != null && targetTLId.startsWith("u-tl-")) {
+                List<String> caseTcVariants = getTaxCenterVariants(caseTc);
+                boolean match = false;
+                for (String variant : caseTcVariants) {
+                    String vLower = variant.toLowerCase().replace("-", "").replace("_", "");
+                    String tlLower = targetTLId.toLowerCase().replace("-", "").replace("_", "");
+                    if (tlLower.contains(vLower)) {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) {
+                    return ResponseEntity.badRequest().body(GenericResponse.error("TAX_CENTER_MISMATCH",
+                            "Cross-tax-center assignment not allowed. Team Leader " + targetTLId + " does not belong to Tax Center " + caseTc));
+                }
+            }
+
             entity.setAssignedTeamLeaderId(targetTLId);
             entity.setStatus(ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER);
             entity.setUpdatedAt(OffsetDateTime.now());
@@ -516,6 +557,7 @@ public class CaseManagementController {
             if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
                     && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())
                     && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())
+                    && !ApAuditCaseEntity.STATUS_PLANNING_TRIGGERED.equals(entity.getStatus())
                     && !"HANDED_OFF".equals(entity.getStatus())
                     && !"ASSIGNED".equals(entity.getStatus())
                     && !"AUDITOR_ASSIGNED".equals(entity.getStatus())) {
@@ -720,9 +762,10 @@ public class CaseManagementController {
                         continue;
                     }
 
-                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER, ASSIGNED_TO_COMMITTEE, or IN_PROGRESS state
+                    // Allow assignment if in ASSIGNED_TO_TEAM_LEADER, ASSIGNED_TO_COMMITTEE, PLANNING_TRIGGERED, or IN_PROGRESS state
                     if (!ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(entity.getStatus())
                             && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_COMMITTEE.equals(entity.getStatus())
+                            && !ApAuditCaseEntity.STATUS_PLANNING_TRIGGERED.equals(entity.getStatus())
                             && !ApAuditCaseEntity.STATUS_IN_PROGRESS.equals(entity.getStatus())) {
                         errors.add("Case " + caseId + ": invalid status " + entity.getStatus());
                         continue;

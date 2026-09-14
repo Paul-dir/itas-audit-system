@@ -128,7 +128,7 @@ export default function IssueTeamLeaderReviewModal({
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                   Issue Audit — Team Leader Supervisory Review
                 </h2>
-                <Badge color="teal" size="sm">FR-04.6 Direct Route</Badge>
+                <Badge color="teal" size="sm"> Direct Route</Badge>
                 <Badge color="blue" size="sm">No Committee • Tax Center Direct</Badge>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -153,7 +153,7 @@ export default function IssueTeamLeaderReviewModal({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-400 flex items-center gap-1.5">
-                <Scale size={13} /> Identified Non-Compliance Issue & Scope (FR-04.6-02)
+                <Scale size={13} /> Identified Non-Compliance Issue & Scope
               </span>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
                 {detailData?.identifiedIssue || 'VAT Withholding & Overhead Disallowance Discrepancy (Art. 54 & Art. 27)'}
@@ -183,7 +183,7 @@ export default function IssueTeamLeaderReviewModal({
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <FileText size={14} className="text-blue-600" />
-                1. Selected Transactions / Testing Areas (FR-04.6-02)
+                1. Selected Transactions / Testing Areas
               </span>
               <Badge color="blue" size="xs">2 Tested Areas</Badge>
             </div>
@@ -214,7 +214,7 @@ export default function IssueTeamLeaderReviewModal({
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <CheckCircle2 size={14} className="text-emerald-600" />
-                2. Gathered Evidence Records (FR-04.6-03)
+                2. Gathered Evidence Records
               </span>
               <Badge color="green" size="xs">3 Verified Sources</Badge>
             </div>
@@ -249,7 +249,7 @@ export default function IssueTeamLeaderReviewModal({
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
               <MapPin size={14} className="text-rose-600" />
-              3. Field Visit Verification & Draft Report (FR-04.6-04 & FR-04.6-05)
+              3. Field Visit Verification & Draft Report ( & )
             </span>
             <Badge color="teal" size="xs">On-Site Verified</Badge>
           </div>

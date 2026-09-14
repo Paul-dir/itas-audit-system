@@ -19,35 +19,35 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
 
   const SUB_PAGES = {
     NOTIFICATION: [
-      { id: 1, title: 'Data Warehouse Case Dossier (FR-04.2-01/03)' },
-      { id: 2, title: 'Auditee Statutory Notice & Response (FR-04.6-01 & FR-04.2-02)' },
-      { id: 3, title: 'Targeted Issue Scope & Materiality (FR-04.6-02 & FR-04.2-04)' },
-      { id: 4, title: 'Industry Benchmarks & Ratios (FR-04.2-05)' },
-      { id: 5, title: 'Specific Audit Plan & Team Leader Review (FR-04.2-07/08)' },
-      { id: 6, title: 'Entry Conference & Interview Log (FR-04.2.1-01..05)' }
+      { id: 1, title: 'Data Warehouse Case Dossier' },
+      { id: 2, title: 'Auditee Statutory Notice & Response ( & )' },
+      { id: 3, title: 'Targeted Issue Scope & Materiality ( & )' },
+      { id: 4, title: 'Industry Benchmarks & Ratios' },
+      { id: 5, title: 'Specific Audit Plan & Team Leader Review' },
+      { id: 6, title: 'Entry Conference & Interview Log' }
     ],
     EVIDENCE_GATHERING: [
-      { id: 1, title: 'Working Papers & Evidence Register (FR-04.2-10 & FR-04.6-03)' },
-      { id: 2, title: 'Field Visit & On-Site Verification (FR-04.6-04)' },
-      { id: 3, title: 'Cross-Matching & Reconciliations (FR-04.7-20)' },
-      { id: 4, title: 'Audit Preparation Report & Fraud Check (FR-04.2-10/12)' }
+      { id: 1, title: 'Working Papers & Evidence Register ( & )' },
+      { id: 2, title: 'Field Visit & On-Site Verification' },
+      { id: 3, title: 'Cross-Matching & Reconciliations' },
+      { id: 4, title: 'Audit Preparation Report & Fraud Check' }
     ],
     REPORT_DRAFT: [
-      { id: 1, title: 'Audit Working Papers Indexing (FR-04.7-01/17)' },
-      { id: 2, title: 'Draft Audit Report (FR-04.7-02)' },
-      { id: 3, title: 'Tax Adjustment & Estimated Assessment (FR-04.7-24)' },
-      { id: 4, title: 'Exit Conference Scheduling & Letters (FR-04.7-04..15)' }
+      { id: 1, title: 'Audit Working Papers Indexing' },
+      { id: 2, title: 'Draft Audit Report' },
+      { id: 3, title: 'Tax Adjustment & Estimated Assessment' },
+      { id: 4, title: 'Exit Conference Scheduling & Letters' }
     ],
     REVIEW_CHAIN: [
-      { id: 1, title: 'Team Leader Supervisory Endorsement (FR-04.6-06)' },
-      { id: 2, title: 'Tax Center Directorate Review Status (FR-04.6-07)' },
-      { id: 3, title: 'Multi-Level Audit Trail & Approval Log (FR-04.7-42)' }
+      { id: 1, title: 'Team Leader Supervisory Endorsement' },
+      { id: 2, title: 'Tax Center Directorate Review Status' },
+      { id: 3, title: 'Multi-Level Audit Trail & Approval Log' }
     ],
     DIRECTOR_DECISION: [
-      { id: 1, title: 'Final Assessment Notice Generation (FR-04.7-21..28)' },
-      { id: 2, title: 'Taxpayer Delivery & Objection Window (FR-04.7-34)' },
-      { id: 3, title: 'Audit Case Closure & Yield Report (FR-04.7-39..41)' },
-      { id: 4, title: 'Directorate Follow-Up Disposition & Referral (FR-04.7-35)' }
+      { id: 1, title: 'Final Assessment Notice Generation' },
+      { id: 2, title: 'Taxpayer Delivery & Objection Window' },
+      { id: 3, title: 'Audit Case Closure & Yield Report' },
+      { id: 4, title: 'Directorate Follow-Up Disposition & Referral' }
     ]
   };
 
@@ -64,7 +64,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
   const [identifiedIssue, setIdentifiedIssue] = useState('VAT Withholding & Overhead Disallowance on Intercompany Machinery Leasing');
   const [selectionRationale, setSelectionRationale] = useState('Deduction discrepancy flagged by Automated Risk Engine between declared VAT returns and withholding schedules for FY 2023-2024.');
 
-  // Selected Transactions/Areas list (FR-04.6-02)
+  // Selected Transactions/Areas list
   const [selectedTransactions, setSelectedTransactions] = useState([
     { id: 'TX-01', issueTaxType: 'VAT Withholding', transactionDescription: 'Machinery Leasing Agreement #ML-8890 with Subsidiary', rationale: 'Unreconciled 15% VAT withholding on leasing fees', selectingAuditor: user?.name || 'Tax Auditor' },
     { id: 'TX-02', issueTaxType: 'Corporate Income Tax', transactionDescription: 'Overhead Administration Expense Allocation', rationale: 'Non-deductible management overhead claimed under Art. 27', selectingAuditor: user?.name || 'Tax Auditor' }
@@ -186,7 +186,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
               Back to Cases
             </Button>
             <span className="px-3 py-1 bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-mono font-semibold rounded-full">
-              ISSUE AUDIT WORKSPACE (FR-04.6)
+              ISSUE AUDIT WORKSPACE
             </span>
             <Badge color="blue">{activePhase}</Badge>
           </div>
@@ -239,7 +239,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
-                    1. Data Warehouse Case Dossier & Risk Engine Drill-Down (FR-04.2-01 & FR-04.2-03)
+                    1. Data Warehouse Case Dossier & Risk Engine Drill-Down ( & )
                   </h3>
                   <Badge color="blue">SUB-PAGE 1 OF 6</Badge>
                 </div>
@@ -283,7 +283,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                   </div>
                 </div>
 
-                {/* Sub-Step 1.3: Document Request Trigger (FR-04.2-02) */}
+                {/* Sub-Step 1.3: Document Request Trigger */}
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
                   <div className="flex justify-between items-center">
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -312,7 +312,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-blue-600" />
-                    2. Auditee Statutory Notification & Response (FR-04.6-01 & FR-04.2-02)
+                    2. Auditee Statutory Notification & Response ( & )
                   </h3>
                   <Badge color="blue">SUB-PAGE 2 OF 6</Badge>
                 </div>
@@ -365,7 +365,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-blue-600" />
-                    3. Targeted Issue Scope & Materiality (FR-04.6-02 & FR-04.2-04)
+                    3. Targeted Issue Scope & Materiality ( & )
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 6</Badge>
                 </div>
@@ -398,7 +398,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">3.2 Materiality & Scope (FR-04.2-04)</h4>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">3.2 Materiality & Scope</h4>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between"><span className="text-slate-500">Materiality Threshold:</span><span className="font-bold">ETB 500,000</span></div>
                       <div className="flex justify-between"><span className="text-slate-500">Sampling Method:</span><span className="font-bold">100% Substantive</span></div>
@@ -425,7 +425,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-blue-600" />
-                    4. Industry Benchmarks & Ratios (FR-04.2-05)
+                    4. Industry Benchmarks & Ratios
                   </h3>
                   <Badge color="blue">SUB-PAGE 4 OF 6</Badge>
                 </div>
@@ -468,7 +468,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
-                    5. Specific Audit Plan & Team Leader Review (FR-04.2-07/08)
+                    5. Specific Audit Plan & Team Leader Review
                   </h3>
                   <Badge color="blue">SUB-PAGE 5 OF 6</Badge>
                 </div>
@@ -511,7 +511,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <UserCheck className="w-5 h-5 text-blue-600" />
-                    6. Entry Conference & Interview Log (FR-04.2.1-01 to 05)
+                    6. Entry Conference & Interview Log
                   </h3>
                   <Badge color="blue">SUB-PAGE 6 OF 6</Badge>
                 </div>
@@ -575,7 +575,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
               <>
                 <h3 className="text-base font-bold text-slate-800 dark:text-white border-b pb-3 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
-                  Document & Evidence Register (FR-04.6-03)
+                  Document & Evidence Register
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -610,7 +610,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
               <>
                 <h3 className="text-base font-bold text-slate-800 dark:text-white border-b pb-3 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-blue-600" />
-                  Field Visit & On-Site Verification Findings (FR-04.6-04)
+                  Field Visit & On-Site Verification Findings
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -649,7 +649,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Scale className="w-5 h-5 text-blue-600" />
-                    3. Automated System Cross-Matching & Reconciliations (FR-04.7-20)
+                    3. Automated System Cross-Matching & Reconciliations
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 4</Badge>
                 </div>
@@ -722,7 +722,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
-                    1. Audit Working Papers Indexing (FR-04.7-01 & 17)
+                    1. Audit Working Papers Indexing ( & 17)
                   </h3>
                   <Badge color="blue">SUB-PAGE 1 OF 4</Badge>
                 </div>
@@ -757,7 +757,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-blue-600" />
-                    2. Draft Audit Report (FR-04.7-02)
+                    2. Draft Audit Report
                   </h3>
                   <Badge color="blue">SUB-PAGE 2 OF 4</Badge>
                 </div>
@@ -781,7 +781,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Scale className="w-5 h-5 text-blue-600" />
-                    3. Tax Adjustment & Estimated Assessment (FR-04.7-24)
+                    3. Tax Adjustment & Estimated Assessment
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 4</Badge>
                 </div>
@@ -817,7 +817,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-blue-600" />
-                    4. Exit Conference Scheduling & Letters (FR-04.7-04 to 15)
+                    4. Exit Conference Scheduling & Letters
                   </h3>
                   <Badge color="blue">SUB-PAGE 4 OF 4</Badge>
                 </div>
@@ -860,7 +860,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <UserCheck className="w-5 h-5 text-blue-600" />
-                    Level 1: Team Leader Supervisory Review & Technical Endorsement (FR-04.6-06)
+                    Level 1: Team Leader Supervisory Review & Technical Endorsement
                   </h3>
                   <Badge color="blue">SUB-PAGE 1 OF 3</Badge>
                 </div>
@@ -868,7 +868,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
                   <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Supervisory Review Boundary:</span> Under ITAS statutory governance (FR-04.6), the technical review and endorsement of this Issue Audit Report is conducted exclusively by your <strong>Issue Audit Team Leader</strong> via the Team Leader Review Console. Auditors cannot self-approve reports.
+                    <span className="font-bold">Supervisory Review Boundary:</span> Under ITAS statutory governance, the technical review and endorsement of this Issue Audit Report is conducted exclusively by your <strong>Issue Audit Team Leader</strong> via the Team Leader Review Console. Auditors cannot self-approve reports.
                   </div>
                 </div>
 
@@ -934,7 +934,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
 
                 {/* Supervisory Quality Checklist Preview */}
                 <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                  <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Supervisory Quality Assurance Checklist (FR-04.6-06)</span>
+                  <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Supervisory Quality Assurance Checklist</span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="p-2 rounded bg-white dark:bg-slate-900 border flex items-center gap-2 text-slate-700 dark:text-slate-300">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -971,7 +971,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    Level 2: Tax Center Directorate Review & Statutory Disposition (FR-04.6-07)
+                    Level 2: Tax Center Directorate Review & Statutory Disposition
                   </h3>
                   <Badge color="blue">SUB-PAGE 2 OF 3</Badge>
                 </div>
@@ -1059,7 +1059,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Clock className="w-5 h-5 text-blue-600" />
-                    3. Multi-Level Audit Trail & Case Chain of Custody (FR-04.7-40 & 42)
+                    3. Multi-Level Audit Trail & Case Chain of Custody ( & 42)
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 3</Badge>
                 </div>
@@ -1086,7 +1086,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                       </p>
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-2 italic">* Entire history preserved and accessible based on authorization (FR-04.7-42).</p>
+                  <p className="text-[10px] text-slate-500 mt-2 italic">* Entire history preserved and accessible based on authorization.</p>
                 </div>
 
                 <div className="flex justify-between pt-4 border-t">
@@ -1110,7 +1110,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
-                    1. Final Assessment Notice Generation (FR-04.7-21 to 28)
+                    1. Final Assessment Notice Generation
                   </h3>
                   <Badge color="blue">SUB-PAGE 1 OF 4</Badge>
                 </div>
@@ -1122,7 +1122,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                     <div className="p-3 bg-white dark:bg-slate-800 rounded-lg border">
-                      <span className="font-bold text-slate-700 dark:text-slate-300">Notice ID (FR-04.7-26):</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Notice ID:</span>
                       <p className="text-blue-600 font-mono font-bold mt-0.5">NTC-ISSUE-2026-0988</p>
                     </div>
                     <div className="p-3 bg-white dark:bg-slate-800 rounded-lg border">
@@ -1132,7 +1132,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                   </div>
                   <div className="flex gap-4">
                     <Button size="sm" variant="secondary" icon={UploadCloud}>Batch Print Mail Notices</Button>
-                    <Button size="sm" variant="secondary" icon={Send}>Email Notice to Taxpayer (FR-04.7-27/33)</Button>
+                    <Button size="sm" variant="secondary" icon={Send}>Email Notice to Taxpayer</Button>
                   </div>
                 </div>
 
@@ -1149,7 +1149,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Clock className="w-5 h-5 text-blue-600" />
-                    2. Taxpayer Delivery & Objection Window (FR-04.7-34/37)
+                    2. Taxpayer Delivery & Objection Window
                   </h3>
                   <Badge color="blue">SUB-PAGE 2 OF 4</Badge>
                 </div>
@@ -1184,7 +1184,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-blue-600" />
-                    3. Audit Case Closure & Yield Report (FR-04.7-39 to 42)
+                    3. Audit Case Closure & Yield Report
                   </h3>
                   <Badge color="blue">SUB-PAGE 3 OF 4</Badge>
                 </div>
@@ -1221,7 +1221,7 @@ export default function IssueAuditWorkspace({ caseData, user, initialPhase, onCl
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    4. Directorate Resolution & Official Disposition Record (FR-04.7-35)
+                    4. Directorate Resolution & Official Disposition Record
                   </h3>
                   <Badge color="blue">SUB-PAGE 4 OF 4</Badge>
                 </div>

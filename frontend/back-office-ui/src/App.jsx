@@ -38,15 +38,15 @@ import JaAuditorWorkspace from './features/ja/pages/AuditorWorkspace.jsx';
 import { Spinner } from './components/ui/index.jsx';
 
 const TP_PHASE_TITLES = {
-  'phase-1':          { title: 'Risk Assessment',               subtitle: 'Detailed TP risk scoring and indicators' },
-  'phase-2':          { title: 'Working Hypothesis',            subtitle: 'Formulate audit scope and transfer pricing risk hypothesis' },
-  'phase-3':          { title: 'Planning & Meeting',            subtitle: 'Entry conference schedule and initial document request' },
-  'phase-4':          { title: 'Field Work',                    subtitle: 'Fact statement verification & document gathering' },
-  'phase-5':          { title: 'Economic Analysis',             subtitle: 'Interquartile range (IQR) benchmarking & FAR analysis' },
-  'phase-6':          { title: 'TP Report',                     subtitle: 'Draft audit report and multi-level approval chain' },
-  'phase-assessment': { title: 'Assessment',                    subtitle: 'Arm’s length tax liability and penalty calculations' },
-  'phase-7':          { title: 'Notice & Objection',            subtitle: 'Assessment notice generation and taxpayer objection window' },
-  'phase-8':          { title: 'Audit Closure',                 subtitle: 'Final case sign-off and audit file archiving' },
+  'phase-1':          { title: '1. Risk Assessment & Evidence',         subtitle: 'Detailed TP risk scoring, BEPS indicators, and baseline evidence' },
+  'phase-2':          { title: '2. Audit Planning & Programming',       subtitle: 'Audit scope definition, materiality thresholds, and Entry Conference' },
+  'phase-3':          { title: '3. Field Work & Facts',                 subtitle: 'FAR functional analysis, IDR log, and Statement of Facts' },
+  'phase-4':          { title: '4. Economic Analysis & IQR',            subtitle: 'Method selection, comparable screening, and interquartile range' },
+  'phase-5':          { title: '5. TP Audit Report & Exit Conference',  subtitle: 'Comprehensive TP audit report, Exit Conference, and rebuttal' },
+  'phase-6':          { title: '6. Assessment & Notice Draft',          subtitle: 'Arm’s length tax adjustments, penalty calculations, and notice draft' },
+  'phase-assessment': { title: '6. Assessment & Notice Draft',          subtitle: 'Arm’s length tax adjustments, penalty calculations, and notice draft' },
+  'phase-7':          { title: '7. Notice & Objection',                 subtitle: 'Statutory 30-day objection window and auditor defense rejoinder' },
+  'phase-8':          { title: '8. Audit Closure',                      subtitle: 'Statutory clearance certification, digital dossier archival, and case closure' },
 };
 
 const JA_PHASE_TITLES = {
@@ -232,10 +232,11 @@ function RoleRouter({ user, view, onNavigate }) {
   if (role === 'committee' || role === 'committee_member' || role === 'committee_chair') {
     const isTp = (user?.auditType || '').toUpperCase().includes('TP') ||
                  (user?.auditType || '').toUpperCase().includes('TRANSFER') ||
+                 (user?.username || '').toLowerCase().includes('tp') ||
                  (user?.name || '').toLowerCase().includes('tp');
 
     if (isTp) {
-      if (view === 'assign-cases') return <CommitteeCaseAssignment />;
+      if (view === 'assign-cases' || view === 'assign') return <CommitteeDashboard view="assign" />;
       return <CommitteeDashboard view={view} />;
     }
 
