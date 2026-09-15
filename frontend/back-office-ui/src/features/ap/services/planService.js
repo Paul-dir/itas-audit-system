@@ -5,6 +5,7 @@
  */
 
 import { convertDistributionFromBackend } from '../data/constants.js';
+import { getRegionCodeMap } from './planningConfigService.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1/backoffice';
 
@@ -26,19 +27,8 @@ class PlanService {
       console.log('🔍 Distribution type:', typeof planData.distribution);
       console.log('🔍 Distribution keys:', Object.keys(planData.distribution || {}));
       
-      // Map frontend region IDs to backend region codes
-      // Frontend uses: addis_ababa, amhara, oromia, dire_dawa, snnpr, somali
-      // Backend expects: AA, BA, BB, AB, CA, SO
-      const regionIdToCode = {
-        'federal_level': 'FED',
-        'fed': 'FED',
-        'addis_ababa': 'AA',
-        'amhara': 'BA',
-        'oromia': 'BB',
-        'dire_dawa': 'AB',
-        'snnpr': 'CA',
-        'somali': 'SO',
-      };
+      // Dynamically map frontend region IDs to backend region codes
+      const regionIdToCode = getRegionCodeMap();
       
       // Transform frontend distribution format to backend regional allocations
       const regionalAllocations = [];
@@ -48,11 +38,7 @@ class PlanService {
           const total = counts.reduce((sum, count) => sum + count, 0);
           console.log(`   Region ${regionId}: counts = [${counts.join(', ')}], total = ${total}`);
           if (total > 0) {
-            const backendRegionCode = regionIdToCode[regionId];
-            if (!backendRegionCode) {
-              console.warn(`   ⚠️  Unknown region ID: ${regionId}, skipping`);
-              return;
-            }
+            const backendRegionCode = regionIdToCode[regionId] || regionIdToCode[regionId.toLowerCase()] || regionId.toUpperCase().slice(0, 4);
             regionalAllocations.push({
               regionCode: backendRegionCode,
               proposedCount: total,
@@ -822,20 +808,8 @@ class PlanService {
       console.log('🚀 Sending distribution to tax centers for region:', region);
       console.log('📦 TC Allocations from frontend:', JSON.stringify(tcAllocations, null, 2));
 
-      // Map frontend region IDs to backend region codes
-      // Frontend uses: addis_ababa, amhara, oromia, dire_dawa, snnpr, somali
-      // Backend expects: AA, BA, BB, AB, CA, SO
-      const regionIdToCode = {
-        'federal_level': 'FED',
-        'fed': 'FED',
-        'addis_ababa': 'AA',
-        'amhara': 'BA',
-        'oromia': 'BB',
-        'dire_dawa': 'AB',
-        'snnpr': 'CA',
-        'somali': 'SO',
-      };
-
+      // Map frontend region IDs to backend region codes dynamically
+      const regionIdToCode = getRegionCodeMap();
       const backendRegionCode = regionIdToCode[region] || (region && region.toUpperCase());
       if (!backendRegionCode) {
         throw new Error(`Unknown region ID: ${region}`);
@@ -913,12 +887,8 @@ class PlanService {
       console.log('📤 Submitting regional feedback for plan:', planId);
       console.log('🔧 Capacity overrides:', capacityOverrides);
 
-      // Map frontend region ID to backend code
-      const regionIdToCode = {
-        'federal_level': 'FED', 'fed': 'FED',
-        'addis_ababa': 'AA', 'amhara': 'BA', 'oromia': 'BB',
-        'dire_dawa': 'AB', 'snnpr': 'CA', 'somali': 'SO',
-      };
+      // Map frontend region ID to backend code dynamically
+      const regionIdToCode = getRegionCodeMap();
       const backendRegionCode = regionIdToCode[regionCode] || (regionCode && regionCode.toUpperCase());
 
       // Build aggregated feedback from plan allocations

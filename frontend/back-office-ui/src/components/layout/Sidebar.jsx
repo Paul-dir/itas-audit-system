@@ -395,7 +395,8 @@ const NAV_SECTIONS = {
     {
       title: 'GOVERNANCE',
       items: [
-        { id: 'approvals', label: 'Approvals', icon: Star }
+        { id: 'approvals', label: 'Approvals', icon: Star },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -409,6 +410,12 @@ const NAV_SECTIONS = {
       items: [
         { id: 'plans', label: 'Regional Plans', icon: ClipboardList },
         { id: 'feedback', label: 'Capacity Feedback', icon: Map }
+      ]
+    },
+    {
+      title: 'GOVERNANCE',
+      items: [
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -428,6 +435,12 @@ const NAV_SECTIONS = {
       items: [
         { id: 'cases', label: 'Case Deployment', icon: Building2 }
       ]
+    },
+    {
+      title: 'GOVERNANCE',
+      items: [
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
+      ]
     }
   ],
   senior_management: [
@@ -438,7 +451,8 @@ const NAV_SECTIONS = {
     {
       title: 'GOVERNANCE',
       items: [
-        { id: 'approval', label: 'National Plan Approval', icon: Star }
+        { id: 'approval', label: 'National Plan Approval', icon: Star },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -451,7 +465,8 @@ const NAV_SECTIONS = {
       title: 'STATUTORY AUDIT REFERRALS',
       items: [
         { id: 'referrals', label: 'My Referrals & Flags', icon: ClipboardList },
-        { id: 'new_referral', label: 'Submit Audit Referral', icon: Target }
+        { id: 'new_referral', label: 'Submit Audit Referral', icon: Target },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ]

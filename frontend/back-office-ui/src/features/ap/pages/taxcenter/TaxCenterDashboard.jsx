@@ -238,19 +238,59 @@ export default function TaxCenterDashboard({ view }) {
 
   useEffect(() => { loadCases(); }, [loadCases]);
 
-  // ── Separate allocations ──
-  // pendingFeedback: pre-approval plan review stage
-  const pendingFeedback = tcAllocations.filter(a => !a.acknowledged);
-  // pendingCascade: deployed plans or plans ready for immediate case cascade
-  const pendingCascade = tcAllocations.filter(a => 
-    !a.acknowledged || ['APPROVED_TO_REGIONS', 'AWAITING_REGIONAL_FEEDBACK', 'SENT_TO_TAX_CENTERS', 'FINALIZED'].includes(a.planStatus)
-  );
-  const acknowledged = tcAllocations.filter(a => a.acknowledged);
+  // ── Plan Lifecycle Status Groups ──
+  const POST_APPROVAL_STATUSES = useMemo(() => [
+    'FINALIZED',
+    'SENIOR_MGMT_APPROVED',
+    'APPROVED_TO_REGIONS',
+    'DEPLOYED',
+    'REGIONAL_DEPLOYED'
+  ], []);
 
-  // Check if a plan already has cases
-  const planHasCases = (planId) => {
-    if (!auditCases || !auditCases.cases) return false;
-    return auditCases.cases.some(c => c.planId === planId);
+  // Check if a plan already has cases created/cascaded
+  const planHasCases = useCallback((planId) => {
+    if (!planId) return false;
+    const alloc = tcAllocations.find(a => a.planId === planId);
+    if (alloc?.cascaded) return true;
+    if ((alloc?.caseCount || 0) > 0) return true;
+    if (!auditCases) return false;
+    if (auditCases.planIds && auditCases.planIds.includes(planId)) return true;
+    if (auditCases.cases && auditCases.cases.length > 0) {
+      return auditCases.cases.some(c => c.planId === planId || (c.caseNumber && c.caseNumber.includes(planId.slice(0, 8))));
+    }
+    return false;
+  }, [tcAllocations, auditCases]);
+
+  const getPlanCaseCount = useCallback((planId) => {
+    if (!planId) return 0;
+    const alloc = tcAllocations.find(a => a.planId === planId);
+    if (alloc?.caseCount != null && alloc.caseCount > 0) return alloc.caseCount;
+    if (!auditCases || !auditCases.cases) return 0;
+    return auditCases.cases.filter(c => c.planId === planId || (c.caseNumber && c.caseNumber.includes(planId.slice(0, 8)))).length;
+  }, [tcAllocations, auditCases]);
+
+  // ── Separate allocations by stage & actionability ──
+  // Rule 1: Pending Capacity Feedback (Pre-Approval Review)
+  // ONLY for pre-approval draft plans where feedback has NOT yet been submitted.
+  // Once feedback is submitted (acknowledged: true), it disappears from this pending list.
+  // Approved/finalized plans NEVER appear here.
+  const pendingFeedback = useMemo(() => {
+    return tcAllocations.filter(a => !a.acknowledged && !POST_APPROVAL_STATUSES.includes(a.planStatus));
+  }, [tcAllocations, POST_APPROVAL_STATUSES]);
+
+  // Rule 2: Pending Case Cascade (Post-Approval Execution)
+  // ONLY for approved & deployed plans that have NOT yet cascaded into cases.
+  // Once cases are created, it disappears from this pending cascade list.
+  const pendingCascade = useMemo(() => {
+    return tcAllocations.filter(a => POST_APPROVAL_STATUSES.includes(a.planStatus) && !a.cascaded && !planHasCases(a.planId));
+  }, [tcAllocations, POST_APPROVAL_STATUSES, planHasCases]);
+
+  const scrollToCases = (alloc) => {
+    if (alloc?.planYear) {
+      setFilterYear(String(alloc.planYear));
+    }
+    const elem = document.getElementById('audit-cases-section');
+    if (elem) elem.scrollIntoView({ behavior: 'smooth' });
   };
 
   // ── CASCADE: trigger backend to create cases from plan allocation ──
@@ -463,53 +503,118 @@ export default function TaxCenterDashboard({ view }) {
         </Card>
       )}
 
-      {/* ═══ ACKNOWLEDGED TABLE ═══ */}
-      {acknowledged.length > 0 && (
+      {/* ═══ ALL ASSIGNED PLANS / EXECUTION DOSSIER & STATUS TRACKING (Rule 3) ═══ */}
+      {tcAllocations.length > 0 && (
         <Card padding={false}>
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">✅ Acknowledged Plans</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Plans you have acknowledged — cases created from cascade</p>
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                All Assigned Plans — Execution Dossier & Lifecycle Tracking
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Complete audit plan dossier showing capacity review status, statutory lifecycle stage, and case cascade progress
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                {tcAllocations.length} {tcAllocations.length === 1 ? 'Plan' : 'Plans'} Assigned
+              </span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-700">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Plan Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Allocated</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Your Capacity</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Action</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300">Plan Name & Year</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-300">Target Allocation</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-300">Plan Lifecycle Stage</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-300">Pre-Approval Feedback</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-300">Case Cascade Execution</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {acknowledged.map(alloc => {
-                  const allocated = alloc.proposedCount || 0;
-                  const accepted = alloc.tcAdjustedCount || allocated;
-                  const diff = allocated - accepted;
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {tcAllocations.map(alloc => {
+                  const isCascaded = alloc.cascaded || planHasCases(alloc.planId);
+                  const isPostApproval = POST_APPROVAL_STATUSES.includes(alloc.planStatus);
+                  const caseCount = alloc.caseCount || getPlanCaseCount(alloc.planId);
+
                   return (
                     <tr key={alloc.allocationId}
-                      className="border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                      className="border-b border-gray-100 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors"
                       onClick={() => setViewDetailModal(alloc)}>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-gray-900 dark:text-white">{alloc.planName}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {alloc.acknowledgedAt ? new Date(alloc.acknowledgedAt).toLocaleDateString() : ''}
-                        </p>
+                        <p className="font-semibold text-gray-900 dark:text-white text-sm">{alloc.planName}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge color="blue" size="xs">FY {alloc.planYear}</Badge>
+                          <span className="text-xs text-gray-500">Region: {alloc.regionCode || 'N/A'}</span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-gray-900 dark:text-white">{allocated.toLocaleString()}</p>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-base font-bold text-gray-900 dark:text-white">
+                          {alloc.proposedCount?.toLocaleString() || 0}
+                        </span>
+                        <span className="text-xs text-gray-400 block">cases</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-blue-600 dark:text-blue-400">{accepted.toLocaleString()}</p>
+                      <td className="px-6 py-4 text-center">
+                        <PlanStatusBadge status={alloc.planStatus} />
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge color="green" dot>Acknowledged</Badge>
+                      <td className="px-6 py-4 text-center">
+                        {alloc.acknowledged ? (
+                          <div>
+                            <Badge color="green" dot>Feedback Submitted</Badge>
+                            {alloc.tcAdjustedCount != null && (
+                              <p className="text-[11px] text-gray-500 mt-0.5">Capacity: {alloc.tcAdjustedCount} cases</p>
+                            )}
+                          </div>
+                        ) : isPostApproval ? (
+                          <Badge color="gray" size="xs">Approved / Finalized</Badge>
+                        ) : (
+                          <Badge color="orange" dot>Pending Feedback</Badge>
+                        )}
                       </td>
-                      <td className="px-6 py-4">
-                        <Button size="sm" variant="secondary" icon={Eye}
-                          onClick={(e) => { e.stopPropagation(); setViewDetailModal(alloc); }}>
-                          View Details
-                        </Button>
+                      <td className="px-6 py-4 text-center">
+                        {isCascaded ? (
+                          <Badge color="green" dot>
+                            Cascaded ({caseCount} cases)
+                          </Badge>
+                        ) : isPostApproval ? (
+                          <Badge color="yellow" dot>
+                            Ready for Cascade
+                          </Badge>
+                        ) : (
+                          <Badge color="blue">
+                            Awaiting Final Approval
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button size="xs" variant="secondary" icon={Eye}
+                            onClick={() => setViewDetailModal(alloc)}>
+                            Dossier
+                          </Button>
+                          {!isPostApproval && !alloc.acknowledged && (
+                            <Button size="xs" variant="primary" icon={Send}
+                              onClick={() => openFeedback(alloc)}>
+                              Feedback
+                            </Button>
+                          )}
+                          {isPostApproval && !isCascaded && (
+                            <Button size="xs" variant="success" icon={Play}
+                              loading={cascading === alloc.planId}
+                              onClick={() => handleCascade(alloc)}>
+                              Create Cases
+                            </Button>
+                          )}
+                          {isCascaded && (
+                            <Button size="xs" variant="secondary" icon={Search}
+                              onClick={() => scrollToCases(alloc)}>
+                              View Cases
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -537,6 +642,7 @@ export default function TaxCenterDashboard({ view }) {
 
       {/* ═══ AUDIT CASES ═══ */}
       {auditCases && auditCases.totalCases > 0 && (
+        <div id="audit-cases-section">
         <Card padding={false}>
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -806,6 +912,7 @@ export default function TaxCenterDashboard({ view }) {
             />
           </div>
         </Card>
+        </div>
       )}
 
       {auditCases && auditCases.totalCases === 0 && (
@@ -890,7 +997,7 @@ export default function TaxCenterDashboard({ view }) {
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setViewDetailModal(null)}>Close</Button>
-            {!viewDetailModal?.acknowledged && (
+            {POST_APPROVAL_STATUSES.includes(viewDetailModal?.planStatus) && !(viewDetailModal?.cascaded || planHasCases(viewDetailModal?.planId)) && (
               <Button
                 variant="success"
                 icon={Play}
@@ -898,6 +1005,24 @@ export default function TaxCenterDashboard({ view }) {
                 onClick={() => { handleCascade(viewDetailModal); setViewDetailModal(null); }}
               >
                 Execute Case Cascade
+              </Button>
+            )}
+            {!POST_APPROVAL_STATUSES.includes(viewDetailModal?.planStatus) && !viewDetailModal?.acknowledged && (
+              <Button
+                variant="primary"
+                icon={Send}
+                onClick={() => { const target = viewDetailModal; setViewDetailModal(null); openFeedback(target); }}
+              >
+                Submit Capacity Feedback
+              </Button>
+            )}
+            {(viewDetailModal?.cascaded || planHasCases(viewDetailModal?.planId)) && (
+              <Button
+                variant="secondary"
+                icon={Search}
+                onClick={() => { const target = viewDetailModal; setViewDetailModal(null); scrollToCases(target); }}
+              >
+                View Cases
               </Button>
             )}
           </div>
@@ -918,9 +1043,15 @@ export default function TaxCenterDashboard({ view }) {
                     Region: <strong className="text-gray-700 dark:text-gray-300">{viewDetailModal.regionCode || 'N/A'}</strong> • Branch: <strong className="text-gray-700 dark:text-gray-300 uppercase">{(taxCenter || '').replace(/-/g, ' ')}</strong>
                   </p>
                 </div>
-                <Badge color={viewDetailModal.acknowledged ? 'green' : 'yellow'} dot>
-                  {viewDetailModal.acknowledged ? 'Approved & Ready' : 'Pending Cascade'}
-                </Badge>
+                {viewDetailModal.cascaded || planHasCases(viewDetailModal.planId) ? (
+                  <Badge color="green" dot>Cases Active ({viewDetailModal.caseCount || getPlanCaseCount(viewDetailModal.planId)})</Badge>
+                ) : POST_APPROVAL_STATUSES.includes(viewDetailModal.planStatus) ? (
+                  <Badge color="yellow" dot>Ready for Cascade</Badge>
+                ) : viewDetailModal.acknowledged ? (
+                  <Badge color="blue" dot>Feedback Submitted</Badge>
+                ) : (
+                  <Badge color="orange" dot>Pending Feedback</Badge>
+                )}
               </div>
             </div>
 
@@ -933,8 +1064,20 @@ export default function TaxCenterDashboard({ view }) {
               </div>
               <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-gray-200 dark:border-slate-700">
                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Execution Readiness</span>
-                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
-                  <CheckCircle size={14} /> Ready for Risk Engine Cascade
+                <p className="text-xs font-semibold mt-1 flex items-center gap-1">
+                  {viewDetailModal.cascaded || planHasCases(viewDetailModal.planId) ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle size={14} /> Cases Generated & Active ({viewDetailModal.caseCount || getPlanCaseCount(viewDetailModal.planId)})
+                    </span>
+                  ) : POST_APPROVAL_STATUSES.includes(viewDetailModal.planStatus) ? (
+                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Play size={14} /> Ready for Risk Engine Cascade
+                    </span>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <Clock size={14} /> Awaiting Final Regional Approval
+                    </span>
+                  )}
                 </p>
               </div>
             </div>

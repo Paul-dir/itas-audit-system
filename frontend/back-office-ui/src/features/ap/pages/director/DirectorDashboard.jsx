@@ -36,6 +36,14 @@ export default function DirectorDashboard({ view }) {
   const [allRegions, setAllRegions] = useState([]);  // ✅ NEW: Store all regions
   const [revenueStats, setRevenueStats] = useState(null);
 
+  // Sync tab with view from sidebar navigation
+  useEffect(() => {
+    if (view === 'review') setTab('pending');
+    else if (view === 'deploy') setTab('senior_approved');
+    else if (view === 'approvals') setTab('approved');
+    else if (view === 'dashboard') setTab('pending');
+  }, [view]);
+
   // Load national revenue stats
   useEffect(() => {
     const loadRevenue = async () => {

@@ -137,6 +137,7 @@ public class TaxCenterCasesController {
                 .map(c -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", c.getId().toString());
+                    m.put("planId", c.getPlanId() != null ? c.getPlanId().toString() : null);
                     m.put("caseNumber", c.getCaseNumber());
                     m.put("taxpayerId", c.getTaxpayerId());
                     m.put("taxpayerName", c.getTaxpayerName() != null ? c.getTaxpayerName() : c.getTaxpayerId());

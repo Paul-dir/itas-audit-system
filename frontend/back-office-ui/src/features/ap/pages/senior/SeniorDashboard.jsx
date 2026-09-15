@@ -16,8 +16,14 @@ export default function SeniorDashboard({ view }) {
   const [action, setAction] = useState(null); // 'approve' | 'reject'
   const [loading, setLoading] = useState(false);
   const [viewPlan, setViewPlan] = useState(null);
-  const [viewTab, setViewTab] = useState('distribution');
   const [tab, setTab] = useState('pending');
+
+  // Sync tab with view from sidebar navigation
+  useEffect(() => {
+    if (view === 'approval') {
+      setTab('pending');
+    }
+  }, [view]);
 
   const [localPlans, setLocalPlans] = useState([]);
 

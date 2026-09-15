@@ -9,6 +9,8 @@ import PlanDetailModal from './PlanDetailModal.jsx';
 import AmendmentEditModal from './AmendmentEditModal.jsx';
 import RiskAnalysisDashboard from './RiskAnalysisDashboard.jsx';
 import PlanConfigurationPage from './PlanConfigurationPage.jsx';
+import { DistributionTable } from '../shared/DistributionTable.jsx';
+import AuditTrail from '../../../committee/pages/AuditTrail.jsx';
 
 export default function PlanningDashboard({ view }) {
   const { state, actions, selectors } = useApp();
@@ -42,6 +44,16 @@ export default function PlanningDashboard({ view }) {
   // Show full configuration page if view is 'plan-configuration' or 'config'
   if (view === 'plan-configuration' || view === 'config') {
     return <PlanConfigurationPage />;
+  }
+
+  // Show governance audit trail
+  if (view === 'audit_trail' || view === 'audit-trail') {
+    return <AuditTrail />;
+  }
+
+  // Show risk analysis or risk distribution
+  if (view === 'risk_analysis' || view === 'risk_distribution') {
+    return <RiskAnalysisDashboard onUsePlanDefaults={() => { setActiveTab('plans'); setShowCreate(true); }} />;
   }
 
   const stats = selectors.getPlanStats();
@@ -95,25 +107,39 @@ export default function PlanningDashboard({ view }) {
 
   return (
     <div className="space-y-6">
-      {/* Tab strip */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
-        <button onClick={() => setActiveTab('plans')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-          <ClipboardList size={14} /> Audit Plans
-        </button>
-        <button onClick={() => setActiveTab('risk')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'risk' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-          <Activity size={14} /> Risk Analysis
-          <span className="ml-0.5 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">Live</span>
-        </button>
-        <button onClick={() => setActiveTab('config')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-          <Settings size={14} /> Planning & Resource Configuration
-        </button>
-      </div>
+      {view === 'regional_allocation' ? (
+        <RegionalAllocationSection
+          plans={plans}
+          onSelectPlan={setSelectedPlan}
+          onCreatePlan={() => setShowCreate(true)}
+        />
+      ) : view === 'deployment' ? (
+        <DeploymentTrackerSection
+          plans={plans}
+          onSelectPlan={setSelectedPlan}
+          onSubmitPlan={handleSubmit}
+        />
+      ) : (
+        <>
+          {/* Tab strip */}
+          <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
+            <button onClick={() => setActiveTab('plans')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+              <ClipboardList size={14} /> Audit Plans
+            </button>
+            <button onClick={() => setActiveTab('risk')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'risk' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+              <Activity size={14} /> Risk Analysis
+              <span className="ml-0.5 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">Live</span>
+            </button>
+            <button onClick={() => setActiveTab('config')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+              <Settings size={14} /> Planning & Resource Configuration
+            </button>
+          </div>
 
-      {/* Configuration tab */}
-      {activeTab === 'config' && <PlanConfigurationPage />}
+          {/* Configuration tab */}
+          {activeTab === 'config' && <PlanConfigurationPage />}
 
-      {/* Risk Analysis tab */}
-      {activeTab === 'risk' && <RiskAnalysisDashboard onUsePlanDefaults={() => { setActiveTab('plans'); setShowCreate(true); }} />}
+          {/* Risk Analysis tab */}
+          {activeTab === 'risk' && <RiskAnalysisDashboard onUsePlanDefaults={() => { setActiveTab('plans'); setShowCreate(true); }} />}
 
       {/* Plans tab */}
       {activeTab === 'plans' && (
@@ -207,6 +233,8 @@ export default function PlanningDashboard({ view }) {
             </Card>
         </div>
       )}
+        </>
+      )}
 
       {/* Modals */}
       {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -248,6 +276,156 @@ export default function PlanningDashboard({ view }) {
         onClose={() => setAmendmentEditPlan(null)}
         onUpdate={handleAmendmentUpdate}
       />
+    </div>
+  );
+}
+
+function RegionalAllocationSection({ plans, onSelectPlan, onCreatePlan }) {
+  const [selectedPlanId, setSelectedPlanId] = useState(plans[0]?.id || '');
+  const currentPlan = plans.find(p => p.id === selectedPlanId) || plans[0];
+
+  useEffect(() => {
+    if (!selectedPlanId && plans.length > 0) {
+      setSelectedPlanId(plans[0].id);
+    }
+  }, [plans, selectedPlanId]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Regional Quota Allocation</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Audit case quotas distributed across statutory regions and audit disciplines
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {plans.length > 0 && (
+            <select
+              value={currentPlan?.id || ''}
+              onChange={(e) => setSelectedPlanId(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+            >
+              {plans.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.planName || p.name} (FY {p.planYear || p.year})
+                </option>
+              ))}
+            </select>
+          )}
+          <Button size="sm" variant="primary" icon={Plus} onClick={onCreatePlan}>
+            New Plan
+          </Button>
+        </div>
+      </div>
+
+      {currentPlan ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="p-4">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Selected Plan</p>
+              <p className="text-base font-bold text-gray-900 dark:text-white mt-1">{currentPlan.planName || currentPlan.name}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-500">FY {currentPlan.planYear || currentPlan.year}</span>
+                <PlanStatusBadge status={currentPlan.status} />
+              </div>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Total Cases</p>
+              <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 tabular-nums">{currentPlan.totalCases?.toLocaleString() || 0}</p>
+              <p className="text-xs text-gray-500 mt-1">National statutory quota</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Plan Workflow</p>
+              <div className="mt-2">
+                <Button size="xs" variant="secondary" icon={Eye} onClick={() => onSelectPlan(currentPlan)}>
+                  Inspect Full Dossier
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          <Card padding={false} className="overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Regional Allocation Matrix</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Dynamic regional distribution based on persistent configuration</p>
+            </div>
+            <div className="p-6">
+              <DistributionTable distribution={currentPlan.distribution} />
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <Card className="p-12 text-center">
+          <Empty title="No plans available" description="Create an annual plan to view regional allocations." />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function DeploymentTrackerSection({ plans, onSelectPlan, onSubmitPlan }) {
+  const stages = [
+    { label: '1. Draft Planning', count: plans.filter(p => p.status === 'DRAFT').length },
+    { label: '2. Director Review', count: plans.filter(p => p.status === 'SUBMITTED_TO_DIRECTOR').length },
+    { label: '3. Regional Consultation', count: plans.filter(p => ['DIRECTOR_APPROVED', 'AWAITING_REGIONAL_FEEDBACK', 'FEEDBACK_COLLECTED'].includes(p.status)).length },
+    { label: '4. Senior Management', count: plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length },
+    { label: '5. Deployed to Execution', count: plans.filter(p => ['SENIOR_MGMT_APPROVED', 'FINALIZED'].includes(p.status)).length },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Plan Deployment Lifecycle</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          End-to-end statutory deployment tracking from national draft to regional tax center execution
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+          {stages.map((st, idx) => (
+            <div key={idx} className="p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200/60 dark:border-slate-600/60">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">{st.label}</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1 tabular-nums">{st.count}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Card padding={false} className="overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Active Plan Deployments</h3>
+        </div>
+        <div className="divide-y divide-gray-100 dark:divide-slate-700">
+          {plans.map(p => (
+            <div key={p.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-900 dark:text-white text-sm">{p.planName || p.name}</span>
+                  <PlanStatusBadge status={p.status} />
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                  <span>FY {p.planYear || p.year}</span>
+                  <span>•</span>
+                  <span>{p.totalCases?.toLocaleString() || 0} Total Cases</span>
+                  <span>•</span>
+                  <span>Created: {new Date(p.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="xs" variant="ghost" icon={Eye} onClick={() => onSelectPlan(p)}>View Plan</Button>
+                {p.status === 'DRAFT' && (
+                  <Button size="xs" variant="primary" icon={Send} onClick={() => onSubmitPlan(p)}>Submit to Director</Button>
+                )}
+              </div>
+            </div>
+          ))}
+          {plans.length === 0 && (
+            <div className="p-12 text-center">
+              <Empty title="No plans deployed" description="Create a plan to begin the deployment pipeline." />
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

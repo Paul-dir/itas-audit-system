@@ -1,4 +1,6 @@
 import { REGIONS, TAX_CENTERS, AUDIT_TYPES, getRegionById } from '../../data/constants.js';
+import { storage, STORE_KEYS } from '../../services/storage.js';
+import { DEFAULT_PLANNING_CONFIG } from '../../services/planningConfigService.js';
 
 const TYPE_COLORS = {
   desk_audit: 'bg-blue-50 text-blue-700',
@@ -30,20 +32,24 @@ const REVENUE_PER_CASE = {
 };
 
 // Read-only distribution table (region × audit type)
-export function DistributionTable({ distribution, regions = REGIONS, auditTypes = AUDIT_TYPES }) {
+export function DistributionTable({ distribution, regions, auditTypes }) {
   console.log('📊 [DistributionTable] Received distribution:', distribution);
   
   if (!distribution) {
     return null;
   }
 
-  const activeAuditTypes = (auditTypes || AUDIT_TYPES).filter(a => a.active !== false);
+  const cachedConfig = storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const regionsToUse = (regions && regions.length > 0) ? regions : (cachedConfig?.regions || REGIONS);
+  const auditTypesToUse = (auditTypes && auditTypes.length > 0) ? auditTypes : (cachedConfig?.auditTypes || AUDIT_TYPES);
+  const activeRegions = (regionsToUse || []).filter(r => r && r.active !== false);
+  const activeAuditTypes = (auditTypesToUse || []).filter(a => a && a.active !== false);
 
   const totals = {};
   const revenueTotals = {};
   
   activeAuditTypes.forEach(a => {
-    const caseCount = regions.reduce((sum, r) => {
+    const caseCount = activeRegions.reduce((sum, r) => {
       const dist = distribution[r.id] || distribution[r.code] || distribution[r.id?.toLowerCase()] || {};
       return sum + (dist[a.id] || dist[a.shortName] || 0);
     }, 0);
@@ -98,7 +104,7 @@ export function DistributionTable({ distribution, regions = REGIONS, auditTypes 
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-600 bg-white dark:bg-slate-700">
-            {regions.map(region => {
+            {activeRegions.map(region => {
               const dist = distribution[region.id] || distribution[region.code] || distribution[region.id?.toLowerCase()] || {};
               const rowCases = activeAuditTypes.reduce((sum, a) => sum + (dist[a.id] || dist[a.shortName] || 0), 0);
               const rowRevenue = activeAuditTypes.reduce((sum, a) => sum + ((dist[a.id] || dist[a.shortName] || 0) * (a.revenuePerCase || REVENUE_PER_CASE[a.id] || 250000)), 0);
@@ -144,8 +150,12 @@ export function DistributionTable({ distribution, regions = REGIONS, auditTypes 
 }
 
 // Editable distribution table for plan creation
-export function EditableDistributionTable({ distribution, onChange, regions = REGIONS, auditTypes = AUDIT_TYPES }) {
-  const activeAuditTypes = (auditTypes || AUDIT_TYPES).filter(a => a.active !== false);
+export function EditableDistributionTable({ distribution, onChange, regions, auditTypes }) {
+  const cachedConfig = storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const regionsToDisplay = (regions && regions.length > 0) ? regions : (cachedConfig?.regions || REGIONS);
+  const auditTypesToDisplay = (auditTypes && auditTypes.length > 0) ? auditTypes : (cachedConfig?.auditTypes || AUDIT_TYPES);
+  const activeRegions = (regionsToDisplay || []).filter(r => r && r.active !== false);
+  const activeAuditTypes = (auditTypesToDisplay || []).filter(a => a && a.active !== false);
 
   const handleChange = (regionId, auditTypeId, rawValue) => {
     const value = Math.max(0, parseInt(rawValue) || 0);
@@ -156,13 +166,10 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
     onChange(newDist);
   };
 
-  // Show ALL regions (no filtering)
-  const regionsToDisplay = regions;
-
   // Regional totals
   const totals = {};
   activeAuditTypes.forEach(a => {
-    totals[a.id] = regionsToDisplay.reduce((sum, r) => sum + (distribution[r.id]?.[a.id] || 0), 0);
+    totals[a.id] = activeRegions.reduce((sum, r) => sum + (distribution?.[r.id]?.[a.id] || 0), 0);
   });
   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0);
 
@@ -184,7 +191,7 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-600 bg-white dark:bg-slate-700">
-              {regionsToDisplay.map(region => {
+              {activeRegions.map(region => {
                 const dist = distribution[region.id] || {};
                 const rowTotal = activeAuditTypes.reduce((sum, a) => sum + (dist[a.id] || 0), 0);
                 return (

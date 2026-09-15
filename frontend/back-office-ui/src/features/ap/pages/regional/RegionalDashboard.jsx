@@ -38,6 +38,17 @@ export default function RegionalDashboard({ view }) {
   const [regionalPlans, setRegionalPlans] = useState([]); // ✅ Plans fetched from backend for this region
   const [plansLoading, setPlansLoading] = useState(false);
   const [filteredPlansView, setFilteredPlansView] = useState('awaiting'); // DEFAULT: Show only "Awaiting Your Feedback"
+
+  // Sync filtered plans view with sidebar navigation view
+  useEffect(() => {
+    if (view === 'feedback') {
+      setFilteredPlansView('awaiting');
+    } else if (view === 'plans') {
+      setFilteredPlansView('approved');
+    } else if (view === 'dashboard') {
+      setFilteredPlansView('awaiting');
+    }
+  }, [view]);
   
   // NEW MODAL STATES FOR WORKFLOW SEPARATION
   const [distributionModalOpen, setDistributionModalOpen] = useState(false);

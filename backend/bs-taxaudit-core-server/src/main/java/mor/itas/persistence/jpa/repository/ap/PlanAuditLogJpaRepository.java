@@ -25,6 +25,11 @@ public interface PlanAuditLogJpaRepository extends JpaRepository<PlanAuditLogEnt
     List<PlanAuditLogEntity> findByAnnualPlanIdAndActionOrderByCreatedAtDesc(UUID planId, String action);
     
     /**
+     * Find all audit logs across all plans, ordered by creation date descending
+     */
+    List<PlanAuditLogEntity> findAllByOrderByCreatedAtDesc();
+
+    /**
      * Count audit logs for a plan
      */
     long countByAnnualPlanId(UUID planId);
