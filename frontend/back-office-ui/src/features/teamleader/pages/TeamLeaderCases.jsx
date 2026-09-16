@@ -22,62 +22,27 @@ import Card from '../../../components/Card';
 import {
   Search, AlertCircle, ChevronLeft, ChevronRight, Download,
   FileText, Send, ArrowRight, Filter, PlayCircle, ClipboardCheck,
-  UserCheck,
+  UserCheck, Clock,
 } from 'lucide-react';
 
 const TEAM_LEADER_ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
   'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
   'fed.ja.chair': '20000000-0000-0000-0099-000000000001',
   'fed.ja.member': '20000000-0000-0000-0099-000000000002',
   'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
-  'aa1.tl': '10000000-0000-0001-0000-000000000001',
-  'or1.tl': '10000000-0000-0002-0000-000000000001',
+  'aa1.tl': '10000000-0000-0000-0001-000000000001',
+  'or1.tl': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-joint-1': '10000000-0000-0000-0004-000000000001',
   'u-tl-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
   'u-tl-federal-lto1-joint-1': '10000000-0000-0000-0099-000000000001',
 };
 
-const JA_PHASE_CONFIG = {
-  'ja-phase-planning': {
-    title: 'Planning & Entry Conference Supervisory Gate',
-    subtitle: 'Review and approve preliminary audit scopes, materiality thresholds, team authorization, and taxpayer entry conference minutes.',
-    badge: 'Steps 2–3 Supervisory Gate',
-    initialStep: 'PLANNING',
-  },
-  'ja-phase-fieldwork': {
-    title: 'Field Investigation & Evidence Oversight',
-    subtitle: 'Supervise joint field investigation logs, CAAT automated analytics, and customs-tax inter-agency verification trails.',
-    badge: 'Steps 4–7 Fieldwork Gate',
-    initialStep: 'INFO_REQUEST',
-  },
-  'ja-phase-findings': {
-    title: 'Customs & Domestic Tax Reconciliation',
-    subtitle: 'Review cross-matched ASYCUDA customs declarations versus domestic VAT and Income Tax discrepancy findings.',
-    badge: 'Step 8 Discrepancy Gate',
-    initialStep: 'FINDINGS',
-  },
-  'ja-phase-response': {
-    title: 'Exit Conference & Taxpayer Response Review',
-    subtitle: 'Supervise bipartite exit conference protocol, evaluate taxpayer written rebuttals and counter-evidence within the 30-day statutory window.',
-    badge: 'Step 9 Rebuttal Gate',
-    initialStep: 'TAXPAYER_RESPONSE',
-  },
-  'ja-phase-conclusion': {
-    title: 'Statutory Joint Assessment & Sign-Off',
-    subtitle: 'Final supervisory review of combined tax assessment notices, joint penalty determinations with Customs, and formal case sign-off.',
-    badge: 'Step 10 Statutory Sign-Off',
-    initialStep: 'CONCLUSION',
-  },
-  'execution': {
-    title: 'Joint Audit 10-Step Execution Workspace',
-    subtitle: 'Select any assigned joint audit case below to launch or continue the full 10-step statutory audit lifecycle.',
-    badge: '10-Step Execution Workspace',
-    initialStep: null,
-  },
-};
+const JA_PHASE_CONFIG = {};
 
 export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
   const { user } = useAuth();
@@ -163,6 +128,11 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
     }
     if (isConcluded || isAssignedToAuditor(caseItem)) {
       return { type: 'EXECUTE', label: isExecuting ? 'Continue' : 'Execute' };
+    }
+    // Awaiting assignment by a Tax Center Manager — the TL cannot hand off yet.
+    const status = caseItem.status?.toUpperCase();
+    if (!caseItem.assignedTeamLeaderId && status === 'PENDING_ASSIGNMENT') {
+      return { type: 'AWAITING_ASSIGNMENT', label: 'Awaiting Assignment' };
     }
     if (isHandoffable(caseItem) || !isHandedOff(caseItem)) {
       return { type: 'HANDOFF', label: 'Handoff' };
@@ -277,7 +247,7 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
       });
     }
 
-    const targetStep = forcedStep || JA_PHASE_CONFIG[view]?.initialStep || null;
+    const targetStep = forcedStep || null;
 
     setExecutingCase({
       id: caseId,
@@ -327,7 +297,7 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
       <CaseExecution
         caseId={executingCase.id}
         caseData={executingCase}
-        initialStep={executingCase.initialStep || JA_PHASE_CONFIG[view]?.initialStep}
+        initialStep={executingCase.initialStep}
         onBack={() => setExecutingCase(null)}
       />
     );
@@ -374,36 +344,6 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
 
   return (
     <div className="space-y-6">
-      {/* Supervisory Milestone Banner if in a specific phase */}
-      {activePhaseConfig && (
-        <div className="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/20 border border-blue-500/30 rounded-2xl p-5 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                  {activePhaseConfig.badge}
-                </span>
-                <span className="text-xs text-blue-300/80 font-medium">Joint Audit Process</span>
-              </div>
-              <h2 className="text-xl font-bold text-white tracking-tight">
-                {activePhaseConfig.title}
-              </h2>
-              <p className="text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                {activePhaseConfig.subtitle}
-              </p>
-            </div>
-            {view !== 'cases' && (
-              <button
-                onClick={() => onNavigate?.('cases')}
-                className="self-start md:self-center px-3.5 py-2 text-xs font-medium rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-colors whitespace-nowrap"
-              >
-                View All Assigned Cases
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div>
         <div className="flex items-start justify-between mb-4">
@@ -553,6 +493,19 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
                             }
                             const isHandoffAction = nextAction.type === 'HANDOFF';
                             const isAssignAction = nextAction.type === 'ASSIGN';
+                            const isAwaitingAssignment = nextAction.type === 'AWAITING_ASSIGNMENT';
+                            if (isAwaitingAssignment) {
+                              return (
+                                <button
+                                  disabled
+                                  className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed"
+                                  title="Waiting for a Tax Center Manager to assign this case to a team leader"
+                                >
+                                  <Clock size={14} />
+                                  Awaiting Assignment
+                                </button>
+                              );
+                            }
                             return (
                               <button
                                 onClick={() => isHandoffAction ? handleHandoff(caseItem) : isAssignAction ? handleAssign(caseItem) : handleExecuteCase(caseItem)}

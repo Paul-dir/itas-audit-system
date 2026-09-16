@@ -7,10 +7,10 @@ const API_BASE = '/api/v1/backoffice/ap/cases';
 const COMMITTEE_API_BASE = '/api/v1/backoffice/ap/committee';
 
 const ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
   'u-aud-aa1a': 'a0000001-0000-0000-0000-000000000001',
   'u-aud-db02': 'a0000001-0000-0000-0000-000000000002',
   'u-aud-db03': 'a0000001-0000-0000-0000-000000000003',
@@ -75,12 +75,19 @@ export const workflowAPI = {
     return response.json();
   },
 
-  /** Handoff a case (Team Leader takes responsibility) */
   handoffCase: async (caseId, teamLeaderId, comment) => {
+    const resolvedTlId = ID_MAP[teamLeaderId] || teamLeaderId;
+    const headers = getHeaders();
+    if (resolvedTlId) {
+      headers['X-Actor-Id'] = resolvedTlId;
+    }
     const response = await fetch(`${API_BASE}/${caseId}/handoff`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ comment: comment || 'Accepted by Team Leader after reviewing the case referral' }),
+      headers,
+      body: JSON.stringify({
+        comment: comment || 'Accepted by Team Leader after reviewing the case referral',
+        teamLeaderId: resolvedTlId,
+      }),
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));

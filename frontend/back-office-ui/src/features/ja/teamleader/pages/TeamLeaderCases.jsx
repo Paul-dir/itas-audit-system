@@ -22,14 +22,22 @@ import Card from '../../../../components/Card';
 import {
   Search, AlertCircle, ChevronLeft, ChevronRight, Download,
   FileText, Send, ArrowRight, Filter, PlayCircle, ClipboardCheck,
-  UserCheck,
+  UserCheck, Clock,
 } from 'lucide-react';
 
 const TEAM_LEADER_ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
+  'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
+  'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
+  'aa1.tl': '10000000-0000-0000-0001-000000000001',
+  'or1.tl': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-joint-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'u-tl-federal-lto1-joint-1': '10000000-0000-0000-0099-000000000001',
 };
 
 export default function TeamLeaderCases() {
@@ -116,6 +124,11 @@ export default function TeamLeaderCases() {
     }
     if (isConcluded || isAssignedToAuditor(caseItem)) {
       return { type: 'EXECUTE', label: isExecuting ? 'Continue' : 'Execute' };
+    }
+    // Awaiting assignment by a Tax Center Manager — the TL cannot hand off yet.
+    const status = caseItem.status?.toUpperCase();
+    if (!caseItem.assignedTeamLeaderId && status === 'PENDING_ASSIGNMENT') {
+      return { type: 'AWAITING_ASSIGNMENT', label: 'Awaiting Assignment' };
     }
     if (isHandoffable(caseItem) || !isHandedOff(caseItem)) {
       return { type: 'HANDOFF', label: 'Handoff' };
@@ -461,6 +474,19 @@ export default function TeamLeaderCases() {
                             }
                             const isHandoffAction = nextAction.type === 'HANDOFF';
                             const isAssignAction = nextAction.type === 'ASSIGN';
+                            const isAwaitingAssignment = nextAction.type === 'AWAITING_ASSIGNMENT';
+                            if (isAwaitingAssignment) {
+                              return (
+                                <button
+                                  disabled
+                                  className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed"
+                                  title="Waiting for a Tax Center Manager to assign this case to a team leader"
+                                >
+                                  <Clock size={14} />
+                                  Awaiting Assignment
+                                </button>
+                              );
+                            }
                             return (
                               <button
                                 onClick={() => isHandoffAction ? handleHandoff(caseItem) : isAssignAction ? handleAssign(caseItem) : handleExecuteCase(caseItem)}

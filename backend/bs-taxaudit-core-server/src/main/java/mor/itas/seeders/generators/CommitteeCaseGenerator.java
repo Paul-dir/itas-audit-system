@@ -41,10 +41,7 @@ public class CommitteeCaseGenerator {
 
     private static final String[] CASE_STATUSES = {
         "PENDING_VOTES",
-        "PENDING_VIABILITY",
-        "APPROVED",
-        "REJECTED",
-        "TEAM_ASSIGNED"
+        "PENDING_VIABILITY"
     };
 
     // Tax center-specific case data for realistic distribution
@@ -143,23 +140,15 @@ public class CommitteeCaseGenerator {
         String status = CASE_STATUSES[index % CASE_STATUSES.length];
         entity.setStatus(status);
 
-        // Add code for approved/team-assigned cases
-        if (status.equals("APPROVED") || status.equals("TEAM_ASSIGNED")) {
-            entity.setCaseCode(String.format("JAC-2024-%04d", index));
-        }
-
         int tcIdx = (index % TAX_CENTERS.length) + 1;
         UUID tcChairUuid = UUID.fromString(String.format("20000000-0000-0000-%04d-000000000001", tcIdx));
         UUID tcMemberUuid = UUID.fromString(String.format("20000000-0000-0000-%04d-000000000002", tcIdx));
-        UUID tcTeamLeadUuid = UUID.fromString(String.format("10000000-0000-0000-%04d-000000000001", tcIdx));
 
         entity.setChairpersonId(tcChairUuid);
         entity.setCreatedBy(tcChairUuid);
 
-        // Assign team lead for cases past TEAM_ASSIGNED (business rule: team lead must exist before viability)
-        if (status.equals("PENDING_VIABILITY") || status.equals("APPROVED") || status.equals("REJECTED") || status.equals("TEAM_ASSIGNED")) {
-            entity.setTeamLeadId(tcTeamLeadUuid);
-        }
+        // Seeded cases begin at the committee level; team lead is assigned only after committee appointment
+        entity.setTeamLeadId(null);
 
         // Generate ownership (assigned to TC Member or Chair)
         if ((index % 3) != 0) {
@@ -167,21 +156,10 @@ public class CommitteeCaseGenerator {
             entity.setOwnershipAcquiredAt(OffsetDateTime.now().minusDays(random.nextInt(7) + 1));
         }
 
-        // Add decision for approved/rejected cases
-        if (status.equals("APPROVED")) {
-            entity.setDecision("APPROVED");
-            entity.setDecisionDate(entity.getCommitteeDeadline().minusDays(random.nextInt(5) + 1));
-        } else if (status.equals("REJECTED")) {
-            entity.setDecision("REJECTED");
-            entity.setDecisionDate(entity.getCommitteeDeadline().minusDays(random.nextInt(5) + 1));
-            entity.setDecisionReason("Risk assessment indicates insufficient multi-tax compliance controls for joint audit approval");
-        }
-
-        // Add handoff info for team-assigned cases
-        if (status.equals("TEAM_ASSIGNED") && entity.getDecisionDate() != null) {
-            entity.setHandoffRecordId(generateDeterministicUUID("handoff", index));
-            entity.setHandoffDate(entity.getDecisionDate().plusDays(random.nextInt(3) + 1));
-        }
+        entity.setDecision(null);
+        entity.setDecisionDate(null);
+        entity.setHandoffRecordId(null);
+        entity.setHandoffDate(null);
 
         // Generate extended case details
         entity.setDescription(generateDescription(index, industry, segment));

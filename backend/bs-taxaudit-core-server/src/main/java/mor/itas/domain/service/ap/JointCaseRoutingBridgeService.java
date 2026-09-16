@@ -125,7 +125,7 @@ public class JointCaseRoutingBridgeService {
                 .region("Addis Ababa")
                 .taxCenter(effectiveTaxCenter)
                 .chairpersonId(chairpersonId)
-                .teamLeadId(defaultTeamLeadId)
+                .teamLeadId(null)
                 .createdBy(chairpersonId)
                 .complianceIssues(List.of(
                         "ASYCUDA Customs import declarations exceed declared SIGTAS Domestic Sales by ETB 87.0M with zero corresponding inventory build-up.",

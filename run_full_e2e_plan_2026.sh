@@ -15,13 +15,21 @@ step() { echo -e "${BLUE}▶ $1${NC}"; }
 
 BASE_URL="http://localhost:8080/api/v1/backoffice/ap"
 
+# DB connection (matches application.yml env var convention)
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-5432}"
+DB_NAME="${DB_NAME:-itas_audit}"
+DB_USER="${DB_USER:-itas_dev}"
+DB_PASSWORD="${DB_PASSWORD:-dev_password}"
+psql_db() { PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" "$@"; }
+
 echo "================================================================="
 echo "  FULL E2E AUDIT PLAN 2026 ROUTING & VERIFICATION TEST"
 echo "  All 7 Regions | 20 Tax Centers | All 5 Audit Types"
 echo "================================================================="
 
 step "1. Truncating all previous plans, cases, and workflow instances..."
-PGPASSWORD=dev_password psql -h localhost -p 5432 -U itas_dev -d itas_audit -c "
+psql_db -c "
 TRUNCATE TABLE 
   ap_annual_audit_plans,
   ap_plan_allocations,
@@ -240,7 +248,7 @@ pass "All 20 tax centers have active audit cases."
 step "13. Verifying All 5 Audit Types in Database..."
 AUDIT_TYPES=("DESK_AUDIT" "COMPREHENSIVE_AUDIT" "ISSUE_AUDIT" "JOINT_AUDIT" "TRANSFER_PRICING")
 for at in "${AUDIT_TYPES[@]}"; do
-  AT_COUNT=$(PGPASSWORD=dev_password psql -h localhost -p 5432 -U itas_dev -d itas_audit -t -A -c "SELECT count(*) FROM ap_audit_cases WHERE audit_type = '$at';")
+  AT_COUNT=$(psql_db -t -A -c "SELECT count(*) FROM ap_audit_cases WHERE audit_type = '$at';")
   if [ "$AT_COUNT" -eq 0 ]; then
     fail "Audit type $at has 0 cases in database!"
   fi

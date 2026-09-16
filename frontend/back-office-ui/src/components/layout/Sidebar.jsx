@@ -14,18 +14,7 @@ const TEAM_LEADER_NAV = {
     {
       title: 'JOINT AUDIT OPERATIONS',
       items: [
-        { id: 'cases', label: 'Assigned Joint Cases', icon: Users },
-        { id: 'execution', label: 'Execution Workspace', icon: ClipboardList, badge: '10 Steps' }
-      ]
-    },
-    {
-      title: 'SUPERVISORY REVIEWS & MILESTONES',
-      items: [
-        { id: 'ja-phase-planning', label: 'Planning & Entry Conference', icon: Target },
-        { id: 'ja-phase-fieldwork', label: 'Field Investigation Oversight', icon: Building2 },
-        { id: 'ja-phase-findings', label: 'Customs & Tax Reconciliation', icon: Activity },
-        { id: 'ja-phase-response', label: 'Exit Conference & Response', icon: CheckSquare },
-        { id: 'ja-phase-conclusion', label: 'Statutory Joint Assessment', icon: Star }
+        { id: 'cases', label: 'Assigned Joint Cases', icon: Users }
       ]
     }
   ],
@@ -228,8 +217,10 @@ export function getEffectiveAuditType(user) {
   if (raw.includes('DESK')) return 'DESK_AUDIT';
   if (raw.includes('ISSUE')) return 'ISSUE_AUDIT';
 
-  // Heuristics from username / id / email / name
-  const str = `${user.username || ''} ${user.id || ''} ${user.email || ''} ${user.name || ''}`.toLowerCase();
+  // Heuristics from username / id / email / name / directory metadata.
+  // category & department carry 'Joint Audit' in the login directory presets,
+  // so profiles that lost their auditType field still resolve correctly.
+  const str = `${user.username || ''} ${user.id || ''} ${user.email || ''} ${user.name || ''} ${user.category || ''} ${user.department || ''} ${user.description || ''}`.toLowerCase();
   if (str.includes('.ja.') || str.includes('-ja-') || str.includes('joint') || str.includes(' ja ') || str.includes('(ja')) return 'JOINT_AUDIT';
   if (str.includes('.tp.') || str.includes('-tp-') || str.includes('transfer') || str.includes(' tp ') || str.includes('(tp')) return 'TRANSFER_PRICING';
   if (str.includes('.comp.') || str.includes('-comp-') || str.includes('comprehensive') || str.includes(' comp ') || str.includes('(comp')) return 'COMPREHENSIVE_AUDIT';
@@ -237,6 +228,16 @@ export function getEffectiveAuditType(user) {
   if (str.includes('.issue.') || str.includes('-issue-') || str.includes('issue') || str.includes('(issue')) return 'ISSUE_AUDIT';
 
   return 'TRANSFER_PRICING';
+}
+
+/**
+ * Single source of truth for "is this user a Joint Audit user".
+ * Used by both the sidebar navigation and App.jsx view routing so the two
+ * can never disagree (a joint TL must always get the joint menu AND the
+ * joint workspace views).
+ */
+export function isJointAuditUser(user) {
+  return getEffectiveAuditType(user) === 'JOINT_AUDIT';
 }
 
 export function getRoleDisplayName(user) {
