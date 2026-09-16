@@ -215,11 +215,17 @@ export default function CaseAssignmentToTeamLeaders({ committee, auditType, taxC
 
   const loadTeamLeaders = async () => {
     try {
-      const url = `/api/v1/backoffice/ap/users?role=team_leader&auditType=${encodeURIComponent(auditType)}`;
+      const tcParam = taxCenter ? `&taxCenter=${encodeURIComponent(taxCenter)}` : '';
+      const url = `/api/v1/backoffice/ap/users?role=team_leader&auditType=${encodeURIComponent(auditType)}${tcParam}`;
       const resp = await fetch(url);
       if (resp.ok) {
         const data = await resp.json();
-        const userList = Array.isArray(data) ? data : (data.data || []);
+        let userList = Array.isArray(data) ? data : (data.data || []);
+        if (taxCenter) {
+          const norm = (s) => (s || '').toLowerCase().replace(/[-_]/g, '');
+          const target = norm(taxCenter);
+          userList = userList.filter(u => norm(u.assignedLocation || '').includes(target) || norm(u.username || '').includes(target));
+        }
         if (userList.length > 0) {
           const mapped = userList.map(u => ({
             id: u.username || u.userId,

@@ -1,35 +1,210 @@
 package mor.itas.api.controller.backoffice.ap;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import mor.itas.api.dto.response.ap.GenericResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PlanningConfigController — REST controller for dynamic audit planning & resource configuration.
  * 
- * Allows the Audit Planning Team to configure:
- * 1. Audit Types (name, effort hours per case, complexity, revenue per case, governance routing)
+ * Backed by PostgreSQL table `ap_planning_configuration` to ensure persistent storage of:
+ * 1. Audit Types (name, effort hours per case, complexity, revenue per case, governance routing, active status)
  * 2. Auditor Capacity & Available Resources (annual working days, daily hours, direct productive ratio)
  * 3. Configurable Regions (Add / Remove / Edit regions) & Nested Tax Centers (optional per region)
  * 4. Effort Estimation & Multipliers (complexity multipliers, contingency buffer)
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/backoffice/ap/config/planning")
 @CrossOrigin(origins = "*")
 public class PlanningConfigController {
 
-    private final Map<String, Object> currentConfig = new ConcurrentHashMap<>();
+    private static final String CONFIG_ID = "ACTIVE_CONFIG";
+    private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public PlanningConfigController() {
-        initDefaultConfig();
+    public PlanningConfigController(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
-    private synchronized void initDefaultConfig() {
-        currentConfig.clear();
+    /**
+     * GET /api/v1/backoffice/ap/config/planning
+     * Retrieves active configuration from PostgreSQL, or falls back to statutory defaults.
+     */
+    @GetMapping
+    public ResponseEntity<GenericResponse<Map<String, Object>>> getPlanningConfig() {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                "SELECT config_data, version, updated_by, updated_at FROM ap_planning_configuration WHERE id = ?",
+                (rs, rowNum) -> {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    try {
+                        String json = rs.getString("config_data");
+                        Map<String, Object> data = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+                        result.putAll(data);
+                    } catch (Exception e) {
+                        log.error("Failed to parse planning config json: {}", e.getMessage());
+                    }
+                    result.put("version", rs.getInt("version"));
+                    result.put("updatedBy", rs.getString("updated_by"));
+                    result.put("lastUpdated", rs.getTimestamp("updated_at") != null 
+                        ? rs.getTimestamp("updated_at").toInstant().toString() 
+                        : OffsetDateTime.now().toString());
+                    return result;
+                },
+                CONFIG_ID
+            );
+
+            if (!rows.isEmpty()) {
+                return ResponseEntity.ok(GenericResponse.success(rows.get(0)));
+            }
+        } catch (Exception e) {
+            log.error("Database query failed for planning config: {}", e.getMessage());
+        }
+
+        // Fallback to statutory default and persist
+        Map<String, Object> defaultConfig = buildDefaultConfig();
+        saveConfigToDatabase(defaultConfig, "SYSTEM_DEFAULT", 1);
+        defaultConfig.put("version", 1);
+        defaultConfig.put("updatedBy", "SYSTEM_DEFAULT");
+        defaultConfig.put("lastUpdated", OffsetDateTime.now().toString());
+        return ResponseEntity.ok(GenericResponse.success(defaultConfig));
+    }
+
+    /**
+     * PUT /api/v1/backoffice/ap/config/planning
+     * Persists updated configuration to PostgreSQL and synchronizes master tables.
+     */
+    @PutMapping
+    public ResponseEntity<GenericResponse<Map<String, Object>>> updatePlanningConfig(@RequestBody Map<String, Object> newConfig) {
+        if (newConfig == null || newConfig.isEmpty()) {
+            return ResponseEntity.badRequest().body(GenericResponse.error("INVALID_CONFIG", "Configuration payload cannot be empty"));
+        }
+
+        try {
+            Integer currentVersion = 1;
+            try {
+                currentVersion = jdbcTemplate.queryForObject(
+                    "SELECT COALESCE(MAX(version), 0) FROM ap_planning_configuration WHERE id = ?",
+                    Integer.class,
+                    CONFIG_ID
+                );
+            } catch (Exception ignored) {}
+            if (currentVersion == null) currentVersion = 0;
+            int newVersion = currentVersion + 1;
+            String updatedBy = String.valueOf(newConfig.getOrDefault("updatedBy", "Audit Planning Team"));
+
+            Map<String, Object> configToSave = new LinkedHashMap<>(newConfig);
+            configToSave.remove("version");
+            configToSave.remove("lastUpdated");
+            configToSave.remove("updatedBy");
+
+            saveConfigToDatabase(configToSave, updatedBy, newVersion);
+            syncMasterTables(configToSave);
+
+            Map<String, Object> response = new LinkedHashMap<>(configToSave);
+            response.put("version", newVersion);
+            response.put("updatedBy", updatedBy);
+            response.put("lastUpdated", OffsetDateTime.now().toString());
+
+            return ResponseEntity.ok(GenericResponse.success(response));
+        } catch (Exception e) {
+            log.error("Failed to update planning config in database: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(GenericResponse.error("DB_ERROR", "Failed to persist configuration: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * POST /api/v1/backoffice/ap/config/planning/reset
+     * Resets configuration to statutory Ministry defaults in PostgreSQL.
+     */
+    @PostMapping("/reset")
+    public ResponseEntity<GenericResponse<Map<String, Object>>> resetPlanningConfig() {
+        Map<String, Object> defaultConfig = buildDefaultConfig();
+        saveConfigToDatabase(defaultConfig, "SYSTEM_DEFAULT", 1);
+        syncMasterTables(defaultConfig);
+        defaultConfig.put("version", 1);
+        defaultConfig.put("updatedBy", "SYSTEM_DEFAULT");
+        defaultConfig.put("lastUpdated", OffsetDateTime.now().toString());
+        return ResponseEntity.ok(GenericResponse.success(defaultConfig));
+    }
+
+    private void saveConfigToDatabase(Map<String, Object> config, String updatedBy, int version) {
+        try {
+            String json = objectMapper.writeValueAsString(config);
+            jdbcTemplate.update(
+                "INSERT INTO ap_planning_configuration (id, config_data, version, updated_by, updated_at) " +
+                "VALUES (?, ?::jsonb, ?, ?, CURRENT_TIMESTAMP) " +
+                "ON CONFLICT (id) DO UPDATE SET config_data = EXCLUDED.config_data, version = EXCLUDED.version, " +
+                "updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at",
+                CONFIG_ID, json, version, updatedBy
+            );
+        } catch (Exception e) {
+            log.error("Failed to save planning config to PostgreSQL: {}", e.getMessage(), e);
+            throw new RuntimeException("Could not persist planning configuration to database", e);
+        }
+    }
+
+    private void syncMasterTables(Map<String, Object> config) {
+        try {
+            // 1. Sync Audit Types
+            Object typesObj = config.get("auditTypes");
+            if (typesObj instanceof List<?> typesList) {
+                for (Object item : typesList) {
+                    if (item instanceof Map<?, ?> typeMap) {
+                        String id = String.valueOf(typeMap.get("id"));
+                        String name = String.valueOf(typeMap.get("name"));
+                        String code = id.toUpperCase().replace(" ", "_");
+                        boolean reqCommittee = "COMMITTEE".equalsIgnoreCase(String.valueOf(typeMap.get("governanceRouting")));
+                        String role = typeMap.get("governanceRouting") != null ? String.valueOf(typeMap.get("governanceRouting")) : "TEAM_LEADER";
+                        boolean active = !Boolean.FALSE.equals(typeMap.get("active"));
+
+                        jdbcTemplate.update(
+                            "INSERT INTO audit_types (code, name, requires_committee, initial_assignment_role, is_active) " +
+                            "VALUES (?, ?, ?, ?, ?) " +
+                            "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, requires_committee = EXCLUDED.requires_committee, " +
+                            "initial_assignment_role = EXCLUDED.initial_assignment_role, is_active = EXCLUDED.is_active",
+                            code, name, reqCommittee, role, active
+                        );
+                    }
+                }
+            }
+
+            // 2. Sync Regions
+            Object regionsObj = config.get("regions");
+            if (regionsObj instanceof List<?> regionsList) {
+                for (Object item : regionsList) {
+                    if (item instanceof Map<?, ?> regMap) {
+                        String name = String.valueOf(regMap.get("name"));
+                        String code = regMap.get("code") != null 
+                            ? String.valueOf(regMap.get("code")).toUpperCase().trim() 
+                            : name.substring(0, Math.min(2, name.length())).toUpperCase();
+                        boolean active = !Boolean.FALSE.equals(regMap.get("active"));
+
+                        jdbcTemplate.update(
+                            "INSERT INTO regions (code, name, is_active, updated_at) " +
+                            "VALUES (?, ?, ?, CURRENT_TIMESTAMP) " +
+                            "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP",
+                            code, name, active
+                        );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Master tables synchronization note: {}", e.getMessage());
+        }
+    }
+
+    private Map<String, Object> buildDefaultConfig() {
+        Map<String, Object> config = new LinkedHashMap<>();
 
         // 1. Audit Types
         List<Map<String, Object>> auditTypes = new ArrayList<>();
@@ -39,17 +214,16 @@ public class PlanningConfigController {
         auditTypes.add(createAuditType("transfer_pricing", "Transfer Pricing", "TP", 80, "High", 1500000L, "COMMITTEE", "orange", "Specialized cross-border intercompany transaction & BEPS examination"));
         auditTypes.add(createAuditType("comprehensive", "Comprehensive", "Comp", 200, "Very High", 1000000L, "TEAM_LEADER", "red", "Full-scope statutory corporate income tax, VAT, and excise audit"));
         auditTypes.add(createAuditType("issue_audit", "Issue Audit", "Issue", 50, "Medium", 250000L, "TEAM_LEADER", "teal", "Targeted single-issue or specific risk transaction examination"));
-        currentConfig.put("auditTypes", auditTypes);
+        config.put("auditTypes", auditTypes);
 
         // 2. Capacity & Resource Parameters
         Map<String, Object> capacity = new LinkedHashMap<>();
         capacity.put("workingDaysPerYear", 220);
         capacity.put("hoursPerDay", 8.0);
-        capacity.put("directProductiveRatio", 0.75); // 75% on active audit cases
+        capacity.put("directProductiveRatio", 0.75);
         capacity.put("annualTrainingDays", 5);
         capacity.put("annualLeaveDays", 20);
         
-        // Regional Headcount Matrix
         Map<String, Integer> regionalHeadcount = new LinkedHashMap<>();
         regionalHeadcount.put("federal_level", 120);
         regionalHeadcount.put("addis_ababa", 600);
@@ -60,7 +234,7 @@ public class PlanningConfigController {
         regionalHeadcount.put("somali", 100);
         regionalHeadcount.put("sidama", 100);
         capacity.put("regionalHeadcount", regionalHeadcount);
-        currentConfig.put("capacity", capacity);
+        config.put("capacity", capacity);
 
         // 3. Configurable Regions with Optional Nested Tax Centers
         List<Map<String, Object>> regions = new ArrayList<>();
@@ -99,7 +273,7 @@ public class PlanningConfigController {
             createTaxCenter("somali-tc3", "Somali TC3", "SO-TC3")
         )));
         regions.add(createRegion("sidama", "Sidama", "SI", 100, 350000L, new ArrayList<>()));
-        currentConfig.put("regions", regions);
+        config.put("regions", regions);
 
         // 4. Effort Estimation & Multipliers
         Map<String, Object> effortEstimation = new LinkedHashMap<>();
@@ -109,14 +283,11 @@ public class PlanningConfigController {
         complexityMultipliers.put("High", 1.35);
         complexityMultipliers.put("Very High", 1.70);
         effortEstimation.put("complexityMultipliers", complexityMultipliers);
-        effortEstimation.put("contingencyBufferPercentage", 15); // 15% buffer
+        effortEstimation.put("contingencyBufferPercentage", 15);
         effortEstimation.put("travelOverheadHoursPerFieldCase", 16);
-        currentConfig.put("effortEstimation", effortEstimation);
+        config.put("effortEstimation", effortEstimation);
 
-        // Metadata
-        currentConfig.put("lastUpdated", OffsetDateTime.now().toString());
-        currentConfig.put("updatedBy", "SYSTEM_DEFAULT");
-        currentConfig.put("version", 1);
+        return config;
     }
 
     private Map<String, Object> createAuditType(String id, String name, String shortName, int effortPerCase, 
@@ -129,7 +300,7 @@ public class PlanningConfigController {
         type.put("effortPerCase", effortPerCase);
         type.put("complexity", complexity);
         type.put("revenuePerCase", revenuePerCase);
-        type.put("governanceRouting", governanceRouting); // "TEAM_LEADER" or "COMMITTEE"
+        type.put("governanceRouting", governanceRouting);
         type.put("color", color);
         type.put("description", description);
         type.put("active", true);
@@ -154,54 +325,5 @@ public class PlanningConfigController {
         tc.put("name", name);
         tc.put("shortName", shortName);
         return tc;
-    }
-
-    /**
-     * GET /api/v1/backoffice/ap/config/planning
-     */
-    @GetMapping
-    public ResponseEntity<GenericResponse<Map<String, Object>>> getPlanningConfig() {
-        return ResponseEntity.ok(GenericResponse.success(new LinkedHashMap<>(currentConfig)));
-    }
-
-    /**
-     * PUT /api/v1/backoffice/ap/config/planning
-     */
-    @PutMapping
-    public ResponseEntity<GenericResponse<Map<String, Object>>> updatePlanningConfig(@RequestBody Map<String, Object> newConfig) {
-        if (newConfig == null || newConfig.isEmpty()) {
-            return ResponseEntity.badRequest().body(GenericResponse.error("INVALID_CONFIG", "Configuration payload cannot be empty"));
-        }
-
-        synchronized (this) {
-            if (newConfig.containsKey("auditTypes")) {
-                currentConfig.put("auditTypes", newConfig.get("auditTypes"));
-            }
-            if (newConfig.containsKey("capacity")) {
-                currentConfig.put("capacity", newConfig.get("capacity"));
-            }
-            if (newConfig.containsKey("regions")) {
-                currentConfig.put("regions", newConfig.get("regions"));
-            }
-            if (newConfig.containsKey("effortEstimation")) {
-                currentConfig.put("effortEstimation", newConfig.get("effortEstimation"));
-            }
-
-            int prevVersion = (int) currentConfig.getOrDefault("version", 1);
-            currentConfig.put("version", prevVersion + 1);
-            currentConfig.put("lastUpdated", OffsetDateTime.now().toString());
-            currentConfig.put("updatedBy", newConfig.getOrDefault("updatedBy", "Planning Team"));
-        }
-
-        return ResponseEntity.ok(GenericResponse.success(new LinkedHashMap<>(currentConfig)));
-    }
-
-    /**
-     * POST /api/v1/backoffice/ap/config/planning/reset
-     */
-    @PostMapping("/reset")
-    public ResponseEntity<GenericResponse<Map<String, Object>>> resetPlanningConfig() {
-        initDefaultConfig();
-        return ResponseEntity.ok(GenericResponse.success(new LinkedHashMap<>(currentConfig)));
     }
 }

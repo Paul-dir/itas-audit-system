@@ -7,7 +7,8 @@ import { formatRevenue } from '../../utils/revenueFormatter.js';
 import TpTeamLeaderReviewModal from '../../../tp/components/TpTeamLeaderReviewModal.jsx';
 import TpWorkflowTaskPanel from '../../../tp/components/TpWorkflowTaskPanel.jsx';
 import IssueTeamLeaderReviewModal from '../../../issue/components/IssueTeamLeaderReviewModal.jsx';
-import TpAuditWorkspace from '../../../tp/pages/TpAuditWorkspace.jsx';
+import TpTeamLeaderWorkspace from '../../../tp/pages/TpTeamLeaderWorkspace.jsx';
+import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 
 const API = '/api/v1/backoffice/ap/cases';
 
@@ -251,10 +252,21 @@ export default function TeamLeaderDashboard({ view }) {
     return scopedCases.filter(c => String(c.planYear || 2026) === String(yearFilter));
   }, [scopedCases, yearFilter]);
 
+  const inProgressStatuses = [
+    'IN_PROGRESS', 
+    'AUDIT_PLAN_SUBMITTED_TL', 
+    'RISK_ASSESSMENT_SUBMITTED_TL', 
+    'SUBMITTED_FOR_TL_REVIEW', 
+    'SUBMITTED_TO_TL',
+    'REPORT_SUBMITTED_FOR_TL_REVIEW', 
+    'AUDIT_PLAN_SUBMITTED_COMMITTEE', 
+    'SUBMITTED_FOR_COMMITTEE'
+  ];
+
   const stats = useMemo(() => ({
     total:      yearScopedCases.length,
-    pending:    yearScopedCases.filter(c => c.frontendStatus !== 'IN_PROGRESS' && c.status !== 'IN_PROGRESS' && !['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
-    inProgress: yearScopedCases.filter(c => c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS').length,
+    pending:    yearScopedCases.filter(c => !inProgressStatuses.includes(c.status) && c.frontendStatus !== 'IN_PROGRESS' && !['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
+    inProgress: yearScopedCases.filter(c => inProgressStatuses.includes(c.status) || c.frontendStatus === 'IN_PROGRESS').length,
     completed:  yearScopedCases.filter(c => ['COMPLETED','CLOSED'].includes(c.frontendStatus)).length,
   }), [yearScopedCases]);
 
@@ -279,8 +291,8 @@ export default function TeamLeaderDashboard({ view }) {
         }
       }
       // Tab filters for Team Leader view
-      if (tab === 'pending'     && (c.frontendStatus === 'IN_PROGRESS' || c.status === 'IN_PROGRESS')) return false;
-      if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS' && c.status !== 'IN_PROGRESS') return false;
+      if (tab === 'pending'     && (c.frontendStatus === 'IN_PROGRESS' || inProgressStatuses.includes(c.status))) return false;
+      if (tab === 'in_progress' && c.frontendStatus !== 'IN_PROGRESS' && !inProgressStatuses.includes(c.status)) return false;
       if (tab === 'completed'   && !['COMPLETED','CLOSED'].includes(c.frontendStatus)) return false;
       if (filterAT !== 'ALL' && !isAuditTypeMatch(filterAT, c.auditTypeDef?.id || c.auditType)) return false;
       if (searchQ) {
@@ -292,7 +304,7 @@ export default function TeamLeaderDashboard({ view }) {
   }, [yearScopedCases, tab, filterAT, searchQ, isCommitteeUser]);
 
   // ── Selection ────────────────────────────────────────────────────────────────
-  const selectableInTab = filtered.filter(c => ['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT', 'IN_PROGRESS'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_TEAM_LEADER' || c.status === 'ASSIGNED_TO_COMMITTEE');
+  const selectableInTab = filtered.filter(c => ['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'ASSIGNED_TO_COMMITTEE', 'PENDING_ASSIGNMENT', 'IN_PROGRESS'].includes(c.frontendStatus) || c.status === 'ASSIGNED_TO_TEAM_LEADER' || c.status === 'ASSIGNED_TO_COMMITTEE' || c.status === 'PLANNING_TRIGGERED');
   const toggleAll = () => setSelected(prev =>
     prev.length === selectableInTab.length ? [] : selectableInTab.map(c => c.id));
   const toggle = id => setSelected(prev =>
@@ -345,10 +357,10 @@ export default function TeamLeaderDashboard({ view }) {
 
   if (tpWorkspaceCase) {
     return (
-      <TpAuditWorkspace
+      <TpTeamLeaderWorkspace
         caseData={tpWorkspaceCase}
         user={user}
-        initialPhase={tpWorkspacePhase || 'DETAILED_RISK_ASSESSMENT'}
+        initialPhase={tpWorkspacePhase}
         onClose={() => { setTpWorkspaceCase(null); setTpWorkspacePhase(null); }}
         onRefresh={() => {
           fetchCases();
@@ -426,20 +438,23 @@ export default function TeamLeaderDashboard({ view }) {
       )}
 
       {/* Selection banner */}
-      {selected.length > 0 && (
-        <div className="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-xl p-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
-            {selected.length} case{selected.length > 1 ? 's' : ''} selected
-          </p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setSelected([])}>Clear</Button>
-            <Button size="sm" variant="success" icon={Send}
-              onClick={() => { setAssignResult(null); setAssignModal(true); }}>
-              {isCommitteeUser ? 'Assign to Team Leader' : 'Assign to Auditors'}
-            </Button>
+      {selected.length > 0 && (() => {
+        const isSelectedPlanningTriggered = selected.some(id => cases.find(c => c.id === id)?.status === 'PLANNING_TRIGGERED');
+        return (
+          <div className="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-xl p-4 flex items-center justify-between">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+              {selected.length} case{selected.length > 1 ? 's' : ''} selected
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setSelected([])}>Clear</Button>
+              <Button size="sm" variant="success" icon={Send}
+                onClick={() => { setAssignResult(null); setAssignModal(true); }}>
+                {isCommitteeUser ? 'Assign to Team Leader' : (isSelectedPlanningTriggered ? 'Route to Auditors' : 'Assign to Auditors')}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {assignResult && (
         <Alert type={assignResult.status === 'SUCCESS' || assignResult.assigned > 0 ? 'success' : 'error'}
@@ -486,8 +501,10 @@ export default function TeamLeaderDashboard({ view }) {
             <TpWorkflowTaskPanel
               role={isCommitteeUser ? 'process_owner' : 'team_leader'}
               user={user}
-              onOpenWorkspace={(caseData) => {
-                setTlReviewCase(caseData);
+              onOpenWorkspace={(caseData, targetPhase) => {
+                const target = targetPhase || (caseData?.status === 'AUDIT_PLAN_SUBMITTED_TL' ? 'AUDIT_PLANNING' : 'DETAILED_RISK_ASSESSMENT');
+                setTpWorkspacePhase(target);
+                setTpWorkspaceCase(caseData);
               }}
             />
           </div>
@@ -551,15 +568,36 @@ export default function TeamLeaderDashboard({ view }) {
                     <td className="px-4 py-3">
                       <input type="checkbox" checked={selected.includes(c.id)}
                         onChange={() => toggle(c.id)}
-                        disabled={!['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'IN_PROGRESS', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) && c.status !== 'ASSIGNED_TO_TEAM_LEADER' && c.status !== 'ASSIGNED_TO_COMMITTEE'}
+                        disabled={!['ASSIGNED', 'ASSIGNED_TO_TEAM_LEADER', 'IN_PROGRESS', 'PENDING_ASSIGNMENT'].includes(c.frontendStatus) && c.status !== 'ASSIGNED_TO_TEAM_LEADER' && c.status !== 'ASSIGNED_TO_COMMITTEE' && c.status !== 'PLANNING_TRIGGERED'}
                         className="w-4 h-4 rounded disabled:opacity-40" />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{c.taxpayerName}</p>
+                        <button
+                          type="button"
+                          onClick={() => setViewCase(c)}
+                          className="text-sm font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left cursor-pointer"
+                        >
+                          {c.taxpayerName}
+                        </button>
                         <Badge color="blue" size="xs">FY {c.planYear}</Badge>
+                        {c.status === 'PLANNING_TRIGGERED' && (
+                          <Badge color="indigo" size="xs" dot className="font-semibold animate-pulse">
+                            ⚡ Planning Mandate Issued
+                          </Badge>
+                        )}
+                        {['RISK_ASSESSMENT_SUBMITTED_TL', 'AUDIT_PLAN_SUBMITTED_TL', 'SUBMITTED_FOR_TL_REVIEW', 'REPORT_SUBMITTED_FOR_TL_REVIEW'].includes(c.status) && (
+                          <Badge color="amber" size="xs" dot className="font-semibold animate-pulse">
+                            ⚡ Awaiting TL Endorsement
+                          </Badge>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 font-mono">{c.caseNumber || c.tin} • {c.sector}</p>
+                      <p 
+                        onClick={() => setViewCase(c)}
+                        className="text-xs text-gray-500 dark:text-slate-400 font-mono cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                      >
+                        {c.caseNumber || c.tin} • {c.sector}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
                       <Badge color={riskColors[c.riskLevel]} dot size="sm">{c.riskLevel} ({c.riskScore})</Badge>
@@ -580,27 +618,47 @@ export default function TeamLeaderDashboard({ view }) {
                           ? <span className="font-medium text-purple-700 dark:text-purple-300">{assignedTlName}</span>
                           : <span className="text-gray-400">Not assigned</span>
                       ) : (
-                        auditor
-                          ? <span className="font-medium text-gray-900 dark:text-white">{auditor.name}</span>
-                          : <span className="text-gray-400">Not assigned</span>
+                        (auditor?.name || c.assignedAuditorName || c.assignedAuditorId) ? (
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {auditor?.name || c.assignedAuditorName || (c.assignedAuditorId === 'fikadu.mulugeta' ? 'Fikadu Alemayehu' : c.assignedAuditorId)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Not assigned</span>
+                        )
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
-                        {!c.assignedAuditorId && (
+                        {c.status === 'PLANNING_TRIGGERED' ? (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={Send}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+                            onClick={() => {
+                              setSelected([c.id]);
+                              setSelectedAuditorId(c.assignedAuditorId || '');
+                              setAssignResult(null);
+                              setAssignModal(true);
+                            }}
+                          >
+                            Route to Auditor
+                          </Button>
+                        ) : !c.assignedAuditorId ? (
                           <Button
                             size="sm"
                             variant="primary"
                             icon={Send}
                             onClick={() => {
                               setSelected([c.id]);
+                              setSelectedAuditorId('');
                               setAssignResult(null);
                               setAssignModal(true);
                             }}
                           >
                             Assign
                           </Button>
-                        )}
+                        ) : null}
                         <Button size="sm" variant="secondary" icon={Eye} onClick={() => setViewCase(c)}>View</Button>
                         {(c.auditType || '').toUpperCase().includes('TRANSFER') && (
                           <>
@@ -609,9 +667,13 @@ export default function TeamLeaderDashboard({ view }) {
                               variant="primary"
                               icon={ShieldCheck}
                               className="bg-purple-600 hover:bg-purple-700 text-white"
-                              onClick={() => setTlReviewCase(c)}
+                              onClick={() => {
+                                const targetPhase = c.status === 'AUDIT_PLAN_SUBMITTED_TL' ? 'AUDIT_PLANNING' : 'DETAILED_RISK_ASSESSMENT';
+                                setTpWorkspacePhase(targetPhase);
+                                setTpWorkspaceCase(c);
+                              }}
                             >
-                              {['SUBMITTED_FOR_TL_REVIEW', 'REPORT_SUBMITTED_FOR_TL_REVIEW'].includes(c.status)
+                              {['SUBMITTED_FOR_TL_REVIEW', 'REPORT_SUBMITTED_FOR_TL_REVIEW', 'RISK_ASSESSMENT_SUBMITTED_TL', 'AUDIT_PLAN_SUBMITTED_TL'].includes(c.status)
                                 ? 'Review & Endorse'
                                 : 'TP Review'}
                             </Button>
@@ -620,7 +682,8 @@ export default function TeamLeaderDashboard({ view }) {
                               variant="secondary"
                               icon={Layers3}
                               onClick={() => {
-                                setTpWorkspacePhase('DETAILED_RISK_ASSESSMENT');
+                                const targetPhase = c.status === 'AUDIT_PLAN_SUBMITTED_TL' ? 'AUDIT_PLANNING' : 'DETAILED_RISK_ASSESSMENT';
+                                setTpWorkspacePhase(targetPhase);
                                 setTpWorkspaceCase(c);
                               }}
                             >
@@ -660,107 +723,85 @@ export default function TeamLeaderDashboard({ view }) {
       </Card>}
 
 
-      {/* View Case Modal */}
+      {/* View Case Dossier Modal */}
       {viewCase && (
-        <Modal open onClose={() => setViewCase(null)} title="Case Details" size="lg"
-          footer={<Button variant="secondary" onClick={() => setViewCase(null)}>Close</Button>}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4 bg-blue-50 dark:bg-slate-800 rounded-xl p-4 border border-blue-100 dark:border-slate-600">
-              <div><p className="text-xs text-blue-600">Case #</p>
-                <p className="text-sm font-mono font-bold text-blue-900 dark:text-white">{viewCase.caseNumber}</p></div>
-              <div><p className="text-xs text-blue-600">Status</p>
-                <Badge color={CASE_STATUS[viewCase.status]?.color || 'gray'} dot>
-                  {CASE_STATUS[viewCase.status]?.label || viewCase.status}
-                </Badge></div>
-              <div><p className="text-xs text-blue-600">Audit Type</p>
-                <Badge color={viewCase.auditTypeDef?.color || 'gray'}>{viewCase.auditTypeDef?.name || viewCase.auditType}</Badge></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-1">
-                <p className="text-sm font-semibold mb-2">🏢 Taxpayer</p>
-                <p className="font-medium text-gray-900 dark:text-white">{viewCase.taxpayerName}</p>
-                <p className="text-xs text-gray-500">TIN: {viewCase.tin}</p>
-                <p className="text-xs text-gray-500">Sector: {viewCase.sector}</p>
-                {viewCase.estimatedRevenue && <p className="text-xs text-gray-500">Revenue: {formatRevenue(viewCase.estimatedRevenue)} ETB</p>}
-              </div>
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4">
-                <p className="text-sm font-semibold mb-2">⚠️ Risk Score</p>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex-1 bg-gray-200 dark:bg-slate-600 rounded-full h-2">
-                    <div className={`h-2 rounded-full ${viewCase.riskLevel==='CRITICAL'?'bg-red-500':viewCase.riskLevel==='HIGH'?'bg-orange-500':viewCase.riskLevel==='MEDIUM'?'bg-yellow-500':'bg-blue-400'}`}
-                      style={{width:`${Math.min(viewCase.riskScore||0,100)}%`}}/>
-                  </div>
-                  <span className="text-lg font-bold">{viewCase.riskScore}</span>
-                </div>
-                <Badge color={riskColors[viewCase.riskLevel]} dot>{viewCase.riskLevel}</Badge>
-                {viewCase.assignedAuditorId && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-600">
-                    <p className="text-xs text-gray-500">Assigned Auditor:</p>
-                    <p className="text-sm font-medium">{auditors.find(a => [a.userId, a.id, a.username, a.email].filter(Boolean).includes(viewCase.assignedAuditorId))?.name || viewCase.assignedAuditorId}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Modal>
+        <CaseDetailModal
+          caseData={viewCase}
+          onClose={() => setViewCase(null)}
+        />
       )}
 
       {/* Assign to Auditors / Team Leader Modal */}
-      {assignModal && (
-        <Modal open onClose={() => setAssignModal(false)} title="Assign Cases to Auditors" size="lg"
-          footer={
-            <div className="flex justify-between w-full">
-              <Button variant="secondary" onClick={() => setAssignModal(false)}>Cancel</Button>
-              <Button variant="success" icon={Send} onClick={handleAssignAuditors} disabled={assignLoading || !auditors.length}>
-                {assignLoading ? 'Assigning…' : `Assign ${selected.length} Case${selected.length > 1 ? 's' : ''}`}
-              </Button>
-            </div>
-          }>
-          <div className="space-y-4">
-            <Alert type="info" title="Auditor Assignment">
-              Assign selected cases directly to a specific auditor or leave set to Automatic to balance workload evenly.
-            </Alert>
+      {assignModal && (() => {
+        const isPlanningTriggered = selected.some(id => cases.find(c => c.id === id)?.status === 'PLANNING_TRIGGERED');
+        const actionVerb = isPlanningTriggered ? 'Route' : 'Assign';
+        const actionLabel = isPlanningTriggered ? 'Routing…' : 'Assigning…';
 
-            <Select
-              label="Select Target Auditor"
-              value={selectedAuditorId}
-              onChange={(e) => setSelectedAuditorId(e.target.value)}
-            >
-              <option value="">⚡ Automatic Load Balancing (Distribute evenly)</option>
-              {auditors.map(a => (
-                <option key={a.username || a.userId || a.id} value={a.username || a.userId || a.id}>
-                  👤 {a.name} ({a.email || a.username || a.userId || a.id})
-                </option>
-              ))}
-            </Select>
+        return (
+          <Modal open onClose={() => setAssignModal(false)} 
+            title={isPlanningTriggered ? "Route Case to Lead Auditor (Phase 2: Audit Planning)" : (isCommitteeUser ? "Assign Cases to Team Leader" : "Assign Cases to Auditors")} 
+            size="lg"
+            footer={
+              <div className="flex justify-between w-full">
+                <Button variant="secondary" onClick={() => setAssignModal(false)}>Cancel</Button>
+                <Button variant="success" icon={Send} onClick={handleAssignAuditors} disabled={assignLoading || !auditors.length}>
+                  {assignLoading ? actionLabel : `${actionVerb} ${selected.length} Case${selected.length > 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            }>
+            <div className="space-y-4">
+              {isPlanningTriggered ? (
+                <Alert type="info" title="Statutory Audit Planning Mandate">
+                  The Transfer Pricing Review Committee has issued the Statutory Planning Mandate (Directive No. 43/2015).
+                  Confirm or designate the lead auditor to route the case and launch Phase 2: Audit Planning &amp; Programming.
+                </Alert>
+              ) : (
+                <Alert type="info" title="Auditor Assignment">
+                  Assign selected cases directly to a specific auditor or leave set to Automatic to balance workload evenly.
+                </Alert>
+              )}
 
-            <div>
-              <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Current Auditor Workload</p>
-              {auditors.length === 0
-                ? <Alert type="warning" title="No Auditors">You have no auditors in your team. Please contact your Tax Center Manager.</Alert>
-                : auditors.map(a => {
-                    const load = cases.filter(c => [a.userId, a.id, a.username, a.email].filter(Boolean).includes(c.assignedAuditorId) && c.frontendStatus !== 'COMPLETED').length;
-                    return (
-                      <div key={a.username || a.userId || a.id} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-lg p-3 mb-2">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</p>
-                          <p className="text-xs text-gray-500">{a.email || a.username || a.userId || a.id}</p>
+              <Select
+                label="Select Target Auditor"
+                value={selectedAuditorId}
+                onChange={(e) => setSelectedAuditorId(e.target.value)}
+              >
+                <option value="">⚡ Automatic Load Balancing (Distribute evenly)</option>
+                {auditors.map(a => (
+                  <option key={a.username || a.userId || a.id} value={a.username || a.userId || a.id}>
+                    👤 {a.name} ({a.email || a.username || a.userId || a.id})
+                  </option>
+                ))}
+              </Select>
+
+              <div>
+                <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-slate-200">Current Auditor Workload</p>
+                {auditors.length === 0
+                  ? <Alert type="warning" title="No Auditors">You have no auditors in your team. Please contact your Tax Center Manager.</Alert>
+                  : auditors.map(a => {
+                      const load = cases.filter(c => [a.userId, a.id, a.username, a.email].filter(Boolean).includes(c.assignedAuditorId) && c.frontendStatus !== 'COMPLETED').length;
+                      return (
+                        <div key={a.username || a.userId || a.id} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-lg p-3 mb-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{a.name}</p>
+                            <p className="text-xs text-gray-500">{a.email || a.username || a.userId || a.id}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{load}</p>
+                            <p className="text-xs text-gray-500">active cases</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">{load}</p>
-                          <p className="text-xs text-gray-500">active cases</p>
-                        </div>
-                      </div>
-                    );
-                  })
-              }
+                      );
+                    })
+                }
+              </div>
+              <div className="bg-green-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-green-800 dark:text-green-400">
+                <strong>Ready to {actionVerb.toLowerCase()}:</strong> {selected.length} case{selected.length > 1 ? 's' : ''} → {selectedAuditorId ? (auditors.find(a => [a.userId, a.id, a.username, a.email].filter(Boolean).includes(selectedAuditorId))?.name || selectedAuditorId) : `${auditors.length} auditors (Balanced)`}
+              </div>
             </div>
-            <div className="bg-green-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-green-800 dark:text-green-400">
-              <strong>Ready to assign:</strong> {selected.length} case{selected.length > 1 ? 's' : ''} → {selectedAuditorId ? (auditors.find(a => [a.userId, a.id, a.username, a.email].filter(Boolean).includes(selectedAuditorId))?.name || selectedAuditorId) : `${auditors.length} auditors (Balanced)`}
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
 
       {/* Transfer Pricing Supervisory Review Modal */}

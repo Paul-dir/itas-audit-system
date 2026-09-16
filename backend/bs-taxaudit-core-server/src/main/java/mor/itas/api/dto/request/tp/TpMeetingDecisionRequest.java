@@ -4,6 +4,13 @@ import lombok.Data;
 
 @Data
 public class TpMeetingDecisionRequest {
-    private String decision;       // APPROVED, RETURN_FOR_REVISION, REJECT
+    private String decision; // CONTINUE, DISCONTINUE, RETURN_FOR_DATA
     private String discussionNotes;
+    private String meetingMinutes;
+    private String attendees;
+    private String mandateDirectives;
+    private String targetFiscalYears;
+    private Integer statutoryDeadlineDays;
+    private String assignedTeamLeaderId;
 }
+

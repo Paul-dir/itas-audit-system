@@ -267,21 +267,24 @@ export function synthesizeUserFromPattern(identifier) {
       });
     }
     if (type === 'com') {
-      const isChair = cleanInput.includes('chair');
-      const isFed = cleanInput.includes('fed');
+      const isChair = cleanInput.includes('chair') || cleanInput.endsWith('-tp') || cleanInput.endsWith('-ja');
       let at = resolveAuditType(cleanInput);
       if (cleanInput.includes('fed-chair') && !cleanInput.includes('tp')) {
         at = 'joint_audit';
       }
-      const tc = isFed ? 'federal-lto1' : parts.slice(2, isChair ? -1 : undefined).join('-');
+      // Extract taxCenter: e.g. u-com-federal-lto1-tp -> federal-lto1, u-com-addis_ababa-tc1-tp -> addis_ababa-tc1
+      let tc = cleanInput
+        .replace(/^u-com-/, '')
+        .replace(/-(?:tp|ja|joint|desk|comp|issue|chair|tpchair|jachair|mem\d*|tpmem\d*)$/, '');
+      if (tc === 'fed' || tc === 'federal') tc = 'federal-lto1';
       return buildCompleteUserProfile({
         id: cleanInput,
-        name: `${at ? at.replace(/_/g, ' ').toUpperCase() : ''} Committee ${isChair ? 'Chair' : 'Member'} (${isFed ? 'Federal' : tc})`,
+        name: `${at ? at.replace(/_/g, ' ').toUpperCase() : ''} Committee ${isChair ? 'Chair' : 'Member'} (${tc.replace(/-/g, ' ').toUpperCase()})`,
         email: `${cleanInput}@mor.gov.et`,
         role: isChair ? 'committee_chair' : 'committee_member',
-        region: isFed ? 'federal_level' : resolveRegion(tc),
+        region: (tc.includes('federal') || tc.startsWith('fed')) ? 'federal_level' : resolveRegion(tc),
         taxCenter: tc,
-        auditType: at || 'joint_audit'
+        auditType: at || 'transfer_pricing'
       });
     }
     if (type === 'tl') {

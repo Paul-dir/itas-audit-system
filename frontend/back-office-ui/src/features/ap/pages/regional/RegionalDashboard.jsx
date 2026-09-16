@@ -9,6 +9,7 @@ import { DistributionTable, TaxCenterDistributionTable } from '../shared/Distrib
 import DistributionModal from './DistributionModal.jsx';
 import FeedbackSubmissionModal from './FeedbackSubmissionModal.jsx';
 import { AUDIT_TYPES, REGIONS, CASE_STATUS, getTaxCentersForRegion } from '../../data/constants.js';
+import CaseDetailModal from '../shared/CaseDetailModal.jsx';
 import PlanTimeline from '../shared/PlanTimeline.jsx';
 import { useEffect } from 'react';
 
@@ -37,6 +38,17 @@ export default function RegionalDashboard({ view }) {
   const [regionalPlans, setRegionalPlans] = useState([]); // ✅ Plans fetched from backend for this region
   const [plansLoading, setPlansLoading] = useState(false);
   const [filteredPlansView, setFilteredPlansView] = useState('awaiting'); // DEFAULT: Show only "Awaiting Your Feedback"
+
+  // Sync filtered plans view with sidebar navigation view
+  useEffect(() => {
+    if (view === 'feedback') {
+      setFilteredPlansView('awaiting');
+    } else if (view === 'plans') {
+      setFilteredPlansView('approved');
+    } else if (view === 'dashboard') {
+      setFilteredPlansView('awaiting');
+    }
+  }, [view]);
   
   // NEW MODAL STATES FOR WORKFLOW SEPARATION
   const [distributionModalOpen, setDistributionModalOpen] = useState(false);
@@ -45,6 +57,7 @@ export default function RegionalDashboard({ view }) {
   const [feedbackModalPlan, setFeedbackModalPlan] = useState(null);
   const [capacityOverrides, setCapacityOverrides] = useState({}); // Regional director's capacity adjustments
   const [revenueStats, setRevenueStats] = useState(null);
+  const [dossierCase, setDossierCase] = useState(null);
 
   // Load regional revenue stats
   useEffect(() => {
@@ -377,6 +390,15 @@ export default function RegionalDashboard({ view }) {
       const s = CASE_STATUS[v];
       return s ? <Badge color={s.color} dot>{s.label}</Badge> : <Badge>{v}</Badge>;
     }},
+    { key: 'id', label: '', render: (v, row) => (
+      <button
+        onClick={() => setDossierCase(row)}
+        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+      >
+        <Eye size={12} />
+        Dossier
+      </button>
+    )},
   ];
 
   return (
@@ -1418,6 +1440,14 @@ export default function RegionalDashboard({ view }) {
         }}
         loading={loading}
       />
+
+      {/* Taxpayer Dossier Modal */}
+      {dossierCase && (
+        <CaseDetailModal
+          caseData={dossierCase}
+          onClose={() => setDossierCase(null)}
+        />
+      )}
     </div>
   );
 }

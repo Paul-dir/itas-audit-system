@@ -61,6 +61,18 @@ public class RegionalDeploymentEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    @Column(name = "region_id", length = 64)
+    private String regionId;
+
+    @Column(name = "deployed_by", length = 64)
+    private String deployedBy;
+
+    @Column(name = "deployed_at")
+    private OffsetDateTime deployedAt = OffsetDateTime.now();
+
+    @Column(name = "status", length = 32)
+    private String status = "SENT_TO_REGIONS";
+
     @Version
     private Long version = 0L;
 
@@ -71,8 +83,12 @@ public class RegionalDeploymentEntity {
     public RegionalDeploymentEntity(UUID planId, String regionCode, String directorId) {
         this.planId = planId;
         this.regionCode = regionCode;
+        this.regionId = regionCode;
         this.directorId = directorId;
+        this.deployedBy = directorId;
         this.sentAt = OffsetDateTime.now();
+        this.deployedAt = this.sentAt;
+        this.status = "SENT_TO_REGIONS";
     }
 
     // Getters and Setters
@@ -186,5 +202,37 @@ public class RegionalDeploymentEntity {
 
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    public String getRegionId() {
+        return regionId;
+    }
+
+    public void setRegionId(String regionId) {
+        this.regionId = regionId;
+    }
+
+    public String getDeployedBy() {
+        return deployedBy;
+    }
+
+    public void setDeployedBy(String deployedBy) {
+        this.deployedBy = deployedBy;
+    }
+
+    public OffsetDateTime getDeployedAt() {
+        return deployedAt;
+    }
+
+    public void setDeployedAt(OffsetDateTime deployedAt) {
+        this.deployedAt = deployedAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

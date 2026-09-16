@@ -44,6 +44,8 @@ public class ApAuditCaseEntity {
     public static final String STATUS_ASSIGNED_TO_COMMITTEE   = "ASSIGNED_TO_COMMITTEE";
     /** Team leader has further allocated to a specific auditor */
     public static final String STATUS_IN_PROGRESS             = "IN_PROGRESS";
+    /** Committee has approved planning meeting and issued statutory mandate */
+    public static final String STATUS_PLANNING_TRIGGERED      = "PLANNING_TRIGGERED";
     /** Audit execution finished */
     public static final String STATUS_COMPLETED               = "COMPLETED";
 
@@ -279,30 +281,39 @@ public class ApAuditCaseEntity {
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessments.isEmpty() ? null : tpRiskAssessments.get(0); }
     public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessments.clear(); if (tpRiskAssessment != null) this.tpRiskAssessments.add(tpRiskAssessment); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypotheses.isEmpty() ? null : tpWorkingHypotheses.get(0); }
     public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypotheses.clear(); if (tpWorkingHypothesis != null) this.tpWorkingHypotheses.add(tpWorkingHypothesis); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlans.isEmpty() ? null : tpAuditPlans.get(0); }
     public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlans.clear(); if (tpAuditPlan != null) this.tpAuditPlans.add(tpAuditPlan); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeetings.isEmpty() ? null : tpPlanningMeetings.get(0); }
     public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeetings.clear(); if (tpPlanningMeeting != null) this.tpPlanningMeetings.add(tpPlanningMeeting); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkDatas.isEmpty() ? null : tpFieldWorkDatas.get(0); }
     public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkDatas.clear(); if (tpFieldWorkData != null) this.tpFieldWorkDatas.add(tpFieldWorkData); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisDatas.isEmpty() ? null : tpAnalysisDatas.get(0); }
     public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisDatas.clear(); if (tpAnalysisData != null) this.tpAnalysisDatas.add(tpAnalysisData); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public java.util.List<TpAuditReportEntity> getTpAuditReports() { return tpAuditReports; }
     public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) { this.tpAuditReports = tpAuditReports; }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotices.isEmpty() ? null : tpAuditNotices.get(0); }
     public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotices.clear(); if (tpAuditNotice != null) this.tpAuditNotices.add(tpAuditNotice); }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public java.util.List<TpObjectionEntity> getTpObjections() { return tpObjections; }
     public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) { this.tpObjections = tpObjections; }
 

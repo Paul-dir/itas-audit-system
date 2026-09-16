@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 public class TaxCenterDashboardController {
 
     private final PlanAllocationRepository allocationRepository;
+    private final mor.itas.persistence.jpa.repository.ap.ApAuditCaseRepository auditCaseRepository;
 
     /**
      * Get all plans allocated to a specific tax center
@@ -67,6 +68,15 @@ public class TaxCenterDashboardController {
                         map.put("planStatus", allocation.getAnnualPlan().getStatus() != null 
                             ? allocation.getAnnualPlan().getStatus().name() 
                             : "UNKNOWN");
+                        int cascadedCases = auditCaseRepository.countByPlanIdAndTaxCenterCode(
+                            allocation.getAnnualPlan().getId(),
+                            allocation.getTaxCenterCode()
+                        );
+                        map.put("cascaded", cascadedCases > 0);
+                        map.put("caseCount", cascadedCases);
+                    } else {
+                        map.put("cascaded", false);
+                        map.put("caseCount", 0);
                     }
                     map.put("taxCenterId", allocation.getTaxCenterCode());
                     map.put("regionCode", allocation.getRegionCode());

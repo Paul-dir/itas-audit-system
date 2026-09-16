@@ -18,7 +18,7 @@ public class AuditLogResponse {
     private String actorId;             // User ID
     private String actorRole;           // "PLANNING_TEAM", "DIRECTOR", etc.
     private String reason;              // Optional reason/comment
-    private Map<String, String> changedFields;  // Fields that changed
+    private Map<String, Object> changedFields;  // Fields that changed
     private OffsetDateTime createdAt;
 
     // Constructors
@@ -83,11 +83,11 @@ public class AuditLogResponse {
         this.reason = reason;
     }
 
-    public Map<String, String> getChangedFields() {
+    public Map<String, Object> getChangedFields() {
         return changedFields;
     }
 
-    public void setChangedFields(Map<String, String> changedFields) {
+    public void setChangedFields(Map<String, Object> changedFields) {
         this.changedFields = changedFields;
     }
 

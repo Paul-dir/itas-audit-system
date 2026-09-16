@@ -1133,7 +1133,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <ShieldAlert className="w-4 h-4 text-blue-600" />
                           Statutory 5-Category Transfer Pricing Risk Assessment Questionnaire
                         </h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Required under MoR TP Examination Manual (Form TP-FR-01.1)</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Required under MoR TP Examination Manual (Form TP-01)</p>
                       </div>
                       <Badge color="blue" dot size="sm">5 Categories Evaluated</Badge>
                     </div>
@@ -1413,7 +1413,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                     {/* Pre-Audit Report Generation Preview Button */}
                     <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                       <div>
-                        <p className="font-bold text-xs text-slate-900 dark:text-white">Pre-Audit Formal Risk Assessment Report (Form TP-FR-01.1)</p>
+                        <p className="font-bold text-xs text-slate-900 dark:text-white">Pre-Audit Formal Risk Assessment Report (Form TP-01)</p>
                         <p className="text-[11px] text-slate-500">Generate printable statutory risk assessment document for case file</p>
                       </div>
                       <Button
@@ -1432,7 +1432,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <h4 className="font-bold uppercase tracking-wider text-base text-blue-950 dark:text-blue-300">
                             ETHIOPIAN MINISTRY OF REVENUE — TRANSFER PRICING DIVISION
                           </h4>
-                          <p className="text-xs uppercase font-sans text-slate-500">FORM TP-FR-01.1 — FORMAL RISK ASSESSMENT & AUDIT SELECTION REPORT</p>
+                          <p className="text-xs uppercase font-sans text-slate-500">FORM TP-01 — FORMAL RISK ASSESSMENT & AUDIT SELECTION REPORT</p>
                         </div>
                         <div className="grid grid-cols-2 text-xs font-sans gap-2">
                           <p><strong>Taxpayer Name:</strong> {fullBackendState?.caseDetails?.taxpayerName || caseData?.taxpayerName || 'Taxpayer'}</p>
@@ -2299,7 +2299,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
                       <Badge color="green" size="sm">STEP 2: AUDIT PLANNING & PROGRAMMING</Badge>
-                      <Badge color="blue" size="sm">FORM FR-04.5.1 / IDR-01</Badge>
+                      <Badge color="blue" size="sm">STATUTORY AUDIT PLAN / IDR-01</Badge>
                       <span className="text-xs text-slate-400 font-mono">Directive No. 43/2015 Compliant</span>
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white pt-0.5">
@@ -2320,7 +2320,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                 {/* Sub-Page Navigation Stepper Tabs (Sub-Pages 1 to 5) */}
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border-t border-slate-200 dark:border-slate-700 pt-4">
                   {[
-                    { page: 1, title: '1. Scope & Parameters', desc: 'Statutory Form FR-04.5.1' },
+                    { page: 1, title: '1. Scope & Parameters', desc: 'Statutory Audit Plan' },
                     { page: 2, title: '2. Macro & Benchmarks', desc: 'Financial Ratio Profiling' },
                     { page: 3, title: '3. Entry Conference', desc: 'Venue, Delegation & Agenda' },
                     { page: 4, title: '4. IDR-01 Document Builder', desc: 'Statutory Document Request' },
@@ -2414,7 +2414,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
               })()}
 
               {/* ───────────────────────────────────────────────────────────── */}
-              {/* SUB-PAGE 1: Statutory Scope Parameters & Resource Allocation (Form FR-04.5.1) */}
+              {/* SUB-PAGE 1: Statutory Scope Parameters & Resource Allocation (Statutory Audit Plan) */}
               {planningSubPage === 1 && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -2446,7 +2446,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <Card className="p-6 space-y-5">
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      Step 2.1: Statutory Audit Plan Objectives & Scope (MoR Standard Form FR-04.5.1-01)
+                      Step 2.1: Statutory Audit Plan Objectives & Scope (MoR Standard Audit Plan)
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2473,7 +2473,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         className="font-mono text-blue-600 font-bold"
                       />
                       <Select
-                        label="Sampling & Audit Selection Method (FR-04.5.1-03)"
+                        label="Sampling & Audit Selection Method (Audit Scope Sampling)"
                         value={samplingMethod}
                         onChange={(e) => setSamplingMethod(e.target.value)}
                         options={[
@@ -2522,7 +2522,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
 
                     <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-700">
                       <p className="text-xs text-slate-500">
-                        <span className="font-bold text-emerald-600">Form FR-04.5.1:</span> Parameters configured under MoR statutory guidelines.
+                        <span className="font-bold text-emerald-600">Audit Plan:</span> Parameters configured under MoR statutory guidelines.
                       </p>
                       <Button
                         variant="primary"
@@ -2631,13 +2631,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
               )}
 
               {/* ───────────────────────────────────────────────────────────── */}
-              {/* SUB-PAGE 3: Taxpayer Entry Conference Logistics & Agenda (Form FR-04.2.1) */}
+              {/* SUB-PAGE 3: Taxpayer Entry Conference Logistics & Agenda (Statutory Entry Conference) */}
               {planningSubPage === 3 && (
                 <div className="space-y-6">
                   <Card className="p-6 space-y-5">
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
                       <Users className="w-5 h-5 text-emerald-600" />
-                      Step 2.3: Taxpayer Entry Conference & Supervisory Committee Schedule (Form FR-04.2.1)
+                      Step 2.3: Taxpayer Entry Conference & Supervisory Committee Schedule (Statutory Entry Conference)
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2693,7 +2693,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
 
                     <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-xs text-emerald-900 dark:text-emerald-300">Formal Entry Conference Notice (Form FR-04.2.1-N)</p>
+                        <p className="font-bold text-xs text-emerald-900 dark:text-emerald-300">Formal Entry Conference Notice (Official Notice)</p>
                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400">Notice will be served electronically to Taxpayer CFO 7 days prior to meeting date.</p>
                       </div>
                       <Badge color="green" size="sm">NOTICE GENERATED</Badge>
@@ -2727,13 +2727,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <FileText className="w-5 h-5 text-emerald-600" />
-                          Step 2.4: Initial Information Document Request (IDR-01) Builder (Form FR-04.5.2-IDR)
+                          Step 2.4: Initial Information Document Request (IDR-01) Builder (Information Document Request IDR-01)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Configure statutory documents required from Taxpayer within <span className="font-bold text-emerald-600">{idrNoticeDays} working days</span> of Entry Conference.
                         </p>
                       </div>
-                      <Badge color="emerald" className="font-mono">FORM FR-04.5.2-IDR</Badge>
+                      <Badge color="emerald" className="font-mono">FORM IDR-01</Badge>
                     </div>
 
                     <div className="space-y-3">
@@ -2831,7 +2831,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                     {/* Statutory Summary Card */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3 font-sans text-xs">
                       <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-xs">
-                        Audit Plan Summary Record (MoR Form FR-04.5.1-FINAL)
+                        Audit Plan Summary Record (MoR Statutory Audit Plan)
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <p><strong>Scope Period:</strong> {planScope}</p>
@@ -2848,7 +2848,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                           <UserCheck className="w-4 h-4 text-emerald-600" />
-                          Statutory 3-Stage Audit Plan Approval Chain (Form FR-04.5.1)
+                          Statutory 3-Stage Audit Plan Approval Chain (Statutory Audit Plan)
                         </h4>
                         <Badge 
                           color={
@@ -2897,7 +2897,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                                 industryResearch: { sector: industrySector, ratios: benchmarkingRatios },
                                 samplingMethod: { method: samplingMethod, auditHoursBudget: parseInt(auditHoursBudget) },
                                 plannedProcedures: { subPageCompleted: 5, comments: planComments }
-                              }, 'Audit Plan (Form FR-04.5.1) Saved Successfully!');
+                              }, 'Audit Plan (Statutory Audit Plan) Saved Successfully!');
 
                               await handlePost('/audit-plan/submit-tl', {}, 'Audit Plan submitted to Team Leader for review!');
                             }}
@@ -2952,7 +2952,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           </div>
                           <div>
                             <p className="font-bold text-xs text-blue-950 dark:text-blue-200">3. Process Owner & Committee Sign-Off</p>
-                            <p className="text-[11px] text-slate-500">Statutory Form FR-04.5.1 Authorization</p>
+                            <p className="text-[11px] text-slate-500">Statutory Audit Plan Authorization</p>
                           </div>
                           <div className="flex flex-col gap-2">
                             <Button
@@ -2962,7 +2962,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                               loading={loading}
                               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                               onClick={async () => {
-                                await handlePost('/audit-plan/approve', {}, 'Audit Plan (Form FR-04.5.1) Formally Approved by Review Committee! Fieldwork unlocked.');
+                                await handlePost('/audit-plan/approve', {}, 'Audit Plan (Statutory Audit Plan) Formally Approved by Review Committee! Fieldwork unlocked.');
                               }}
                             >
                               Adopt Decision: APPROVE Audit Plan
@@ -2999,7 +2999,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                                 Audit Plan Approved by Review Committee / Process Owner!
                               </p>
                               <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                                Case has been resent to the Auditor. Form FR-04.5.1 is officially signed and filed. You can now proceed to Step 3: Field Work & FAR Analysis.
+                                Case has been resent to the Auditor. The Audit Plan is officially signed and filed. You can now proceed to Step 3: Field Work & FAR Analysis.
                               </p>
                             </div>
                           </div>
@@ -3036,7 +3036,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                             industryResearch: { sector: industrySector, ratios: benchmarkingRatios },
                             samplingMethod: { method: samplingMethod, auditHoursBudget: parseInt(auditHoursBudget) },
                             plannedProcedures: { subPageCompleted: 5, approvalStatus: planApprovalDecision }
-                          }, 'Audit Plan (Form FR-04.5.1) Saved Successfully!');
+                          }, 'Audit Plan (Statutory Audit Plan) Saved Successfully!');
 
                           await handlePost('/planning-meeting', {
                             scheduledDate: meetingDate,
@@ -3070,7 +3070,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
                         <div>
                           <p className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wide">
-                            Awaiting Review Committee Approval of Audit Plan (Form FR-04.5.1)
+                            Awaiting Review Committee Approval of Audit Plan (Statutory Audit Plan)
                           </p>
                           <p className="text-xs text-amber-700 dark:text-amber-300">
                             Statutory field work commences after the Audit Plan has been reviewed by the Team Leader and formally approved by the Review Committee.
@@ -3167,7 +3167,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           Review statutory documents submitted under IDR-01. Reconcile evidence against tax returns and transfer pricing documentation.
                         </p>
                       </div>
-                      <Badge color="teal" className="font-mono">FORM TP-FR-04.1</Badge>
+                      <Badge color="teal" className="font-mono">FORM TP-FIELD-01</Badge>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -3474,13 +3474,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <FileText className="w-5 h-5 text-teal-600" />
-                          Sub-Page 4.5: Agreed Statement of Facts & Working Papers Verification (Form TP-FR-04.4)
+                          Sub-Page 4.5: Agreed Statement of Facts & Working Papers Verification (Agreed Statement of Facts)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Reconcile audited facts, intercompany ledger entries, and interviewed statements for joint Auditor-Taxpayer sign-off.
                         </p>
                       </div>
-                      <Badge color="teal" className="font-mono">FORM TP-FR-04.4-V{factStatementVersion}.0</Badge>
+                      <Badge color="teal" className="font-mono">STATEMENT-OF-FACTS-V{factStatementVersion}.0</Badge>
                     </div>
 
                     {/* ERP General Ledger Reconciliations Table */}
@@ -3625,13 +3625,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <BarChart2 className="w-5 h-5 text-indigo-600" />
-                          Sub-Page 5.1: Tested Party Selection & Transfer Pricing Method Justification (Form TP-FR-05.1)
+                          Sub-Page 5.1: Tested Party Selection & Transfer Pricing Method Justification (Method Justification)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Directive No. 43/2015 Article 6 — Evaluation of the 5 statutory transfer pricing methods.
                         </p>
                       </div>
-                      <Badge color="indigo" className="font-mono">FORM TP-FR-05.1</Badge>
+                      <Badge color="indigo" className="font-mono">TP-METHOD-JUSTIFICATION</Badge>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3686,7 +3686,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <BarChart2 className="w-5 h-5 text-indigo-600" />
-                          Sub-Page 5.2: Bureau van Dijk Amadeus/Orbis Database Screening Matrix (Form TP-FR-05.2)
+                          Sub-Page 5.2: Bureau van Dijk Amadeus/Orbis Database Screening Matrix (Comparable Screening)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Quantitative & qualitative screening strategy to select independent comparable companies.
@@ -3769,7 +3769,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <Calculator className="w-5 h-5 text-indigo-600" />
-                          Sub-Page 5.3: Interquartile Range (IQR) & Tested Party Position Engine (Form TP-FR-05.3)
+                          Sub-Page 5.3: Interquartile Range (IQR) & Tested Party Position Engine (Interquartile Range IQR)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Directive No. 43/2015 Article 8 — Arm's length statistical interquartile range calculation.
@@ -3877,7 +3877,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <Calculator className="w-5 h-5 text-indigo-600" />
-                          Sub-Page 5.5: Multi-Year Transfer Pricing Base Tax Adjustment Quantifier (Form TP-FR-05.5)
+                          Sub-Page 5.5: Multi-Year Transfer Pricing Base Tax Adjustment Quantifier (Base Adjustment Engine)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Final statutory arm's length base tax adjustments calculated across all 5 audited tax years.
@@ -3947,7 +3947,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
                       <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-400/30 text-xs font-mono font-semibold rounded-full">
-                        PHASE 6: FORMAL TP AUDIT REPORT ENGINE (FORM FR-04.5-20)
+                        PHASE 6: FORMAL TP AUDIT REPORT ENGINE (STATUTORY TP AUDIT REPORT)
                       </span>
                       <span className="text-xs text-slate-400 font-mono">Step {reportSubPage} of 5</span>
                       <Badge color={reportStatus === 'FINAL_AUTHORIZED' ? 'green' : 'purple'} className="font-mono">
@@ -3959,14 +3959,14 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       {reportSubPage === 2 && "Sub-Page 2: Intercompany Transaction Stream Disallowance Breakdown"}
                       {reportSubPage === 3 && "Sub-Page 3: Auditor Working Papers & Technical Evidence Index (WP-01 to WP-08)"}
                       {reportSubPage === 4 && "Sub-Page 4: Sequential Gatekeeper Approval Tracker (Lead → TL → Process Owner)"}
-                      {reportSubPage === 5 && "Sub-Page 5: Audit Report Document Generation (Form FR-04.5-20) & Dispatch"}
+                      {reportSubPage === 5 && "Sub-Page 5: Audit Report Document Generation & Dispatch"}
                     </h2>
                     <p className="text-xs text-slate-300">
                       {reportSubPage === 1 && "Formulate statutory audit grounds pursuant to Income Tax Proclamation No. 979/2016 Art. 79 & Directive No. 43/2015."}
                       {reportSubPage === 2 && "Specify exact adjustments for management fees, brand royalties, and SEZ intercompany pricing streams."}
                       {reportSubPage === 3 && "Compile indexed working papers WP-01 through WP-08, e-invoicing data, and ERP ledger extractions."}
                       {reportSubPage === 4 && "Track statutory 3-stage supervisory review gatekeepers with interactive approval controls."}
-                      {reportSubPage === 5 && "Generate formal MoR Form FR-04.5-20 Audit Report and dispatch to Taxpayer CFO."}
+                      {reportSubPage === 5 && "Generate formal MoR Audit Report and dispatch to Taxpayer CFO."}
                     </p>
                   </div>
                 </div>
@@ -4013,13 +4013,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <FileText className="w-5 h-5 text-purple-600" />
-                          Sub-Page 6.1: Statutory Grounds & Executive Audit Summary (Form FR-04.5-20)
+                          Sub-Page 6.1: Statutory Grounds & Executive Audit Summary (Audit Report)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Formulate legal basis and executive findings pursuant to Income Tax Proclamation 979/2016 Art. 79 & Directive 43/2015.
                         </p>
                       </div>
-                      <Badge color="purple" className="font-mono">FORM FR-04.5-20 PART I</Badge>
+                      <Badge color="purple" className="font-mono">TP AUDIT REPORT PART I</Badge>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4179,7 +4179,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <ShieldCheck className="w-5 h-5 text-purple-600" />
-                          Sub-Page 6.4: Sequential Gatekeeper Approval Tracker (Form FR-04.5-20 Multi-Level Sign-Off)
+                          Sub-Page 6.4: Sequential Gatekeeper Approval Tracker (Multi-Level Sign-Off)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Mandatory 3-stage hierarchical authorization chain before formal dispatch to Taxpayer CFO.
@@ -4374,7 +4374,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <Send className="w-5 h-5 text-purple-600" />
-                          Sub-Page 6.5: MoR Form FR-04.5-20 Document Generation & Dispatch Engine
+                          Sub-Page 6.5: MoR Statutory Audit Report Generation & Dispatch Engine
                         </h3>
                         <p className="text-xs text-slate-500">
                           Finalize statutory audit report document and register in Document Management System (DMS).
@@ -4390,7 +4390,7 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           <FileText className="w-4 h-4 text-purple-400" />
                           <span className="font-bold text-white">MINISTRY OF REVENUE — ETHIOPIA</span>
                         </div>
-                        <span className="text-[10px] text-slate-400">FORM FR-04.5-20 (REV 2026)</span>
+                        <span className="text-[10px] text-slate-400">STATUTORY TP AUDIT REPORT (REV 2026)</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4 text-[11px] text-slate-300">
@@ -4425,12 +4425,12 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                         loading={loading}
                         className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 shadow-lg shadow-purple-900/30"
                         onClick={async () => {
-                          await handlePost('/report/draft', { reportStatus: 'FINAL_AUTHORIZED', subPageCompleted: 5, executiveSummary, legalGrounds }, 'Phase 6 (TP Audit Report Form FR-04.5-20) Fully Authorized & Submitted! Transitioning to Phase 7 (Assessment Calculation)...');
+                          await handlePost('/report/draft', { reportStatus: 'FINAL_AUTHORIZED', subPageCompleted: 5, executiveSummary, legalGrounds }, 'Phase 6 (TP Audit Report) Fully Authorized & Submitted! Transitioning to Phase 7 (Assessment Calculation)...');
                           setReportStatus('FINAL_AUTHORIZED');
                           setActiveTab('ASSESSMENT');
                         }}
                       >
-                        Authorize & Issue Form FR-04.5-20 Audit Report
+                        Authorize & Issue Statutory Audit Report
                       </Button>
                     </div>
                   </Card>
@@ -4814,10 +4814,10 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <Badge color="red" className="font-mono">{taxpayerObjectionStatus}</Badge>
                     </div>
                     <h2 className="text-2xl font-bold text-white tracking-tight pt-1">
-                      {noticeSubPage === 1 && "Sub-Page 1: MoR Assessment Notice Parameter Configuration (Form FR-04.5-23)"}
+                      {noticeSubPage === 1 && "Sub-Page 1: MoR Assessment Notice Parameter Configuration (Notice of Assessment)"}
                       {noticeSubPage === 2 && "Sub-Page 2: Statutory 30-Day Objection Countdown Tracker (Proclamation 979/2016 Art. 115)"}
                       {noticeSubPage === 3 && "Sub-Page 3: Taxpayer Formal Objection Brief & Technical Rebuttal Engine"}
-                      {noticeSubPage === 4 && "Sub-Page 4: Tax Fraud Referral & Criminal Investigation Trigger (Form FR-04.5-22)"}
+                      {noticeSubPage === 4 && "Sub-Page 4: Tax Fraud Referral & Criminal Investigation Trigger (Criminal Tax Fraud Referral)"}
                       {noticeSubPage === 5 && "Sub-Page 5: Formal Notice Dispatch Authorization & Digital Delivery Log"}
                     </h2>
                     <p className="text-xs text-slate-300">
@@ -4872,13 +4872,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <Scale className="w-5 h-5 text-red-600" />
-                          Sub-Page 8.1: MoR Form FR-04.5-23 Assessment Notice Configuration Matrix
+                          Sub-Page 8.1: MoR Assessment Notice Configuration Matrix
                         </h3>
                         <p className="text-xs text-slate-500">
                           Set formal notice reference, statutory filing deadlines, and dispatch parameters.
                         </p>
                       </div>
-                      <Badge color="red" className="font-mono">FORM FR-04.5-23</Badge>
+                      <Badge color="red" className="font-mono">STATUTORY NOTICE OF ASSESSMENT</Badge>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -4991,13 +4991,13 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                       <div>
                         <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                           <AlertOctagon className="w-5 h-5 text-rose-600" />
-                          Sub-Page 8.4: Tax Fraud Referral & Criminal Investigation Trigger (Form FR-04.5-22)
+                          Sub-Page 8.4: Tax Fraud Referral & Criminal Investigation Trigger (Criminal Tax Fraud Referral)
                         </h3>
                         <p className="text-xs text-slate-500">
                           Escalate cases involving deliberate profit stripping or fraudulent schemes to MoR Criminal Investigation Division.
                         </p>
                       </div>
-                      <Badge color="red" className="font-mono">FORM FR-04.5-22</Badge>
+                      <Badge color="red" className="font-mono">STATUTORY FRAUD REFERRAL</Badge>
                     </div>
 
                     <div className="p-4 bg-rose-50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-800 space-y-2">
@@ -5020,11 +5020,11 @@ export default function TpAuditWorkspace({ caseData, user, onClose, onRefresh, i
                           icon={AlertOctagon} 
                           className="bg-rose-700 hover:bg-rose-800 text-white shadow-lg"
                           onClick={async () => {
-                            await handlePost('/notice/fraud-referral', { status: 'ESCALATED', notes: fraudReferralNotes }, 'Form FR-04.5-22 Criminal Referral Submitted to MoR Tax Fraud Division!');
+                            await handlePost('/notice/fraud-referral', { status: 'ESCALATED', notes: fraudReferralNotes }, 'Statutory Criminal Referral Submitted to MoR Tax Fraud Division!');
                             setFraudEscalationStatus('ESCALATED');
                           }}
                         >
-                          Trigger Form FR-04.5-22 Criminal Fraud Referral
+                          Trigger Statutory Criminal Fraud Referral
                         </Button>
                         <Button variant="primary" icon={ArrowRight} className="bg-red-600 hover:bg-red-700 text-white" onClick={() => setNoticeSubPage(5)}>
                           Proceed to Sub-Page 5 (Dispatch Notice) →

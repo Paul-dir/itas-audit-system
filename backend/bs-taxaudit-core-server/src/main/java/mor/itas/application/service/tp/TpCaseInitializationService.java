@@ -33,6 +33,7 @@ public class TpCaseInitializationService {
     private final TpObjectionRepository objectionRepository;
     private final TpInformationRequestLogRepository idrRepository;
     private final TpExitConferenceRepository exitConferenceRepository;
+    private final TpPhaseGateRepository phaseGateRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -83,7 +84,7 @@ public class TpCaseInitializationService {
             TpRiskAssessmentEntity risk = TpRiskAssessmentEntity.builder()
                     .auditCase(auditCase)
                     .riskLevel("HIGH")
-                    .assessmentStatus("COMPLETED")
+                    .assessmentStatus("DRAFT")
                     .riskDetails(objectMapper.valueToTree(riskDetails))
                     .comments("High risk cross-border profit erosion detected via Schedule 5 screening.")
                     .createdBy(actorId != null ? actorId : "SYSTEM")
@@ -112,7 +113,7 @@ public class TpCaseInitializationService {
                     .economicRationale("Transfer pricing adjustments to bring operating margin to 6.4% industry median under TNMM.")
                     .revenueAtRisk(new BigDecimal("8452500.00"))
                     .currency("ETB")
-                    .status("APPROVED")
+                    .status("DRAFT")
                     .calculationDetails(objectMapper.valueToTree(calcDetails))
                     .createdBy(actorId != null ? actorId : "SYSTEM")
                     .build();
@@ -166,9 +167,9 @@ public class TpCaseInitializationService {
                     .industryResearch(objectMapper.valueToTree(industry))
                     .samplingMethod(objectMapper.valueToTree(sampling))
                     .plannedProcedures(objectMapper.valueToTree(procedures))
-                    .status("APPROVED")
-                    .approvedBy("Workneh Kassa (Process Owner)")
-                    .approvedAt(OffsetDateTime.now().minusDays(10))
+                    .status("DRAFT")
+                    .approvedBy(null)
+                    .approvedAt(null)
                     .createdBy(actorId != null ? actorId : "SYSTEM")
                     .build();
 
@@ -271,9 +272,37 @@ public class TpCaseInitializationService {
         }
 
         // Set current phase if not set
-        if (auditCase.getTpCurrentPhase() == null || auditCase.getTpCurrentPhase().isBlank()) {
-            auditCase.setTpCurrentPhase("PLANNING");
+        if (auditCase.getTpCurrentPhase() == null || auditCase.getTpCurrentPhase().isBlank() || "DETAILED_RISK_ASSESSMENT".equalsIgnoreCase(auditCase.getTpCurrentPhase())) {
+            auditCase.setTpCurrentPhase("HYPOTHESIS_DEVELOPMENT");
+            if (auditCase.getStatus() == null || "PENDING_ASSIGNMENT".equalsIgnoreCase(auditCase.getStatus())) {
+                auditCase.setStatus("ASSIGNED_TO_COMMITTEE");
+            }
             dirty = true;
+        }
+
+        // Initialize 8 strict phase gates if not present
+        List<TpPhaseGateEntity> existingGates = phaseGateRepository.findByAuditCaseIdOrderByCreatedAtAsc(caseId);
+        if (existingGates.isEmpty()) {
+            List<String> phases = List.of(
+                    "DETAILED_RISK_ASSESSMENT",
+                    "AUDIT_PLANNING",
+                    "FIELD_WORK",
+                    "ANALYSIS",
+                    "REPORT",
+                    "ASSESSMENT",
+                    "NOTICE",
+                    "CLOSURE"
+            );
+            for (String p : phases) {
+                TpPhaseGateEntity gate = TpPhaseGateEntity.builder()
+                        .auditCase(auditCase)
+                        .phaseId(p)
+                        .status("DRAFT")
+                        .subStepsCompleted(objectMapper.valueToTree(Collections.emptyList()))
+                        .subStepData(objectMapper.valueToTree(Collections.emptyMap()))
+                        .build();
+                phaseGateRepository.save(gate);
+            }
         }
 
         if (dirty) {

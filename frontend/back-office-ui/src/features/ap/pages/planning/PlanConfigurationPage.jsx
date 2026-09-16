@@ -166,7 +166,25 @@ export default function PlanConfigurationPage() {
     setAuditTypeModalOpen(true);
   };
 
-  const handleAuditTypeSubmit = (e) => {
+  // Helper to persist updated configuration immediately to backend database
+  const persistAndNotify = async (updatedConfig, message) => {
+    setConfig(updatedConfig);
+    setSaving(true);
+    try {
+      const saved = await savePlanningConfig(updatedConfig, 'Audit Planning Team');
+      if (saved) setConfig(saved);
+      setFeedback({ type: 'success', message: `${message} & saved to database.` });
+      setTimeout(() => setFeedback({ type: null, message: '' }), 4000);
+    } catch (err) {
+      console.warn('Failed to auto-save to backend, saved locally:', err);
+      setFeedback({ type: 'error', message: 'Failed to save to backend database. Saved in local storage.' });
+      setTimeout(() => setFeedback({ type: null, message: '' }), 4000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAuditTypeSubmit = async (e) => {
     e.preventDefault();
     if (!auditTypeForm.name || !auditTypeForm.name.trim()) return;
 
@@ -181,38 +199,39 @@ export default function PlanConfigurationPage() {
       revenuePerCase: Number(auditTypeForm.revenuePerCase) || 100000,
     };
 
+    let updatedTypes;
     if (isEditingAuditType) {
-      setConfig(prev => ({
-        ...prev,
-        auditTypes: prev.auditTypes.map(t => t.id === updatedType.id ? updatedType : t),
-      }));
+      updatedTypes = config.auditTypes.map(t => t.id === updatedType.id ? updatedType : t);
     } else {
-      setConfig(prev => ({
-        ...prev,
-        auditTypes: [...prev.auditTypes, updatedType],
-      }));
+      updatedTypes = [...config.auditTypes, updatedType];
     }
+    const updated = { ...config, auditTypes: updatedTypes };
 
     setAuditTypeModalOpen(false);
+    await persistAndNotify(updated, isEditingAuditType ? `Audit type '${updatedType.name}' updated` : `Audit type '${updatedType.name}' added`);
   };
 
-  const handleDeleteAuditType = (id) => {
+  const handleDeleteAuditType = async (id) => {
     if (config.auditTypes.length <= 1) {
       alert('At least one audit type must remain configured.');
       return;
     }
     if (!window.confirm(`Are you sure you want to remove audit type '${id}'?`)) return;
-    setConfig(prev => ({
-      ...prev,
-      auditTypes: prev.auditTypes.filter(t => t.id !== id),
-    }));
+    const updated = {
+      ...config,
+      auditTypes: config.auditTypes.filter(t => t.id !== id),
+    };
+    await persistAndNotify(updated, `Audit type '${id}' removed`);
   };
 
-  const handleToggleActiveAuditType = (id) => {
-    setConfig(prev => ({
-      ...prev,
-      auditTypes: prev.auditTypes.map(t => t.id === id ? { ...t, active: !t.active } : t),
-    }));
+  const handleToggleActiveAuditType = async (id) => {
+    const target = config.auditTypes.find(t => t.id === id);
+    const newActive = target?.active === false;
+    const updated = {
+      ...config,
+      auditTypes: config.auditTypes.map(t => t.id === id ? { ...t, active: newActive } : t),
+    };
+    await persistAndNotify(updated, `Audit type '${target?.name || id}' ${newActive ? 'activated' : 'deactivated'}`);
   };
 
   // ── REGIONS HANDLERS (ADD / REMOVE / EDIT) ───────────────────
@@ -242,7 +261,7 @@ export default function PlanConfigurationPage() {
     setRegionModalOpen(true);
   };
 
-  const handleRegionSubmit = (e) => {
+  const handleRegionSubmit = async (e) => {
     e.preventDefault();
     if (!regionForm.name?.trim()) return;
 
@@ -251,10 +270,11 @@ export default function PlanConfigurationPage() {
     const headcount = Math.max(0, parseInt(regionForm.headcount) || 0);
     const taxpayers = Math.max(0, parseInt(regionForm.taxpayers) || 0);
 
+    let updated;
     if (isEditingRegion) {
-      setConfig(prev => ({
-        ...prev,
-        regions: (prev.regions || []).map(r => r.id === id ? {
+      updated = {
+        ...config,
+        regions: (config.regions || []).map(r => r.id === id ? {
           ...r,
           name: regionForm.name,
           code,
@@ -262,13 +282,13 @@ export default function PlanConfigurationPage() {
           taxpayers,
         } : r),
         capacity: {
-          ...prev.capacity,
+          ...config.capacity,
           regionalHeadcount: {
-            ...prev.capacity?.regionalHeadcount,
+            ...config.capacity?.regionalHeadcount,
             [id]: headcount,
           },
         },
-      }));
+      };
     } else {
       const newRegion = {
         id,
@@ -277,25 +297,26 @@ export default function PlanConfigurationPage() {
         headcount,
         taxpayers,
         active: true,
-        taxCenters: [], // Initially empty, nested addition when needed!
+        taxCenters: [],
       };
-      setConfig(prev => ({
-        ...prev,
-        regions: [...(prev.regions || []), newRegion],
+      updated = {
+        ...config,
+        regions: [...(config.regions || []), newRegion],
         capacity: {
-          ...prev.capacity,
+          ...config.capacity,
           regionalHeadcount: {
-            ...prev.capacity?.regionalHeadcount,
+            ...config.capacity?.regionalHeadcount,
             [id]: headcount,
           },
         },
-      }));
+      };
     }
 
     setRegionModalOpen(false);
+    await persistAndNotify(updated, isEditingRegion ? `Region '${regionForm.name}' updated` : `Region '${regionForm.name}' added`);
   };
 
-  const handleDeleteRegion = (regionId) => {
+  const handleDeleteRegion = async (regionId) => {
     if ((config.regions || []).length <= 1) {
       alert('At least one region must remain configured.');
       return;
@@ -304,18 +325,18 @@ export default function PlanConfigurationPage() {
       return;
     }
 
-    setConfig(prev => {
-      const updatedHeadcount = { ...(prev.capacity?.regionalHeadcount || {}) };
-      delete updatedHeadcount[regionId];
-      return {
-        ...prev,
-        regions: (prev.regions || []).filter(r => r.id !== regionId),
-        capacity: {
-          ...prev.capacity,
-          regionalHeadcount: updatedHeadcount,
-        },
-      };
-    });
+    const updatedHeadcount = { ...(config.capacity?.regionalHeadcount || {}) };
+    delete updatedHeadcount[regionId];
+
+    const updated = {
+      ...config,
+      regions: (config.regions || []).filter(r => r.id !== regionId),
+      capacity: {
+        ...config.capacity,
+        regionalHeadcount: updatedHeadcount,
+      },
+    };
+    await persistAndNotify(updated, `Region '${regionId}' removed`);
   };
 
   const updateRegionHeadcountDirect = (regionId, value) => {
@@ -347,7 +368,7 @@ export default function PlanConfigurationPage() {
     setTcModalOpen(true);
   };
 
-  const handleTaxCenterSubmit = (e) => {
+  const handleTaxCenterSubmit = async (e) => {
     e.preventDefault();
     if (!tcTargetRegionId || !tcForm.name?.trim()) return;
 
@@ -357,9 +378,9 @@ export default function PlanConfigurationPage() {
       shortName: tcForm.shortName?.trim() || tcForm.name.slice(0, 6),
     };
 
-    setConfig(prev => ({
-      ...prev,
-      regions: (prev.regions || []).map(r => {
+    const updated = {
+      ...config,
+      regions: (config.regions || []).map(r => {
         if (r.id === tcTargetRegionId) {
           const list = r.taxCenters || [];
           return {
@@ -369,18 +390,18 @@ export default function PlanConfigurationPage() {
         }
         return r;
       }),
-    }));
+    };
 
-    // Auto expand the region
     setExpandedRegions(prev => ({ ...prev, [tcTargetRegionId]: true }));
     setTcModalOpen(false);
+    await persistAndNotify(updated, `Tax Center '${newTC.name}' added`);
   };
 
-  const handleDeleteTaxCenter = (regionId, tcId) => {
+  const handleDeleteTaxCenter = async (regionId, tcId) => {
     if (!window.confirm(`Remove tax center '${tcId}' from region?`)) return;
-    setConfig(prev => ({
-      ...prev,
-      regions: (prev.regions || []).map(r => {
+    const updated = {
+      ...config,
+      regions: (config.regions || []).map(r => {
         if (r.id === regionId) {
           return {
             ...r,
@@ -389,7 +410,8 @@ export default function PlanConfigurationPage() {
         }
         return r;
       }),
-    }));
+    };
+    await persistAndNotify(updated, `Tax Center '${tcId}' removed`);
   };
 
   // ── CAPACITY & MULTIPLIER HANDLERS ───────────────────────────

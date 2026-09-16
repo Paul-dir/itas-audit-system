@@ -66,52 +66,73 @@ public class PlanManagementUseCase {
         if (estimatedRevenue != null) {
             plan.setEstimatedRevenue(estimatedRevenue);
             
-            // Regional capacity weights
-            Map<String, Double> regionWeights = Map.of(
-                "FED", 0.15, // Federal Level gets 15%
-                "AA", 0.45,  // Addis Ababa gets 45%
-                "BA", 0.10,  // Amhara
-                "BB", 0.10,  // Oromia
-                "AB", 0.08,  // Dire Dawa
-                "CA", 0.07,  // SNNPR
-                "SO", 0.05   // Somalia
-            );
-            
-            // Audit Type weights (high value audits get more revenue share)
-            Map<String, Double> typeWeights = Map.of(
-                "COMPREHENSIVE", 0.35,
-                "TRANSFER_PRICING", 0.30,
-                "FIELD_AUDIT", 0.20,
-                "DESK_AUDIT", 0.10,
-                "JOINT_AUDIT", 0.03,
-                "ISSUE_AUDIT", 0.02
-            );
-
             Map<String, Object> distJson = new java.util.HashMap<>();
             Map<String, java.math.BigDecimal> regionRevenues = new java.util.HashMap<>();
-            
-            // Calculate regional total revenues
-            for (Map.Entry<String, Double> entry : regionWeights.entrySet()) {
-                java.math.BigDecimal regRev = estimatedRevenue.multiply(new java.math.BigDecimal(entry.getValue().toString()));
-                regionRevenues.put(entry.getKey(), regRev);
+            Map<String, java.math.BigDecimal> typeRevenues = new java.util.HashMap<>();
+
+            // 1. Calculate case totals dynamically from distribution map
+            Map<String, Integer> regionCaseTotals = new java.util.HashMap<>();
+            Map<String, Integer> typeCaseTotals = new java.util.HashMap<>();
+            int totalDistCases = 0;
+
+            if (distribution != null) {
+                for (Map.Entry<String, Map<String, Integer>> regEntry : distribution.entrySet()) {
+                    String regKey = regEntry.getKey();
+                    Map<String, Integer> typeMap = regEntry.getValue();
+                    if (typeMap != null) {
+                        int regSum = 0;
+                        for (Map.Entry<String, Integer> tEntry : typeMap.entrySet()) {
+                            String tKey = tEntry.getKey();
+                            Integer count = tEntry.getValue();
+                            if (count != null && count > 0) {
+                                regSum += count;
+                                typeCaseTotals.put(tKey, typeCaseTotals.getOrDefault(tKey, 0) + count);
+                            }
+                        }
+                        regionCaseTotals.put(regKey, regSum);
+                        totalDistCases += regSum;
+                    }
+                }
+            }
+
+            // Sum of proposed counts across regional allocations as fallback/reference
+            int totalProposedCount = regionalAllocations.stream().mapToInt(RegionalAllocationDto::getProposedCount).sum();
+            if (totalProposedCount == 0) totalProposedCount = 1;
+
+            // 2. Compute dynamic regional revenue
+            for (RegionalAllocationDto regional : regionalAllocations) {
+                String code = regional.getRegionCode();
+                java.math.BigDecimal regRev;
+                if (totalDistCases > 0) {
+                    int regCases = regionCaseTotals.getOrDefault(code, regional.getProposedCount());
+                    double share = (double) regCases / totalDistCases;
+                    regRev = estimatedRevenue.multiply(java.math.BigDecimal.valueOf(share)).setScale(2, java.math.RoundingMode.HALF_UP);
+                } else {
+                    double share = (double) regional.getProposedCount() / totalProposedCount;
+                    regRev = estimatedRevenue.multiply(java.math.BigDecimal.valueOf(share)).setScale(2, java.math.RoundingMode.HALF_UP);
+                }
+                regionRevenues.put(code, regRev);
             }
             distJson.put("by_region", regionRevenues);
-            
-            // Calculate national audit type revenues
-            Map<String, java.math.BigDecimal> typeRevenues = new java.util.HashMap<>();
-            for (Map.Entry<String, Double> entry : typeWeights.entrySet()) {
-                typeRevenues.put(entry.getKey(), estimatedRevenue.multiply(new java.math.BigDecimal(entry.getValue().toString())));
+
+            // 3. Compute national audit type revenues dynamically
+            if (totalDistCases > 0) {
+                for (Map.Entry<String, Integer> entry : typeCaseTotals.entrySet()) {
+                    double typeShare = (double) entry.getValue() / totalDistCases;
+                    java.math.BigDecimal tRev = estimatedRevenue.multiply(java.math.BigDecimal.valueOf(typeShare)).setScale(2, java.math.RoundingMode.HALF_UP);
+                    typeRevenues.put(entry.getKey(), tRev);
+                }
             }
             distJson.put("by_audit_type_national", typeRevenues);
-            
+
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 plan.setEstimatedRevenueDistribution(mapper.valueToTree(distJson));
             } catch (Exception e) {
                 // Ignore json parsing error
             }
-            
-            // Add regional allocations (one per region) with revenue division
+
+            // 4. Add regional allocations with dynamically computed revenues
             for (RegionalAllocationDto regional : regionalAllocations) {
                 PlanAllocation allocation = new PlanAllocation(
                     UUID.randomUUID(),
@@ -120,24 +141,34 @@ public class PlanManagementUseCase {
                     regional.getRegionCode(),
                     regional.getProposedCount()
                 );
-                
-                // Set revenue for this region
+
                 java.math.BigDecimal regRev = regionRevenues.getOrDefault(regional.getRegionCode(), java.math.BigDecimal.ZERO);
                 allocation.setEstimatedRevenue(regRev);
-                
-                // Break down region revenue by audit type
+
+                // Break down region revenue by audit types dynamically from distribution
                 Map<String, java.math.BigDecimal> regTypeRevenues = new java.util.HashMap<>();
-                for (Map.Entry<String, Double> entry : typeWeights.entrySet()) {
-                    regTypeRevenues.put(entry.getKey(), regRev.multiply(new java.math.BigDecimal(entry.getValue().toString())));
+                int regTotalCases = regionCaseTotals.getOrDefault(regional.getRegionCode(), regional.getProposedCount());
+                if (regTotalCases > 0 && distribution != null) {
+                    Map<String, Integer> regDistMap = distribution.get(regional.getRegionCode());
+                    if (regDistMap != null) {
+                        for (Map.Entry<String, Integer> tEntry : regDistMap.entrySet()) {
+                            String tKey = tEntry.getKey();
+                            Integer count = tEntry.getValue();
+                            if (count != null && count > 0) {
+                                double share = (double) count / regTotalCases;
+                                regTypeRevenues.put(tKey, regRev.multiply(java.math.BigDecimal.valueOf(share)).setScale(2, java.math.RoundingMode.HALF_UP));
+                            }
+                        }
+                    }
                 }
-                
+
                 try {
                     com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                     allocation.setRevenueByAuditType(mapper.valueToTree(regTypeRevenues));
                 } catch (Exception e) {
                     // Ignore json parsing error
                 }
-                
+
                 plan.addAllocation(allocation);
             }
         } else {

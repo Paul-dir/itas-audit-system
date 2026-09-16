@@ -416,3 +416,58 @@ export function calculatePlanEffort(distribution = {}, config = DEFAULT_PLANNING
     byAuditType,
   };
 }
+
+/**
+ * Get dynamic mapping of region ID -> backend region code
+ */
+export function getRegionCodeMap(config = null) {
+  const cfg = config || storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const map = {
+    'federal_level': 'FED',
+    'fed': 'FED',
+    'addis_ababa': 'AA',
+    'amhara': 'BA',
+    'oromia': 'BB',
+    'dire_dawa': 'AB',
+    'snnpr': 'CA',
+    'somali': 'SO',
+    'sidama': 'SI',
+  };
+
+  if (cfg?.regions && Array.isArray(cfg.regions)) {
+    cfg.regions.forEach(r => {
+      if (r.id) {
+        map[r.id] = (r.code || r.id.slice(0, 4)).toUpperCase().trim();
+      }
+    });
+  }
+
+  return map;
+}
+
+/**
+ * Get dynamic mapping of backend region code -> frontend region ID
+ */
+export function getRegionIdMap(config = null) {
+  const cfg = config || storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const map = {
+    'FED': 'federal_level',
+    'AA': 'addis_ababa',
+    'BA': 'amhara',
+    'BB': 'oromia',
+    'AB': 'dire_dawa',
+    'CA': 'snnpr',
+    'SO': 'somali',
+    'SI': 'sidama',
+  };
+
+  if (cfg?.regions && Array.isArray(cfg.regions)) {
+    cfg.regions.forEach(r => {
+      if (r.id && r.code) {
+        map[r.code.toUpperCase().trim()] = r.id;
+      }
+    });
+  }
+
+  return map;
+}

@@ -88,6 +88,10 @@ public class SendPlanToRegionsUseCase {
                 if (deployment == null) {
                     deployment = new RegionalDeploymentEntity(planId, regionCode, directorId);
                 }
+                deployment.setRegionId(regionCode);
+                deployment.setDeployedBy(directorId);
+                deployment.setDeployedAt(OffsetDateTime.now());
+                deployment.setStatus("SENT_TO_REGIONS");
                 deployment.setDeploymentNote(deploymentNote);
                 deployment.setSentAt(OffsetDateTime.now());
                 deployment.setDirectorId(directorId);

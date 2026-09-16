@@ -56,8 +56,10 @@ public class TpAuditExecutionController {
     private final TpCompetitorPriceUploadRepository competitorPriceUploadRepository;
     private final TpExternalPriceMatchRepository externalPriceMatchRepository;
     private final TpAuditActionHistoryRepository actionHistoryRepository;
+    private final TpPhaseGateRepository phaseGateRepository;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
+    private final mor.itas.persistence.jpa.repository.identity.UserRepository userRepository;
 
     // ── Full Case State Endpoint ─────────────────────────────────────────────
 
@@ -86,6 +88,22 @@ public class TpAuditExecutionController {
         caseDetails.put("regionCode", caseEntity.getRegionCode());
         caseDetails.put("assignedAuditorId", caseEntity.getAssignedAuditorId());
         caseDetails.put("assignedTeamLeaderId", caseEntity.getAssignedTeamLeaderId());
+        
+        String tlName = null;
+        if (caseEntity.getAssignedTeamLeaderId() != null && !caseEntity.getAssignedTeamLeaderId().isBlank()) {
+            tlName = userRepository.findByUsername(caseEntity.getAssignedTeamLeaderId())
+                    .map(mor.itas.persistence.jpa.entity.identity.UserEntity::getFullName)
+                    .orElse(caseEntity.getAssignedTeamLeaderId());
+        }
+        String audName = null;
+        if (caseEntity.getAssignedAuditorId() != null && !caseEntity.getAssignedAuditorId().isBlank()) {
+            audName = userRepository.findByUsername(caseEntity.getAssignedAuditorId())
+                    .map(mor.itas.persistence.jpa.entity.identity.UserEntity::getFullName)
+                    .orElse(caseEntity.getAssignedAuditorId());
+        }
+        caseDetails.put("assignedTeamLeaderName", tlName);
+        caseDetails.put("assignedAuditorName", audName);
+
         caseDetails.put("committeeId", caseEntity.getCommitteeId());
         caseDetails.put("createdAt", caseEntity.getCreatedAt());
         state.put("caseDetails", caseDetails);
@@ -104,8 +122,285 @@ public class TpAuditExecutionController {
         state.put("notices", auditNoticeRepository.findByAuditCaseId(caseId).orElse(null));
         state.put("objections", objectionRepository.findByAuditCaseIdOrderByCreatedAtDesc(caseId));
         state.put("actionHistory", actionHistoryRepository.findByAuditCaseIdOrderByActionTimestampAsc(caseId));
+        state.put("phaseGates", phaseGateRepository.findByAuditCaseIdOrderByCreatedAtAsc(caseId));
 
         return ResponseEntity.ok(state);
+    }
+
+    // ── Strict Phase Gate Governance & Sub-Step Endpoints ──────────────────────
+
+    @GetMapping("/phase-gates")
+    @Transactional
+    public ResponseEntity<List<Map<String, Object>>> getPhaseGates(
+            @PathVariable UUID caseId,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+        List<TpPhaseGateEntity> gates = phaseGateRepository.findByAuditCaseIdOrderByCreatedAtAsc(caseId);
+
+        List<String> phasesOrdered = List.of(
+                "DETAILED_RISK_ASSESSMENT",
+                "AUDIT_PLANNING",
+                "FIELD_WORK",
+                "ANALYSIS",
+                "REPORT",
+                "ASSESSMENT",
+                "NOTICE",
+                "CLOSURE"
+        );
+
+        Map<String, TpPhaseGateEntity> gateMap = new HashMap<>();
+        for (TpPhaseGateEntity g : gates) {
+            gateMap.put(g.getPhaseId(), g);
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        boolean previousApproved = true; // Phase 1 is always unlocked
+
+        for (int i = 0; i < phasesOrdered.size(); i++) {
+            String phaseId = phasesOrdered.get(i);
+            TpPhaseGateEntity entity = gateMap.get(phaseId);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("phaseId", phaseId);
+            item.put("phaseIndex", i + 1);
+
+            boolean isUnlocked = previousApproved;
+            item.put("isUnlocked", isUnlocked);
+
+            if (entity != null) {
+                item.put("id", entity.getId());
+                item.put("status", entity.getStatus());
+                item.put("subStepsCompleted", entity.getSubStepsCompleted());
+                item.put("subStepData", entity.getSubStepData());
+                item.put("submittedAt", entity.getSubmittedAt());
+                item.put("submittedBy", entity.getSubmittedBy());
+                item.put("reviewedAt", entity.getReviewedAt());
+                item.put("reviewedBy", entity.getReviewedBy());
+                item.put("reviewerRole", entity.getReviewerRole());
+                item.put("reviewDecision", entity.getReviewDecision());
+                item.put("reviewComments", entity.getReviewComments());
+
+                previousApproved = "APPROVED".equalsIgnoreCase(entity.getStatus());
+            } else {
+                item.put("status", "DRAFT");
+                item.put("subStepsCompleted", Collections.emptyList());
+                item.put("subStepData", Collections.emptyMap());
+                previousApproved = false;
+            }
+            result.add(item);
+        }
+
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/phases/{phaseId}/sub-steps/{subStepId}/complete")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> completeSubStep(
+            @PathVariable UUID caseId,
+            @PathVariable String phaseId,
+            @PathVariable String subStepId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+        TpPhaseGateEntity gate = phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, phaseId)
+                .orElseGet(() -> TpPhaseGateEntity.builder()
+                        .auditCaseId(caseId)
+                        .phaseId(phaseId)
+                        .status("DRAFT")
+                        .subStepsCompleted(objectMapper.valueToTree(Collections.emptyList()))
+                        .subStepData(objectMapper.valueToTree(Collections.emptyMap()))
+                        .build());
+
+        Set<String> completed = new LinkedHashSet<>();
+        if (gate.getSubStepsCompleted() != null && gate.getSubStepsCompleted().isArray()) {
+            for (JsonNode n : gate.getSubStepsCompleted()) {
+                completed.add(n.asText());
+            }
+        }
+
+        boolean markDone = req == null || !Boolean.FALSE.equals(req.get("completed"));
+        if (markDone) {
+            completed.add(subStepId);
+        } else {
+            completed.remove(subStepId);
+        }
+        gate.setSubStepsCompleted(objectMapper.valueToTree(completed));
+
+        if (req != null && req.containsKey("data")) {
+            gate.setSubStepData(objectMapper.valueToTree(req.get("data")));
+        }
+
+        phaseGateRepository.save(gate);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("phaseId", phaseId);
+        res.put("subStepId", subStepId);
+        res.put("completedSubSteps", completed);
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/phases/{phaseId}/submit")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> submitPhaseForReview(
+            @PathVariable UUID caseId,
+            @PathVariable String phaseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+
+        tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+        TpPhaseGateEntity gate = phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, phaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Phase gate not found: " + phaseId));
+
+        gate.setStatus("SUBMITTED_FOR_REVIEW");
+        gate.setSubmittedAt(OffsetDateTime.now());
+        gate.setSubmittedBy(actorId);
+
+        String authority = req != null && req.get("authority") != null ? req.get("authority").toString() : "TEAM_LEADER";
+        gate.setReviewerRole(authority);
+
+        phaseGateRepository.save(gate);
+
+        // Update Case status to ensure Team Leader accesses it immediately
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null) {
+            String newStatus;
+            if ("DETAILED_RISK_ASSESSMENT".equalsIgnoreCase(phaseId)) {
+                newStatus = "RISK_ASSESSMENT_SUBMITTED_TL";
+            } else if ("AUDIT_PLANNING".equalsIgnoreCase(phaseId)) {
+                newStatus = "AUDIT_PLAN_SUBMITTED_TL";
+            } else {
+                newStatus = "SUBMITTED_FOR_TL_REVIEW";
+            }
+            c.setStatus(newStatus);
+            caseRepository.save(c);
+
+            if (c.getAssignedTeamLeaderId() != null && !c.getAssignedTeamLeaderId().isBlank()) {
+                notificationService.sendNotification(c.getAssignedTeamLeaderId(), "TP_PHASE_SUBMITTED",
+                        "TP Phase Dossier Submitted for Review",
+                        "Auditor submitted " + phaseId + " for case " + c.getCaseNumber() + " for TL supervisory review and committee endorsement.",
+                        caseId, null, "TP_PHASE_GATE", gate.getId());
+            }
+        }
+
+        logAction(caseId, "PHASE_SUBMITTED_FOR_REVIEW", phaseId, actorId, "AUDITOR",
+                "Phase " + phaseId + " submitted for review to " + authority,
+                req, "DRAFT", "SUBMITTED_FOR_REVIEW", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("phaseId", phaseId);
+        res.put("status", "SUBMITTED_FOR_REVIEW");
+        res.put("authority", authority);
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/phases/{phaseId}/review")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> reviewPhaseGate(
+            @PathVariable UUID caseId,
+            @PathVariable String phaseId,
+            @RequestBody Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "TEAM_LEADER") String actorRole) {
+
+        tpCaseInitializationService.initializeTpCaseIfEmpty(caseId, actorId);
+        TpPhaseGateEntity gate = phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, phaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Phase gate not found: " + phaseId));
+
+        String decision = req.get("decision") != null ? req.get("decision").toString().toUpperCase() : "APPROVED";
+        String comments = req.get("comments") != null ? req.get("comments").toString() : "";
+
+        gate.setReviewedAt(OffsetDateTime.now());
+        gate.setReviewedBy(actorId);
+        gate.setReviewerRole(actorRole);
+        gate.setReviewDecision(decision);
+        gate.setReviewComments(comments);
+
+        boolean isEndorseToCommittee = "ENDORSE_TO_COMMITTEE".equalsIgnoreCase(decision)
+                || "SUBMIT_TO_COMMITTEE".equalsIgnoreCase(decision)
+                || "ENDORSED".equalsIgnoreCase(decision);
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+
+        if (isEndorseToCommittee) {
+            // Team Leader routes case to Review Committee
+            gate.setStatus("SUBMITTED_FOR_COMMITTEE");
+            gate.setReviewerRole("COMMITTEE");
+
+            if (c != null) {
+                if ("DETAILED_RISK_ASSESSMENT".equalsIgnoreCase(phaseId)) {
+                    c.setStatus("SUBMITTED_FOR_COMMITTEE");
+                } else if ("AUDIT_PLANNING".equalsIgnoreCase(phaseId)) {
+                    c.setStatus("AUDIT_PLAN_SUBMITTED_COMMITTEE");
+                } else {
+                    c.setStatus("SUBMITTED_FOR_COMMITTEE");
+                }
+                caseRepository.save(c);
+
+                if (c.getCommitteeId() != null) {
+                    notificationService.sendNotification(String.valueOf(c.getCommitteeId()), "TP_CASE_FOR_COMMITTEE",
+                            "TP Case Endorsed by TL for Committee Approval",
+                            "Team Leader endorsed " + phaseId + " for case " + c.getCaseNumber() + ". Ready for committee review.",
+                            caseId, null, "TP_PHASE_GATE", gate.getId());
+                }
+            }
+
+            if ("AUDIT_PLANNING".equalsIgnoreCase(phaseId)) {
+                auditPlanRepository.findByAuditCaseId(caseId).ifPresent(p -> {
+                    p.setStatus("SUBMITTED_FOR_REVIEW");
+                    p.setUpdatedBy(actorId);
+                    auditPlanRepository.save(p);
+                });
+            }
+        } else if ("APPROVED".equalsIgnoreCase(decision)) {
+            gate.setStatus("APPROVED");
+            if (c != null) {
+                c.setStatus("IN_PROGRESS");
+                List<String> phasesOrdered = List.of(
+                        "DETAILED_RISK_ASSESSMENT",
+                        "AUDIT_PLANNING",
+                        "FIELD_WORK",
+                        "ANALYSIS",
+                        "REPORT",
+                        "ASSESSMENT",
+                        "NOTICE",
+                        "CLOSURE"
+                );
+                int idx = phasesOrdered.indexOf(phaseId);
+                if (idx >= 0 && idx < phasesOrdered.size() - 1) {
+                    c.setTpCurrentPhase(phasesOrdered.get(idx + 1));
+                }
+                caseRepository.save(c);
+            }
+        } else {
+            gate.setStatus("REVISION_REQUESTED");
+            if (c != null) {
+                c.setStatus("REVISION_REQUESTED");
+                caseRepository.save(c);
+                if (c.getAssignedAuditorId() != null) {
+                    notificationService.sendNotification(c.getAssignedAuditorId(), "TP_REVISION_REQUESTED",
+                            "TP Phase Revision Requested",
+                            "Team Leader requested revisions on " + phaseId + ": " + comments,
+                            caseId, null, "TP_PHASE_GATE", gate.getId());
+                }
+            }
+        }
+
+        phaseGateRepository.save(gate);
+
+        logAction(caseId, "PHASE_REVIEW_" + decision, phaseId, actorId, actorRole,
+                "Phase " + phaseId + " reviewed: " + decision + ". Comments: " + comments,
+                req, "SUBMITTED_FOR_REVIEW", gate.getStatus(), null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("phaseId", phaseId);
+        res.put("status", gate.getStatus());
+        res.put("decision", decision);
+        res.put("comments", comments);
+        return ResponseEntity.ok(res);
     }
 
     // ── Phase Transition & Lifecycle Management ──────────────────────────────
@@ -204,6 +499,7 @@ public class TpAuditExecutionController {
         ApAuditCaseEntity c = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
         c.setStatus("SUBMITTED_FOR_COMMITTEE");
+        c.setTpCurrentPhase("WORKING_HYPOTHESIS");
         caseRepository.save(c);
 
         if (c.getCommitteeId() != null) {
@@ -221,17 +517,50 @@ public class TpAuditExecutionController {
         return ResponseEntity.ok(res);
     }
 
+    @PostMapping("/accept-intake")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> acceptCaseIntake(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, Object> req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+        ApAuditCaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        c.setStatus("TP_INTAKE_ACCEPTED");
+        c.setTpCurrentPhase("HYPOTHESIS_DEVELOPMENT");
+        caseRepository.save(c);
+
+        logAction(caseId, "TP_CASE_ACCEPTED_BY_COMMITTEE", "INTAKE", actorId, "TP_PROCESS_OWNER_COMMITTEE",
+                "TP Process Owner / Committee acknowledged and accepted case into TP workflow", req, "ASSIGNED_TO_COMMITTEE", "TP_INTAKE_ACCEPTED", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "TP_INTAKE_ACCEPTED");
+        res.put("tpCurrentPhase", "HYPOTHESIS_DEVELOPMENT");
+        return ResponseEntity.ok(res);
+    }
+
     @PostMapping("/working-hypothesis")
-    public ResponseEntity<Void> submitWorkingHypothesis(
+    public ResponseEntity<Map<String, Object>> submitWorkingHypothesis(
             @PathVariable UUID caseId,
             @RequestBody TpWorkingHypothesisRequest req,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         workingHypothesisUseCase.saveWorkingHypothesis(caseId,
                 req.getHypothesisDescription(), req.getIdentifiedIssue(),
                 req.getEconomicRationale(), req.getRevenueAtRisk(), req.getCalculationDetails(), actorId);
-        logAction(caseId, "HYPOTHESIS_SAVED", "HYPOTHESIS", actorId, "AUDITOR",
-                "Formulated working hypothesis for issue: " + req.getIdentifiedIssue(), req, null, "HYPOTHESIS_ACTIVE", null, null);
-        return ResponseEntity.ok().build();
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && ("ASSIGNED_TO_COMMITTEE".equalsIgnoreCase(c.getStatus()) || "TP_INTAKE_ACCEPTED".equalsIgnoreCase(c.getStatus()))) {
+            c.setTpCurrentPhase("PLANNING_MEETING");
+            caseRepository.save(c);
+        }
+
+        logAction(caseId, "HYPOTHESIS_SAVED", "HYPOTHESIS", actorId, "TP_PROCESS_OWNER_COMMITTEE",
+                "TP Process Owner / Committee developed initial working hypothesis & quantified revenue at risk: ETB " + req.getRevenueAtRisk(),
+                req, null, "DEVELOPED_BY_PO", null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("status", "DEVELOPED_BY_PO");
+        res.put("tpCurrentPhase", c != null ? c.getTpCurrentPhase() : "PLANNING_MEETING");
+        return ResponseEntity.ok(res);
     }
 
     // ── Phase 2: BUC-TA-013 (1.14 Plan Transfer Pricing Audit) ────────────────
@@ -394,6 +723,14 @@ public class TpAuditExecutionController {
         plan.setApprovedAt(OffsetDateTime.now());
         auditPlanRepository.save(plan);
 
+        phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, "AUDIT_PLANNING").ifPresent(gate -> {
+            gate.setStatus("APPROVED");
+            gate.setReviewedAt(OffsetDateTime.now());
+            gate.setReviewedBy(actorId);
+            gate.setReviewDecision("APPROVED");
+            phaseGateRepository.save(gate);
+        });
+
         ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
         if (c != null) {
             c.setStatus("IN_PROGRESS");
@@ -422,20 +759,82 @@ public class TpAuditExecutionController {
             @RequestBody TpPlanningMeetingRequest req,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
         planningMeetingUseCase.recordMeetingDetails(caseId, req.getScheduledDate(), req.getParticipants(), req.getAgenda(), actorId);
-        logAction(caseId, "PLANNING_MEETING_RECORDED", "PLANNING", actorId, "AUDITOR",
-                "Recorded planning meeting details", req, null, null, null, null);
+        logAction(caseId, "PLANNING_MEETING_RECORDED", "PLANNING", actorId, "TP_PROCESS_OWNER_COMMITTEE",
+                "Recorded TP planning meeting details and agenda", req, null, null, null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/planning-meeting/decision")
-    public ResponseEntity<Void> recordMeetingDecision(
+    @Transactional
+    public ResponseEntity<Map<String, Object>> recordMeetingDecision(
             @PathVariable UUID caseId,
             @RequestBody TpMeetingDecisionRequest req,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
-        planningMeetingUseCase.recordMeetingDecision(caseId, req.getDecision(), req.getDiscussionNotes(), actorId);
-        logAction(caseId, "PLANNING_MEETING_DECISION", "PLANNING", actorId, "AUDITOR",
-                "Meeting decision recorded: " + req.getDecision(), req, null, req.getDecision(), null, null);
-        return ResponseEntity.ok().build();
+
+        StringBuilder notesBuilder = new StringBuilder();
+        if (req.getDiscussionNotes() != null && !req.getDiscussionNotes().isBlank()) {
+            notesBuilder.append(req.getDiscussionNotes());
+        }
+        if (req.getMeetingMinutes() != null && !req.getMeetingMinutes().isBlank()) {
+            if (notesBuilder.length() > 0) notesBuilder.append("\n\nMinutes: ");
+            notesBuilder.append(req.getMeetingMinutes());
+        }
+        if (req.getMandateDirectives() != null && !req.getMandateDirectives().isBlank()) {
+            if (notesBuilder.length() > 0) notesBuilder.append("\n\nPlanning Mandate Directives: ");
+            notesBuilder.append(req.getMandateDirectives());
+        }
+        if (req.getTargetFiscalYears() != null && !req.getTargetFiscalYears().isBlank()) {
+            if (notesBuilder.length() > 0) notesBuilder.append("\nTarget Fiscal Years: ");
+            notesBuilder.append(req.getTargetFiscalYears());
+        }
+        if (req.getStatutoryDeadlineDays() != null) {
+            if (notesBuilder.length() > 0) notesBuilder.append("\nPlanning Deadline: ");
+            notesBuilder.append(req.getStatutoryDeadlineDays()).append(" statutory working days");
+        }
+
+        String notes = notesBuilder.toString();
+        planningMeetingUseCase.recordMeetingDecision(caseId, req.getDecision(), notes, actorId);
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && ("CONTINUE".equalsIgnoreCase(req.getDecision()) || "APPROVED".equalsIgnoreCase(req.getDecision()) || "PROCEED".equalsIgnoreCase(req.getDecision()))) {
+            c.setStatus("PLANNING_TRIGGERED");
+            c.setTpCurrentPhase("PLANNING");
+            if (req.getAssignedTeamLeaderId() != null && !req.getAssignedTeamLeaderId().isBlank()) {
+                c.setAssignedTeamLeaderId(req.getAssignedTeamLeaderId());
+            }
+            caseRepository.save(c);
+
+            TpPhaseGateEntity riskGate = phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, "DETAILED_RISK_ASSESSMENT").orElse(null);
+            if (riskGate != null) {
+                riskGate.setStatus("APPROVED");
+                riskGate.setReviewDecision("APPROVED");
+                riskGate.setReviewerRole("COMMITTEE");
+                phaseGateRepository.save(riskGate);
+            }
+
+            if (c.getAssignedTeamLeaderId() != null) {
+                notificationService.sendNotification(c.getAssignedTeamLeaderId(), "TP_PLANNING_TRIGGERED",
+                        "TP Audit Planning Mandate Issued",
+                        "TP Process Owner / Committee decided to CONTINUE with case " + c.getCaseNumber() + ". Planning & Programming has been triggered.",
+                        caseId, null, "TP_AUDIT_PLAN", null);
+            }
+            if (c.getAssignedAuditorId() != null) {
+                notificationService.sendNotification(c.getAssignedAuditorId(), "TP_PLANNING_TRIGGERED",
+                        "TP Audit Planning Mandate Issued",
+                        "TP Process Owner / Committee decided to CONTINUE with case " + c.getCaseNumber() + ". You may now prepare the Audit Plan & Program.",
+                        caseId, null, "TP_AUDIT_PLAN", null);
+            }
+        }
+
+        logAction(caseId, "PLANNING_MEETING_DECISION", "PLANNING", actorId, "TP_PROCESS_OWNER_COMMITTEE",
+                "TP Process Owner / Review Committee recorded planning meeting decision: " + req.getDecision(),
+                req, null, req.getDecision(), null, null);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("decision", req.getDecision());
+        res.put("status", c != null ? c.getStatus() : req.getDecision());
+        res.put("tpCurrentPhase", c != null ? c.getTpCurrentPhase() : "PLANNING");
+        return ResponseEntity.ok(res);
     }
 
     @PostMapping("/entry-conference")

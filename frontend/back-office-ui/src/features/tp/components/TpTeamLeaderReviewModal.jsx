@@ -73,10 +73,31 @@ export default function TpTeamLeaderReviewModal({ caseData, user, onClose, onRef
       } else if (decisionType === 'TL_APPROVE') {
         newStatus = 'TL_APPROVED';
       } else {
-        newStatus = 'SUBMITTED_FOR_COMMITTEE';
+        newStatus = caseData.status === 'AUDIT_PLAN_SUBMITTED_TL' ? 'AUDIT_PLAN_SUBMITTED_COMMITTEE' : 'SUBMITTED_FOR_COMMITTEE';
       }
 
-      // Persist status to backend
+      // Determine active TP phase
+      const phaseId = caseData.currentPhase || (caseData.status === 'AUDIT_PLAN_SUBMITTED_TL' ? 'AUDIT_PLANNING' : 'DETAILED_RISK_ASSESSMENT');
+
+      // 1. Call TP Phase Gate review endpoint
+      try {
+        await fetch(`/api/v1/backoffice/tp/cases/${caseData.id}/phases/${phaseId}/review`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Actor-Id': user?.id || user?.username || 'team-leader',
+            'X-Actor-Role': 'TEAM_LEADER'
+          },
+          body: JSON.stringify({ 
+            decision: decisionType,
+            comments: comments
+          })
+        });
+      } catch (phaseErr) {
+        console.warn('TP Phase review endpoint call fallback:', phaseErr);
+      }
+
+      // 2. Persist status to backend case status endpoint
       const res = await fetch(`/api/v1/backoffice/ap/cases/${caseData.id}/status`, {
         method: 'PATCH',
         headers: {
@@ -92,7 +113,6 @@ export default function TpTeamLeaderReviewModal({ caseData, user, onClose, onRef
       });
 
       if (!res.ok) {
-        // Fallback for demo if mock case id
         console.warn('Backend update failed, applying local state update');
       }
 
@@ -131,7 +151,7 @@ export default function TpTeamLeaderReviewModal({ caseData, user, onClose, onRef
               <h2 className="text-base font-bold text-gray-900 dark:text-white">
                 Team Leader TP Supervisory Review
               </h2>
-              <Badge color="purple" size="xs">Form FR-04.5-20 Review</Badge>
+              <Badge color="purple" size="xs">Draft TP Report Review</Badge>
               <Badge color="amber" size="xs" dot>Pending TL Action</Badge>
             </div>
             <p className="text-xs text-gray-500">
@@ -386,7 +406,7 @@ export default function TpTeamLeaderReviewModal({ caseData, user, onClose, onRef
                   </tr>
                   <tr className="bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 font-bold">
                     <td className="p-2.5 rounded-l">Total Additional Tax Assessment Demand</td>
-                    <td className="p-2.5 text-center">Form FR-04.5-20 Assessment</td>
+                    <td className="p-2.5 text-center">Statutory Assessment Demand</td>
                     <td className="p-2.5 text-right rounded-r text-sm font-extrabold text-purple-700 dark:text-purple-300">{formatRevenue(totalTaxDemand)} ETB</td>
                   </tr>
                 </tbody>

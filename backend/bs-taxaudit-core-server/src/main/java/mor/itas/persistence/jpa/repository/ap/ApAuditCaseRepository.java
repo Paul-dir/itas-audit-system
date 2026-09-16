@@ -32,6 +32,8 @@ public interface ApAuditCaseRepository extends JpaRepository<ApAuditCaseEntity, 
 
     int countByTaxCenterCode(String taxCenterCode);
 
+    int countByPlanIdAndTaxCenterCode(UUID planId, String taxCenterCode);
+
     // ── By status ─────────────────────────────────────────────────────────────
     List<ApAuditCaseEntity> findByStatus(String status);
 

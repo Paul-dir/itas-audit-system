@@ -15,7 +15,7 @@ public class PlanAuditLog {
     private String actorId;          // User who performed the action
     private String actorRole;        // User's role (PLANNING_TEAM, DIRECTOR, REGIONAL_DIRECTOR, etc.)
     private String reason;           // Optional reason/comment for the action
-    private Map<String, String> changedFields;  // Fields that changed, old value → new value
+    private Map<String, Object> changedFields;  // Fields that changed, old value → new value
     private OffsetDateTime createdAt;
     
     // Constructors
@@ -96,7 +96,7 @@ public class PlanAuditLog {
         this.changedFields.put(fieldName, oldValue + " → " + newValue);
     }
     
-    public void addChangedField(String fieldName, String change) {
+    public void addChangedField(String fieldName, Object change) {
         this.changedFields.put(fieldName, change);
     }
     
@@ -150,11 +150,11 @@ public class PlanAuditLog {
         this.reason = reason;
     }
     
-    public Map<String, String> getChangedFields() {
+    public Map<String, Object> getChangedFields() {
         return changedFields;
     }
     
-    public void setChangedFields(Map<String, String> changedFields) {
+    public void setChangedFields(Map<String, Object> changedFields) {
         this.changedFields = changedFields;
     }
     

@@ -58,7 +58,7 @@ export default function CreatePlanModal({ open, onClose }) {
   }, [planningConfig]);
 
   const activeRegions = useMemo(() => {
-    return planningConfig?.regions || REGIONS;
+    return (planningConfig?.regions || REGIONS).filter(r => r.active !== false);
   }, [planningConfig]);
 
   const [step, setStep] = useState(1);

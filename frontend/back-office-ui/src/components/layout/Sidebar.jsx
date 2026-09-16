@@ -1,7 +1,8 @@
 import {
   LayoutDashboard, ClipboardList, CheckSquare, Map, Building2,
   Users, Search, Star, LogOut, ChevronRight, Activity, Target, Settings,
-  Landmark, Scale, FileText,
+  Landmark, Scale, FileText, FileCheck, ShieldAlert, Calendar, Layers,
+  BarChart2, Calculator, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
@@ -132,14 +133,14 @@ const AUDITOR_NAV = {
     {
       title: 'TP AUDIT EXECUTION',
       items: [
-        { id: 'phase-1', label: 'Risk Assessment', icon: CheckSquare },
-        { id: 'phase-3', label: 'Planning & Meeting', icon: Target },
-        { id: 'phase-4', label: 'Field Work', icon: Building2 },
-        { id: 'phase-5', label: 'Economic Analysis', icon: Activity },
-        { id: 'phase-6', label: 'TP Report', icon: ClipboardList },
-        { id: 'phase-assessment', label: 'Assessment', icon: Star },
-        { id: 'phase-7', label: 'Notice & Objection', icon: Star },
-        { id: 'phase-8', label: 'Audit Closure', icon: CheckSquare }
+        { id: 'phase-1', label: '1. Risk Assessment', icon: ShieldAlert },
+        { id: 'phase-2', label: '2. Audit Planning', icon: Calendar },
+        { id: 'phase-3', label: '3. Field Work & Facts', icon: Layers },
+        { id: 'phase-4', label: '4. Economic Analysis', icon: BarChart2 },
+        { id: 'phase-5', label: '5. TP Audit Report', icon: FileText },
+        { id: 'phase-6', label: '6. Assessment Notice', icon: Calculator },
+        { id: 'phase-7', label: '7. Notice & Objection', icon: Scale },
+        { id: 'phase-8', label: '8. Audit Closure', icon: CheckCircle2 }
       ]
     }
   ],
@@ -308,29 +309,17 @@ export function getNavigationSections(user) {
       return [
         {
           title: 'OVERVIEW',
-          items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+          items: [{ id: 'dashboard', label: 'Committee Dashboard', icon: LayoutDashboard }]
         },
         {
-          title: 'AUDIT OPERATIONS',
+          title: 'TP COMMITTEE PIPELINE',
           items: [
-            { id: 'cases', label: 'Committee Cases', icon: Users },
-            { id: 'assign-cases', label: 'Assign Cases to TLs', icon: Users }
-          ]
-        },
-        {
-          title: 'STATUTORY REVIEW GATES',
-          items: [
-            { id: 'phase-2', label: '① Working Hypothesis & Scope', icon: ClipboardList },
-            { id: 'phase-3', label: '② Audit Plan & IDR Approval', icon: Target },
-            { id: 'phase-5', label: '③ Benchmark IQR Review', icon: Activity },
-            { id: 'phase-6', label: '④ TP Report & Exit Conf.', icon: FileText },
-            { id: 'phase-assessment', label: '⑤ Statutory Assessment Sign-Off', icon: Scale }
-          ]
-        },
-        {
-          title: 'COMMITTEE GOVERNANCE',
-          items: [
-            { id: 'deliberations', label: 'Deliberations & Resolutions', icon: Landmark }
+            { id: 'cases', label: 'All TP Cases', icon: Users },
+            { id: 'assign', label: 'Assign to Team Leaders', icon: Target },
+            { id: 'intake', label: 'Intake & Hypotheses', icon: ClipboardList },
+            { id: 'planning', label: 'Planning & Mandates', icon: Landmark },
+            { id: 'approvals', label: 'Plan & Report Approvals', icon: FileCheck },
+            { id: 'deliberations', label: 'Deliberations Log', icon: FileText }
           ]
         }
       ];
@@ -407,7 +396,8 @@ const NAV_SECTIONS = {
     {
       title: 'GOVERNANCE',
       items: [
-        { id: 'approvals', label: 'Approvals', icon: Star }
+        { id: 'approvals', label: 'Approvals', icon: Star },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -421,6 +411,12 @@ const NAV_SECTIONS = {
       items: [
         { id: 'plans', label: 'Regional Plans', icon: ClipboardList },
         { id: 'feedback', label: 'Capacity Feedback', icon: Map }
+      ]
+    },
+    {
+      title: 'GOVERNANCE',
+      items: [
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -440,6 +436,12 @@ const NAV_SECTIONS = {
       items: [
         { id: 'cases', label: 'Case Deployment', icon: Building2 }
       ]
+    },
+    {
+      title: 'GOVERNANCE',
+      items: [
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
+      ]
     }
   ],
   senior_management: [
@@ -450,7 +452,8 @@ const NAV_SECTIONS = {
     {
       title: 'GOVERNANCE',
       items: [
-        { id: 'approval', label: 'National Plan Approval', icon: Star }
+        { id: 'approval', label: 'National Plan Approval', icon: Star },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ],
@@ -463,7 +466,8 @@ const NAV_SECTIONS = {
       title: 'STATUTORY AUDIT REFERRALS',
       items: [
         { id: 'referrals', label: 'My Referrals & Flags', icon: ClipboardList },
-        { id: 'new_referral', label: 'Submit Audit Referral', icon: Target }
+        { id: 'new_referral', label: 'Submit Audit Referral', icon: Target },
+        { id: 'audit_trail', label: 'Audit Trail', icon: CheckSquare }
       ]
     }
   ]

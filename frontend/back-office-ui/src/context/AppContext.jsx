@@ -246,6 +246,9 @@ function AppProvider({ children }) {
         }
 
         const result = await response.json();
+        if (result && result.status === 'ERROR') {
+          throw new Error(result.error?.message || 'Failed to send plan to regions');
+        }
         console.log('✅ Plan sent to regions:', planId);
         await reloadPlans();
         return result;
