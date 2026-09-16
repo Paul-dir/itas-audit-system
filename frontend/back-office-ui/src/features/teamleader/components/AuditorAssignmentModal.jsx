@@ -13,10 +13,10 @@ async function fetchTeamAuditors() {
     const token = localStorage.getItem('authToken');
     const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
     const idMap = {
-      'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-      'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-      'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-      'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+      'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+      'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+      'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+      'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
     };
     const actorId = idMap[session?.id] || session?.id || '';
     const res = await fetch(
@@ -249,7 +249,7 @@ export default function AuditorAssignmentModal({ open, onClose, caseData, allCas
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <Users size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No auditors found for this team</p>
-                    {nominatedAuditors.length === 0 && myAuditors.length === 0 && (
+                    {myAuditors.length === 0 && (
                       <div className="mt-2 space-y-1">
                         <p className="text-xs text-amber-600 dark:text-amber-400">
                           No auditors nominated by committee members yet.

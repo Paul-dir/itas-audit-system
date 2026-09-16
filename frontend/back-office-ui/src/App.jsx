@@ -35,6 +35,7 @@ import {
   WorkflowProvider,
 } from './features/teamleader/index.js';
 import JaAuditorWorkspace from './features/ja/pages/AuditorWorkspace.jsx';
+import { isJointAuditUser } from './components/layout/Sidebar.jsx';
 import AuditTrail from './features/committee/pages/AuditTrail.jsx';
 import { Spinner } from './components/ui/index.jsx';
 
@@ -51,12 +52,6 @@ const TP_PHASE_TITLES = {
 };
 
 const JA_PHASE_TITLES = {
-  'ja-phase-planning':   { title: 'Planning & Entry Conference',    subtitle: 'Joint audit scope, team authorization & preliminary audit plan review' },
-  'ja-phase-fieldwork':  { title: 'Field Investigation Oversight', subtitle: 'Inter-agency customs data matching, CAAT scripts & fieldwork progress' },
-  'ja-phase-findings':   { title: 'Customs & Tax Reconciliation',  subtitle: 'Triangulation of import/export customs clearance vs tax declarations' },
-  'ja-phase-response':   { title: 'Exit Conference & Response',    subtitle: 'Formal taxpayer hearings, bipartite minutes & 30-day response review' },
-  'ja-phase-conclusion': { title: 'Statutory Joint Assessment',    subtitle: 'Combined tax liability notice, penalty calculation & sign-off' },
-  execution:             { title: 'Joint Execution Workspace',     subtitle: '10-Step statutory joint audit execution workflow' },
   workspace:             { title: 'Joint Audit Workspace',          subtitle: '10-step statutory audit execution workflow' },
   'ja-aud-viability':    { title: 'Viability Assessment',           subtitle: 'Pre-audit viability check and risk profile' },
   'ja-aud-fieldwork':    { title: 'On-Site Inspection',             subtitle: 'Field investigation, questionnaires & interviews' },
@@ -247,14 +242,13 @@ function RoleRouter({ user, view, onNavigate }) {
     return <TaxCenterDashboard view={view} onNavigate={onNavigate} />;
   }
   if (role === 'team_leader') {
-    const isJoint = (user?.auditType || '').toUpperCase().includes('JOINT') ||
-                    (user?.username || '').toLowerCase().includes('ja') ||
-                    (user?.username || '').toLowerCase().includes('joint');
-    if (isJoint) {
-      const isExecutionOrPhase = view === 'cases' || view === 'execution' || view.startsWith('ja-phase-');
+    // Single shared heuristic — must agree with the sidebar's nav selection.
+    if (isJointAuditUser(user)) {
+      // Only 'cases' routes to the case list; every other view is the dashboard
+      // (execution workspace & ja-phase-* supervisory views were removed from the sidebar).
       return (
         <WorkflowProvider>
-          {isExecutionOrPhase ? (
+          {view === 'cases' ? (
             <JaTeamLeaderCases view={view} onNavigate={onNavigate} />
           ) : (
             <JaTeamLeaderDashboard onNavigate={onNavigate} />

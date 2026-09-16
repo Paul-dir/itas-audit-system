@@ -92,7 +92,7 @@ export function useAuditorData(userId) {
     if (dashboard?.activeCases?.length > 0) {
       return dashboard.activeCases;
     }
-    return cases.filter(c => c.status === 'IN_PROGRESS' || c.status === 'ASSIGNED');
+    return cases.filter(c => c.status === 'IN_PROGRESS' || c.status === 'ASSIGNED' || c.status === 'AUDITOR_ASSIGNED');
   }, [dashboard, cases]);
 
   const completedCases = useMemo(() => {

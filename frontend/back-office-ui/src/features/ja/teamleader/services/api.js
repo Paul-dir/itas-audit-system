@@ -13,10 +13,10 @@ const CASE_API_BASE = '/api/v1/backoffice/ap/cases';
 
 // Map frontend user IDs to backend UUIDs
 const ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
   'u-cc-aa1': '10000000-0000-0000-0000-000000000005',
   'u-cc-aa2': '10000000-0000-0000-0000-000000000006',
   'u-cc-aa3': '10000000-0000-0000-0000-000000000008',
@@ -164,17 +164,29 @@ export const teamLeaderAPI = {
 
   /**
    * Assign a case to an auditor (Team Leader action)
-   * Status: ASSIGNED → IN_PROGRESS
+   * Goes through the C2/C3-validated CaseHandoffController:
+   * - creates a case_auditor_assignment record (partial unique index: one ACTIVE per case)
+   * - validates auditor is in the leader's team (403 AUDITOR_NOT_IN_TEAM on violation)
+   * - rejects empty teams early (400 NO_TEAM_MEMBERS)
+   * - requires the requesting user to be the assigned team leader (401)
+   * Status: HANDED_OFF/ASSIGNED_TO_TEAM_LEADER/TEAM_ASSIGNED → AUDITOR_ASSIGNED
    */
   assignCaseToAuditor: async (caseId, auditorId) => {
-    const response = await fetch(`${CASE_API_BASE}/${caseId}/assign-auditor`, {
+    const response = await fetch(`/api/v1/backoffice/cases/${caseId}/assign-auditor`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ auditorId: resolveUserId(auditorId) }),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'Failed to assign case to auditor');
+      const codeMessages = {
+        NO_TEAM_MEMBERS: 'Your team has no active members. Ask the Chairperson to form your team first.',
+        AUDITOR_NOT_IN_TEAM: 'Selected auditor is not a member of your team.',
+        UNAUTHORIZED: 'Only the assigned team leader can assign auditors to this case.',
+        CASE_NOT_FOUND: 'Case not found.',
+        AUDITOR_NOT_FOUND: 'Selected auditor does not exist.',
+      };
+      throw new Error(codeMessages[error.error] || error.message || 'Failed to assign case to auditor');
     }
     return response.json();
   },
@@ -259,12 +271,27 @@ export const teamLeaderAPI = {
    * Status: ASSIGNED → HANDED_OFF
    */
   handoffCase: async (caseId, teamLeaderId, comment) => {
-    const importedCase = await teamLeaderAPI.importCaseFromCommittee(caseId, teamLeaderId);
-    const executionCaseId = importedCase.id || caseId;
+    const resolvedTlId = resolveId(teamLeaderId);
+    let executionCaseId = caseId;
+    try {
+      const importedCase = await teamLeaderAPI.importCaseFromCommittee(caseId, teamLeaderId);
+      if (importedCase && (importedCase.id || importedCase.caseId)) {
+        executionCaseId = importedCase.id || importedCase.caseId;
+      }
+    } catch (e) {
+      console.warn('Auto-import from committee before handoff notice:', e);
+    }
+    const headers = getHeaders();
+    if (resolvedTlId) {
+      headers['X-Actor-Id'] = resolvedTlId;
+    }
     const response = await fetch(`${CASE_API_BASE}/${executionCaseId}/handoff`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ comment: comment || 'Accepted by Team Leader' }),
+      headers,
+      body: JSON.stringify({
+        comment: comment || 'Accepted by Team Leader',
+        teamLeaderId: resolvedTlId,
+      }),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));

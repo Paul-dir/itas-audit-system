@@ -44,7 +44,9 @@ public class AuditWorkflowController {
             @RequestBody(required = false) HandoffRequest request,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
         String comment = request != null ? request.getComment() : null;
-        ApAuditCaseEntity result = workflowService.handoffCase(caseId, actorId, comment);
+        String effectiveActorId = (request != null && request.getTeamLeaderId() != null && !request.getTeamLeaderId().isBlank() && !"system".equalsIgnoreCase(request.getTeamLeaderId()))
+                ? request.getTeamLeaderId() : actorId;
+        ApAuditCaseEntity result = workflowService.handoffCase(caseId, effectiveActorId, comment);
         return ResponseEntity.ok(GenericResponse.success(result));
     }
 
@@ -404,6 +406,7 @@ public class AuditWorkflowController {
     @Data
     static class HandoffRequest {
         private String comment;
+        private String teamLeaderId;
     }
 
     @Data

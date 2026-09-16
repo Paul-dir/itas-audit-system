@@ -37,6 +37,7 @@ public class FinalizeViabilityUseCase {
     private final CommitteeCaseRepository caseRepository;
     private final ApAuditCaseRepository apCaseRepository;
     private final CommitteeCaseJacMapper caseMapper;
+    private final mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository annualAuditPlanRepository;
     
     /**
      * Overloaded execute method to match controller signature
@@ -171,14 +172,29 @@ public class FinalizeViabilityUseCase {
         
         String auditType = mapAuditType(committeeCase.getSegment());
         
+        UUID planId = null;
+        if (committeeCase.getOriginalCaseId() != null) {
+            java.util.Optional<ApAuditCaseEntity> orig = apCaseRepository.findById(committeeCase.getOriginalCaseId());
+            if (orig.isPresent()) {
+                planId = orig.get().getPlanId();
+            }
+        }
+        if (planId == null) {
+            planId = annualAuditPlanRepository.findAll().stream()
+                .map(mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity::getId)
+                .findFirst()
+                .orElse(null);
+        }
+
         // Create AP audit case with PENDING_ASSIGNMENT status
         // This status means: case is ready for team leader to assign auditor
         ApAuditCaseEntity apCase = ApAuditCaseEntity.builder()
-            .planId(committeeCase.getCaseId()) // reference back to committee case
+            .planId(planId)
             .caseNumber(caseCode)
             .taxpayerId(committeeCase.getTaxIdNumber())
             .taxpayerName(committeeCase.getTaxpayerName())
-            .auditType(auditType)
+            .taxCenterCode(committeeCase.getTaxCenter())
+            .auditType("JOINT_AUDIT")
             .riskPriority(committeeCase.getRiskPriority())
             .riskScore(committeeCase.getRiskScore())
             .segment(committeeCase.getSegment())

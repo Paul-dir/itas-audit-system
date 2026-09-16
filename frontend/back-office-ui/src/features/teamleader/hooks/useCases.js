@@ -21,7 +21,7 @@ export function useCases(teamLeaderId) {
       setLoading(true);
       setError(null);
 
-      // Fetch AP cases assigned to this team leader
+      // Fetch cases assigned to this team leader
       let apCases = [];
       try {
         const apData = await teamLeaderAPI.getAssignedCases(teamLeaderId, filters);
@@ -30,60 +30,13 @@ export function useCases(teamLeaderId) {
         console.warn('[Team Leader Cases] Backend unavailable, using empty AP cases:', apiErr.message);
       }
 
-      // Fetch AP audit cases with PENDING_ASSIGNMENT status (after viability approved)
-      let committeeCases = [];
-      try {
-        const committeeData = await teamLeaderAPI.getPendingAssignmentCases();
-        committeeCases = committeeData?.data || committeeData?.content || (Array.isArray(committeeData) ? committeeData : []);
-      } catch (apiErr) {
-        console.warn('[Team Leader Cases] Backend unavailable, using empty committee cases:', apiErr.message);
-      }
-
-      // Fetch auditor nominations for committee cases to enrich with team info
-      const enrichedCommitteeCases = [];
-      for (const c of committeeCases) {
-        const caseId = c.committeeCaseId || c.id;
-        let auditorNominations = [];
-        try {
-          const nomData = await teamLeaderAPI.getAuditorNominations(caseId);
-          auditorNominations = Array.isArray(nomData) ? nomData : [];
-        } catch (nomErr) {
-          // Nominations not available — proceed without
-        }
-        enrichedCommitteeCases.push({
-          ...c,
-          source: 'committee',
-          caseId,
-          auditorNominations,
-        });
-      }
-
-      // Merge: AP assigned cases + committee incoming cases
-      // Mark each with its source for the UI
-      const apWithSource = (Array.isArray(apCases) ? apCases : []).map(c => ({
+      const assignedList = (Array.isArray(apCases) ? apCases : []).map(c => ({
         ...c,
-        source: 'ap',
-        caseId: c.id,
+        source: c.source || (c.auditType === 'JOINT' || c.auditType === 'joint_audit' ? 'committee' : 'ap'),
+        caseId: c.caseId || c.committeeCaseId || c.id,
       }));
 
-      const committeeWithSource = enrichedCommitteeCases;
-
-      // A case can have different IDs in the committee and AP responses.
-      // Use the displayed case number as the shared identity and prefer the
-      // AP record because it carries the latest Team Leader assignment state.
-      const caseKey = (c) => c.caseCode || c.caseNumber || c.caseId || c.id;
-      const mergedByKey = new Map();
-
-      committeeWithSource.forEach(c => {
-        mergedByKey.set(caseKey(c), c);
-      });
-
-      apWithSource.forEach(c => {
-        const key = caseKey(c);
-        mergedByKey.set(key, { ...mergedByKey.get(key), ...c });
-      });
-
-      const mergedCases = Array.from(mergedByKey.values());
+      const mergedCases = assignedList;
 
       setCases(mergedCases);
       setTotalElements(mergedCases.length);

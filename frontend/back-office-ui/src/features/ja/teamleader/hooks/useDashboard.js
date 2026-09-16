@@ -46,20 +46,19 @@ export function useDashboard(teamLeaderId) {
         console.warn('[Team Leader Dashboard] Backend unavailable, using empty assigned cases:', apiErr.message);
       }
 
-      // Separate assigned vs incoming from the combined list
-      // getCasesForTeamLeader returns: assigned cases + PENDING_ASSIGNMENT (unassigned) cases
+      // Incoming cases for this team leader are those assigned to them awaiting an auditor
       const viableIncoming = Array.isArray(assignedCases)
-        ? assignedCases.filter(c => c.status === 'PENDING_ASSIGNMENT' && !c.assignedTeamLeaderId)
+        ? assignedCases.filter(c => (!c.assignedAuditor && !c.assignedAuditorId) || c.status === 'ASSIGNED' || c.status === 'TEAM_ASSIGNED' || c.status === 'PENDING_ASSIGNMENT')
         : [];
       const onlyAssigned = Array.isArray(assignedCases)
-        ? assignedCases.filter(c => c.status !== 'PENDING_ASSIGNMENT' || c.assignedTeamLeaderId)
+        ? assignedCases.filter(c => (c.assignedAuditor || c.assignedAuditorId) && c.status !== 'ASSIGNED' && c.status !== 'TEAM_ASSIGNED' && c.status !== 'PENDING_ASSIGNMENT')
         : [];
 
       // Calculate metrics
-      const totalAssigned = onlyAssigned.length + viableIncoming.length;
+      const totalAssigned = Array.isArray(assignedCases) ? assignedCases.length : 0;
       const pendingAssignment = viableIncoming.length;
       const inProgress = Array.isArray(assignedCases)
-        ? assignedCases.filter(c => c.status === 'IN_PROGRESS').length
+        ? assignedCases.filter(c => ['IN_PROGRESS', 'AUDITOR_ASSIGNED'].includes(c.status)).length
         : 0;
       const completed = Array.isArray(assignedCases)
         ? assignedCases.filter(c => c.status === 'COMPLETED' || c.status === 'CLOSED').length

@@ -226,12 +226,12 @@ public interface CommitteeCaseRepository extends JpaRepository<CommitteeCaseEnti
 
     /**
      * Find cases for a specific team leader.
-     * Used by team leader dashboard to see incoming cases before execution transfer.
-     * Includes TEAM_ASSIGNED, APPROVED, and PENDING_VIABILITY (after team lead appointment).
+     * Used by team leader dashboard to see incoming cases from committee.
+     * Includes TEAM_ASSIGNED and TRANSFERRED_TO_EXECUTION.
      */
     @Query("""
         SELECT c FROM CommitteeCaseEntity c
-        WHERE c.status IN ('TEAM_ASSIGNED', 'APPROVED', 'PENDING_VIABILITY')
+        WHERE c.status IN ('TEAM_ASSIGNED', 'TRANSFERRED_TO_EXECUTION')
         AND c.teamLeadId = :teamLeadId
         ORDER BY c.createdDate DESC
         """)
@@ -239,11 +239,11 @@ public interface CommitteeCaseRepository extends JpaRepository<CommitteeCaseEnti
 
     /**
      * Find cases assigned to a team leader (incoming).
-     * Includes TEAM_ASSIGNED, APPROVED, and PENDING_VIABILITY.
+     * Includes TEAM_ASSIGNED and TRANSFERRED_TO_EXECUTION.
      */
     @Query("""
         SELECT c FROM CommitteeCaseEntity c
-        WHERE c.status IN ('TEAM_ASSIGNED', 'APPROVED', 'PENDING_VIABILITY')
+        WHERE c.status IN ('TEAM_ASSIGNED', 'TRANSFERRED_TO_EXECUTION')
         AND c.teamLeadId IS NOT NULL
         ORDER BY c.createdDate DESC
         """)

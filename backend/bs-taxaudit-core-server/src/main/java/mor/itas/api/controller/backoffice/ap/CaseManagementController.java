@@ -165,14 +165,7 @@ public class CaseManagementController {
                         }
                         final String requiredType = tlAuditType;
                         cases = tcCases.stream()
-                                .filter(c -> {
-                                    if (effectiveTeamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId())) return true;
-                                    if (requiredType != null && requiredType.equalsIgnoreCase(c.getAuditType())
-                                            && (c.getAssignedTeamLeaderId() == null || effectiveTeamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId()))) {
-                                        return true;
-                                    }
-                                    return false;
-                                })
+                                .filter(c -> effectiveTeamLeader.equalsIgnoreCase(c.getAssignedTeamLeaderId()))
                                 .collect(Collectors.toList());
                     }
                 }

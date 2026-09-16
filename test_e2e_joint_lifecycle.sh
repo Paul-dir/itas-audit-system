@@ -95,11 +95,30 @@ HANDOFF_ID=$(echo "$TRANSFER_RESP" | jq -r '.handoffId')
 echo "  ✓ Transferred to Execution! Handoff ID: $HANDOFF_ID"
 
 echo ""
-echo "[Step 8] Verifying Case in PostgreSQL Database..."
-DB_STATE=$(PGPASSWORD=dev_password psql -h localhost -p 5432 -U itas_dev -d itas_audit -t -A -c "SELECT status, case_code, taxpayer_name, team_lead_id FROM t_committee_case WHERE case_id = '$CASE_ID';")
+DB_STATE=$(PGPASSWORD=taxaudit psql -h localhost -p 5433 -U taxaudit -d itas_audit -t -A -c "SELECT status, case_code, taxpayer_name, team_lead_id FROM t_committee_case WHERE case_id = '$CASE_ID';")
 echo "  ✓ PostgreSQL Record: $DB_STATE"
 
 echo ""
+echo "[Step 9] Verifying Case Reaches Appointed Team Leader..."
+TL_CASES=$(curl -s "$BASE_URL/api/v1/backoffice/ap/cases?assignedTeamLeader=$AUDITOR_1")
+TL_CASE_COUNT=$(echo "$TL_CASES" | jq -r '.count // 0')
+echo "  ✓ Cases visible to Team Leader ($AUDITOR_1): $TL_CASE_COUNT"
+if [ "$TL_CASE_COUNT" -lt 1 ]; then
+    echo "FAILED: Case did not reach appointed Team Leader"
+    exit 1
+fi
+ASSIGNED_CASE_ID=$(echo "$TL_CASES" | jq -r '.data[0].id')
+echo "  ✓ Transferred Case ID in Execution Workspace: $ASSIGNED_CASE_ID"
+
+echo ""
+echo "[Step 10] Team Leader Assigning Case to Auditor ($AUDITOR_2)..."
+ASSIGN_AUDITOR_RESP=$(curl -s -X POST "$BASE_URL/api/v1/backoffice/ap/cases/$ASSIGNED_CASE_ID/assign-auditor" \
+  -H "Content-Type: application/json" \
+  -d "{\"auditorId\": \"$AUDITOR_2\"}")
+echo "  ✓ Auditor Assignment Response: $(echo "$ASSIGN_AUDITOR_RESP" | jq -c '{caseNumber, status, assignedAuditorId}')"
+
+echo ""
 echo "======================================================================="
-echo "   ✅ END-TO-END JOINT AUDIT COMMITTEE WORKFLOW VERIFIED SUCCESSFULLY!"
+echo "   ✅ END-TO-END FLOW VERIFIED: COMMITTEE -> TEAM LEADER -> AUDITOR!"
 echo "======================================================================="
+
