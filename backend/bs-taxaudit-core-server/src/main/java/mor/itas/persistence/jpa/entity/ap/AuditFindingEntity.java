@@ -74,6 +74,15 @@ public class AuditFindingEntity {
     @Column(name = "concluded_at")
     private OffsetDateTime concludedAt;
 
+    @Column(name = "principal_amount", precision = 15, scale = 2)
+    private java.math.BigDecimal principalAmount;
+
+    @Column(name = "penalty_amount", precision = 15, scale = 2)
+    private java.math.BigDecimal penaltyAmount;
+
+    @Column(name = "interest_amount", precision = 15, scale = 2)
+    private java.math.BigDecimal interestAmount;
+
     @Column(name = "final_amount", precision = 15, scale = 2)
     private java.math.BigDecimal finalAmount;
 

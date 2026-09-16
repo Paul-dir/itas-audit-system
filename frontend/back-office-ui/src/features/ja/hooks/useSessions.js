@@ -14,12 +14,14 @@ export function useSessions() {
   const [totalElements, setTotalElements] = useState(0);
   const [creating, setCreating] = useState(false);
 
+  const normalizeSession = (s) => ({ ...s, id: s.id || s.sessionId });
+
   const fetchSessions = useCallback(async (pageNum = page) => {
     try {
       setLoading(true);
       setError(null);
       const data = await committeeAPI.listSessions(pageNum);
-      setSessions(data.content || []);
+      setSessions((data.content || []).map(normalizeSession));
       setTotalElements(data.totalElements || 0);
     } catch (err) {
       setError(err.message || 'Failed to load sessions');
@@ -37,7 +39,8 @@ export function useSessions() {
     try {
       setCreating(true);
       setError(null);
-      const session = await committeeAPI.createSession({ sessionName, agenda, scheduledDate, caseId });
+      const rawSession = await committeeAPI.createSession({ sessionName, agenda, scheduledDate, caseId });
+      const session = normalizeSession(rawSession);
       setSessions(prev => [session, ...prev]);
       return session;
     } catch (err) {
@@ -52,9 +55,9 @@ export function useSessions() {
   const addAttendees = async (sessionId, memberIds) => {
     try {
       setError(null);
-      const updated = await committeeAPI.addAttendees(sessionId, { memberIds });
+      const updated = normalizeSession(await committeeAPI.addAttendees(sessionId, { memberIds }));
       setSessions(prev =>
-        prev.map(s => (s.id === sessionId ? updated : s))
+        prev.map(s => ((s.id === sessionId || s.sessionId === sessionId) ? updated : s))
       );
       return updated;
     } catch (err) {

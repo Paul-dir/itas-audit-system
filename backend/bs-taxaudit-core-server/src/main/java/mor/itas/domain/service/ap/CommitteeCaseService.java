@@ -36,8 +36,9 @@ public class CommitteeCaseService {
         if (committeeCase == null) {
             throw new IllegalArgumentException("Committee case cannot be null");
         }
-        if (!committeeCase.getStatus().equals(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY)) {
-            throw new IllegalStateException("Case must be in PENDING_VIABILITY state");
+        if (!committeeCase.getStatus().equals(CommitteeCaseAggregate.CommitteeCaseStatus.PENDING_VIABILITY)
+                && !committeeCase.getStatus().equals(CommitteeCaseAggregate.CommitteeCaseStatus.WAITING_ASSIGNMENT)) {
+            throw new IllegalStateException("Case must be in PENDING_VIABILITY or WAITING_ASSIGNMENT state");
         }
         if (committeeCase.getTeamLeadId() == null) {
             throw new IllegalStateException(

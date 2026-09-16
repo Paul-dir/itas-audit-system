@@ -62,23 +62,23 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
         // ── Planning Team ──
         addUser("u-pt-01", "u-pt-01", "planning.auditor1@mor.gov.et",
-                "Planning Team Lead", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+                "Planning Auditor", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
         addUser("u-pt-02", "u-pt-02", "abebe.tadesse@mor.gov.et",
-                "Planning Team Member 1", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+                "Abebe Tadesse", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
         addUser("u-pt-03", "u-pt-03", "hanna.girma@mor.gov.et",
-                "Planning Team Member 2", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+                "Hanna Girma", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
 
         // ── Director ──
         addUser("u-ad-01", "u-ad-01", "tesfaye.bekele@mor.gov.et",
-                "Director", "DIRECTOR", null, "NATIONAL", "FEDERAL");
+                "Tesfaye Bekele", "DIRECTOR", null, "NATIONAL", "FEDERAL");
         addUser("u-ad-02", "u-ad-02", "deputy.director@mor.gov.et",
                 "Deputy Director", "DIRECTOR", null, "NATIONAL", "FEDERAL");
 
         // ── Senior Management ──
         addUser("u-sm-01", "u-sm-01", "rahel.hailu@mor.gov.et",
-                "Senior Manager 1 (Chair)", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
+                "Rahel Hailu", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
         addUser("u-sm-02", "u-sm-02", "biruk.assefa@mor.gov.et",
-                "Senior Manager 2", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
+                "Biruk Assefa", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
 
         // ── Federal LTO-1 Joint Audit Personnel ──
         addUser("20000000-0000-0000-0099-000000000001", "fed.ja.chair", "fed.ja.chair@mor.gov.et",
@@ -86,7 +86,7 @@ public class MockUserManagementAdapter implements UserManagementPort {
         addUser("20000000-0000-0000-0099-000000000002", "fed.ja.member", "fed.ja.member@mor.gov.et",
                 "Eleni Tesfaye", "COMMITTEE_MEMBER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
         addUser("10000000-0000-0000-0099-000000000001", "fed.ja.tl", "fed.ja.tl@mor.gov.et",
-                "Addis Zewde", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
+                "Abebe Haile", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
         addUser("10000000-0000-0000-0099-000000000002", "fed.ja.tl2", "fed.ja.tl2@mor.gov.et",
                 "Nardos Negash", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "federal-lto1");
         addUser("a0000001-0000-0000-0099-000000000001", "fed.ja.auditor1", "fed.ja.auditor1@mor.gov.et",
@@ -149,11 +149,15 @@ public class MockUserManagementAdapter implements UserManagementPort {
                 "Dawit Tadesse", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
         addUser("10000000-0000-0000-0001-000000000002", "aa1.tl2", "aa1.tl2@mor.gov.et",
                 "Robel Girma", "TEAM_LEADER", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+        String[] aaAuditorNames = {
+            "Sara Mohammed", "Yonas Berhanu", "Hana Girma", "Mulugeta Alemayehu", "Tigist Haile",
+            "Kassahun Tekle", "Meron Desta", "Bereket Wolde", "Solomon Lemma", "Bethlehem Kebede"
+        };
         for (int i = 1; i <= 10; i++) {
             String audId = String.format("a0000001-0000-0000-0001-0000000000%02d", i);
             String un = "aa1.auditor" + i;
             addUser(audId, un, un + "@mor.gov.et",
-                    "AA1 Auditor " + i, "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
+                    aaAuditorNames[i - 1], "AUDITOR", "JOINT_AUDIT", "TAX_CENTER", "addis_ababa-tc1");
         }
         addUser("u-com-aa-tpchair", "u-com-aa-tpchair", "aa.tpchair@mor.gov.et",
                 "TP Committee Chair AA", "COMMITTEE_CHAIR", "TRANSFER_PRICING", "TAX_CENTER", "addis_ababa-tc1");
@@ -338,22 +342,69 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
     // ───────── User builder ─────────
 
+    private static boolean isGenericRoleTitle(String str) {
+        if (str == null || str.isBlank()) return true;
+        String s = str.trim().toLowerCase();
+        return s.startsWith("planning team")
+            || s.equals("director")
+            || s.equals("deputy director")
+            || s.startsWith("senior manager")
+            || s.startsWith("federal joint committee")
+            || s.startsWith("federal tp committee")
+            || s.startsWith("federal desk audit committee")
+            || s.startsWith("federal comprehensive audit committee")
+            || s.startsWith("federal issue audit committee")
+            || s.startsWith("tp committee chair")
+            || s.startsWith("tax center manager")
+            || s.startsWith("joint committee chair")
+            || s.startsWith("ministry of trade")
+            || s.matches(".*\\baa\\d+\\s+auditor\\s+\\d+.*")
+            || s.matches(".*\\b(joint|desk|tp|comp|issue)\\s+tl-\\d+.*")
+            || s.matches(".*\\b(joint|desk|tp|comp|issue)\\s+aud-\\d+.*");
+    }
+
     private static void addUser(String userId, String username, String email, String title,
                                String userType, String auditType, String level, String location) {
 
-        String firstName = FIRST_NAMES[Math.abs(userId.hashCode()) % FIRST_NAMES.length];
-        String lastName  = LAST_NAMES[Math.abs(username.hashCode()) % LAST_NAMES.length];
-        String fullName  = firstName + " " + lastName;
+        boolean isGenericRole = isGenericRoleTitle(title);
 
-        // For named requesters / committee chairs keep their title as fullName
-        if ("AUDIT_REQUESTER".equals(userType) || title.contains("(")) {
-            // keep generated name but prepend the descriptive title for clarity
+        String fullName;
+        String jobTitle;
+
+        if (!isGenericRole) {
+            // Explicit human name passed (e.g. "Fikremariam Tilahun", "Dr. Solomon Desta", "Solomon Worku (Federal LTO)")
+            fullName = title;
+            if ("fed.ja.auditor1".equals(username)) {
+                jobTitle = "Joint Auditor (Customs)";
+            } else if ("AUDITOR".equals(userType)) {
+                jobTitle = (auditType != null ? auditType.replace("_", " ") + " " : "") + "Auditor";
+            } else if ("TEAM_LEADER".equals(userType)) {
+                jobTitle = (auditType != null ? auditType.replace("_", " ") + " " : "") + "Team Leader";
+            } else if ("COMMITTEE_CHAIR".equals(userType)) {
+                jobTitle = (auditType != null ? auditType.replace("_", " ") + " " : "") + "Committee Chair";
+            } else if ("COMMITTEE_MEMBER".equals(userType)) {
+                jobTitle = (auditType != null ? auditType.replace("_", " ") + " " : "") + "Committee Member";
+            } else if ("REGIONAL_DIRECTOR".equals(userType)) {
+                jobTitle = "Regional Director";
+            } else {
+                jobTitle = userType != null ? userType.replace("_", " ") : "Officer";
+            }
+        } else {
+            jobTitle = title;
+            String firstName = FIRST_NAMES[Math.abs(userId.hashCode()) % FIRST_NAMES.length];
+            String lastName  = LAST_NAMES[Math.abs(username.hashCode()) % LAST_NAMES.length];
+            fullName = firstName + " " + lastName;
         }
 
-        String realisticEmail = firstName.toLowerCase() + "." + lastName.toLowerCase() + "@mor.gov.et";
-        // Prefer the explicit email if it looks intentional
-        if (email != null && !email.startsWith("u-")) {
-            realisticEmail = email;
+        String realisticEmail = email;
+        if (realisticEmail == null || realisticEmail.startsWith("u-")) {
+            String cleanName = fullName.replace("Dr. ", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
+            String[] parts = cleanName.split("\\s+");
+            if (parts.length >= 2) {
+                realisticEmail = parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase() + "@mor.gov.et";
+            } else {
+                realisticEmail = username + "@mor.gov.et";
+            }
         }
 
         String department = "Tax Audit";
@@ -373,7 +424,7 @@ public class MockUserManagementAdapter implements UserManagementPort {
         user.put("username",         username);
         user.put("email",            realisticEmail);
         user.put("fullName",         fullName);
-        user.put("jobTitle",         title);
+        user.put("jobTitle",         jobTitle);
         user.put("department",       department);
         user.put("officeLocation",   location);
         user.put("userType",         userType);

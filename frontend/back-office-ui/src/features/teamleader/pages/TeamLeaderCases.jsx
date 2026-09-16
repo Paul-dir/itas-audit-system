@@ -112,6 +112,7 @@ export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
     return [
       'ASSIGNED',
       'PENDING_ASSIGNMENT',
+      'WAITING_ASSIGNMENT',
       'TEAM_ASSIGNED',
       'ASSIGNED_TO_TEAM_LEADER',
       'PENDING_HANDOFF',

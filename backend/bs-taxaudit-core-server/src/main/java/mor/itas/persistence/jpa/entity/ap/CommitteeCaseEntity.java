@@ -130,6 +130,9 @@ public class CommitteeCaseEntity {
     @Column(name = "team_lead_id")
     private UUID teamLeadId;
 
+    @Column(name = "team_id")
+    private UUID teamId;
+
     @Column(name = "tax_center", length = 100)
     private String taxCenter;
 

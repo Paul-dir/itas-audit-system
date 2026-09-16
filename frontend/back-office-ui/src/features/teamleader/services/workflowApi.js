@@ -217,6 +217,28 @@ export const workflowAPI = {
     return response.json();
   },
 
+  /** Skip/waive entry conference */
+  skipConference: async (caseId, reason) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/skip`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) throw new Error('Failed to skip conference');
+    return response.json();
+  },
+
+  /** Send meeting notification to taxpayer (optional, non-fatal) */
+  sendConferenceNotification: async (caseId, { channels, conferenceId, message }) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/notify`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ channels, conferenceId, message }),
+    });
+    if (!response.ok) console.warn('[Conference] Notification send failed (non-fatal)');
+    return response.ok ? response.json() : { status: 'NOTIFICATION_FAILED' };
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 5: INFORMATION REQUEST
   // ═══════════════════════════════════════════════════════════════════════════

@@ -351,30 +351,33 @@ export const committeeAPI = {
 
   // ── Team Formation & Capacity ────────────────────────────────────────
 
-  createTeam: async ({ teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description }) => {
+  createTeam: async ({ teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, taxCenter }) => {
     const res = await fetch(`${API_BASE}/teams`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description }),
+      body: JSON.stringify({ teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, taxCenter }),
     });
     if (!res.ok) throw new Error('Failed to create team');
     return res.json();
   },
 
-  getTeams: async () => {
-    const res = await fetch(`${API_BASE}/teams`, { headers: getHeaders() });
+  getTeams: async (params = {}) => {
+    const query = buildParams(params);
+    const res = await fetch(`${API_BASE}/teams${query ? `?${query}` : ''}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch teams');
     return res.json();
   },
 
-  getAvailableTeams: async () => {
-    const res = await fetch(`${API_BASE}/teams/available`, { headers: getHeaders() });
+  getAvailableTeams: async (params = {}) => {
+    const query = buildParams(params);
+    const res = await fetch(`${API_BASE}/teams/available${query ? `?${query}` : ''}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch available teams');
     return res.json();
   },
 
-  getTeamsForChairperson: async () => {
-    const res = await fetch(`${API_BASE}/teams/chairperson`, { headers: getHeaders() });
+  getTeamsForChairperson: async (params = {}) => {
+    const query = buildParams(params);
+    const res = await fetch(`${API_BASE}/teams/chairperson${query ? `?${query}` : ''}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch teams for chairperson');
     return res.json();
   },
@@ -401,6 +404,13 @@ export const committeeAPI = {
   getCapacityOverview: async () => {
     const res = await fetch(`${API_BASE}/teams/capacity-overview`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch capacity overview');
+    return res.json();
+  },
+
+  getMyTeam: async (teamLeaderId) => {
+    const query = teamLeaderId ? `?teamLeaderId=${encodeURIComponent(teamLeaderId)}` : '';
+    const res = await fetch(`${API_BASE}/teams/my-team${query}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch team details');
     return res.json();
   },
 
@@ -507,9 +517,32 @@ export const committeeAPI = {
     const res = await fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ sessionName, agenda, scheduledDate, caseId }),
+      body: JSON.stringify({
+        sessionName: sessionName?.trim(),
+        agenda: agenda?.trim() || 'General committee review and deliberation session',
+        scheduledDate,
+        caseId: caseId?.trim() || undefined,
+      }),
     });
-    if (!res.ok) throw new Error('Failed to create session');
+    if (!res.ok) {
+      let errorMessage = 'Failed to create session';
+      try {
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          if (data.fieldErrors) {
+            errorMessage = Object.entries(data.fieldErrors)
+              .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+              .join('; ');
+          } else if (data.message) {
+            errorMessage = data.message;
+          }
+        } catch {
+          if (text) errorMessage = text;
+        }
+      } catch {}
+      throw new Error(errorMessage);
+    }
     return res.json();
   },
 

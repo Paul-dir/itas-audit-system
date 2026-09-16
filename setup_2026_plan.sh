@@ -30,7 +30,12 @@ DELETE FROM workflow_tasks;
 DELETE FROM workflow_instances;
 DELETE FROM case_assignments;
 DELETE FROM t_auditor_nomination;
-DELETE FROM t_audit_team;
+UPDATE t_audit_team SET current_cases = 0;
+INSERT INTO t_audit_team (team_id, active, auditor_ids, auditor_names, capacity, current_cases, description, team_leader_id, team_leader_name, tax_center, created_at, updated_at, version)
+VALUES 
+  ('2ca9b1ea-89ae-4e82-aa1c-c8e6faa39d41', true, '[a0000001-0000-0000-0099-000000000001, a0000001-0000-0000-0099-000000000002, a0000001-0000-0000-0099-000000000003, a0000001-0000-0000-0099-000000000004, a0000001-0000-0000-0099-000000000005]', '[Fikremariam Tilahun, Saron Assefa, Bikila Worku, Michael Zewde, Saron Negash]', 8, 0, 'Federal Joint Audit Team 1', '10000000-0000-0000-0099-000000000001', 'Abebe Haile', 'federal-lto1', NOW(), NOW(), 0),
+  ('0e2055ea-764a-493c-bf6f-d11023c30938', true, '[a0000001-0000-0000-0001-000000000001, a0000001-0000-0000-0001-000000000002]', '[Sara Mohammed, Yonas Berhanu]', 5, 0, 'Addis Ababa Joint Audit Team Alpha', '10000000-0000-0000-0001-000000000001', 'Dawit Tadesse', 'addis_ababa-tc1', NOW(), NOW(), 0)
+ON CONFLICT (team_id) DO UPDATE SET current_cases = 0, active = true;
 DELETE FROM t_case_status_history;
 DELETE FROM t_handoff_team_member;
 DELETE FROM t_handoff_record;

@@ -15,7 +15,6 @@ const STEP_ICONS = {
   PLANNING:            ClipboardList,
   ENTRY_CONFERENCE:    Calendar,
   INFO_REQUEST:        FileSearch,
-  DOCUMENT_COLLECTION: FolderOpen,
   CAAT_ANALYSIS:       Cpu,
   AUDIT_TESTING:       TestTube,
   FINDINGS:            AlertTriangle,

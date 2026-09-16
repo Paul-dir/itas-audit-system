@@ -11,6 +11,7 @@
 import { useState, useCallback } from 'react';
 import { useAuditors } from '../hooks/useAuditors';
 import { committeeAPI } from '../services/api';
+import { useAuth } from '../../../context/AuthContext';
 import {
   AlertCircle, Search, Users, UserPlus, Award,
   Loader, X, Star, Crown, Shield,
@@ -26,16 +27,23 @@ const EXPERTISE_OPTIONS = [
 const SENIORITY_OPTIONS = ['All', 'JUNIOR', 'MID_LEVEL', 'SENIOR', 'PRINCIPAL'];
 
 export default function TeamFormation() {
+  const { user, authContext } = useAuth();
+  const userTaxCenter = user?.taxCenter || authContext?.taxCenter || authContext?.org_context?.assignedTaxCenter || null;
+
   /* ── Hook for fetching auditor & team leader pools ─────────────── */
   const {
     auditors, teamLeaders, loading, error, search, formedTeams, fetchTeams, fetchTeamLeaders,
   } = useAuditors(''); // empty caseId — we only use the pool
 
-  /* ── Formed Team Member IDs (already in active teams) ─────────── */
-  /* ── Formed Team Member IDs (already in active teams) ─────────── */
+  /* ── Formed Team Member IDs (already in active teams in this tax center) ── */
   const formedLeaderIds = new Set();
   const formedAuditorIds = new Set();
   (formedTeams || []).forEach(team => {
+    if (userTaxCenter && team.taxCenter) {
+      const normTeamTc = String(team.taxCenter).toLowerCase().replace(/[-_]/g, '');
+      const normUserTc = String(userTaxCenter).toLowerCase().replace(/[-_]/g, '');
+      if (normTeamTc !== normUserTc) return;
+    }
     if (team.teamLeaderId) {
       formedLeaderIds.add(String(team.teamLeaderId).toLowerCase().trim());
     }
@@ -199,6 +207,7 @@ export default function TeamFormation() {
         auditorNames: teamAuditors.map(a => a.name),
         capacity: teamCapacity,
         description: teamDescription || `Team led by ${teamLeader.name}`,
+        taxCenter: userTaxCenter || teamLeader.taxCenter,
       });
       setFormedTeam({
         ...result,
@@ -310,7 +319,7 @@ export default function TeamFormation() {
               </h3>
             </div>
             <span className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100 dark:bg-emerald-900/50 px-2.5 py-1 rounded-full">
-              Active in Tax Center
+              {userTaxCenter ? `Active in ${userTaxCenter}` : 'Active in Tax Center'}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,9 +335,16 @@ export default function TeamFormation() {
                       <Crown size={15} className="text-amber-500" />
                       {t.teamLeaderName || 'Team Leader'}
                     </span>
-                    <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-medium">
-                      Capacity: {t.capacity} cases
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {t.taxCenter && (
+                        <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+                          <MapPin size={10} /> {t.taxCenter}
+                        </span>
+                      )}
+                      <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-medium">
+                        Capacity: {t.capacity} cases
+                      </span>
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 font-medium">
                     Assigned Auditors ({Array.isArray(names) ? names.length : 0}):

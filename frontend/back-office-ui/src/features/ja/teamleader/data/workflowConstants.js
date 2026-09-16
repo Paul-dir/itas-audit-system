@@ -28,12 +28,11 @@ export const WORKFLOW_STEPS = [
   { id: 'PLANNING',             number: 2,  label: 'Planning',                 actor: 'Auditor → Team Leader',      icon: 'ClipboardList' },
   { id: 'ENTRY_CONFERENCE',     number: 3,  label: 'Entry Conference',         actor: 'Auditor + Taxpayer → TL',   icon: 'Calendar' },
   { id: 'INFO_REQUEST',         number: 4,  label: 'Information Request',      actor: 'Auditor → Taxpayer',         icon: 'FileSearch' },
-  { id: 'DOCUMENT_COLLECTION',  number: 5,  label: 'Document Collection',      actor: 'Taxpayer → Auditor',         icon: 'FolderOpen' },
-  { id: 'CAAT_ANALYSIS',        number: 6,  label: 'CAAT / Automated Analysis',actor: 'Auditor (system)',            icon: 'Cpu' },
-  { id: 'AUDIT_TESTING',        number: 7,  label: 'Audit Testing',            actor: 'Auditor',                    icon: 'TestTube' },
-  { id: 'FINDINGS',             number: 8,  label: 'Findings',                 actor: 'Auditor → Team Leader',      icon: 'AlertTriangle' },
-  { id: 'TAXPAYER_RESPONSE',    number: 9,  label: 'Taxpayer Response',        actor: 'Taxpayer → Auditor',         icon: 'MessageSquare' },
-  { id: 'CONCLUSION',           number: 10, label: 'Conclusion',               actor: 'Auditor → Team Leader',      icon: 'CheckCircle' },
+  { id: 'CAAT_ANALYSIS',        number: 5,  label: 'CAAT / Automated Analysis',actor: 'Auditor (system)',            icon: 'Cpu' },
+  { id: 'AUDIT_TESTING',        number: 6,  label: 'Audit Testing',            actor: 'Auditor',                    icon: 'TestTube' },
+  { id: 'FINDINGS',             number: 7,  label: 'Findings',                 actor: 'Auditor → Team Leader',      icon: 'AlertTriangle' },
+  { id: 'TAXPAYER_RESPONSE',    number: 8,  label: 'Taxpayer Response',        actor: 'Taxpayer → Auditor',         icon: 'MessageSquare' },
+  { id: 'CONCLUSION',           number: 9,  label: 'Conclusion',               actor: 'Auditor → Team Leader',      icon: 'CheckCircle' },
 ];
 
 export const WORKFLOW_STEP_IDS = WORKFLOW_STEPS.map(s => s.id);
@@ -46,14 +45,13 @@ export const CASE_WORKFLOW_STATUS = {
   PLANNING_REVISION:        { id: 'PLANNING_REVISION',        label: 'Planning Revision',        color: 'orange', step: 2 },
   ENTRY_CONFERENCE:         { id: 'ENTRY_CONFERENCE',         label: 'Entry Conference',         color: 'teal',   step: 3 },
   INFO_GATHERING:           { id: 'INFO_GATHERING',           label: 'Info Gathering',           color: 'cyan',   step: 4 },
-  DOCUMENT_COLLECTION:      { id: 'DOCUMENT_COLLECTION',      label: 'Document Collection',      color: 'indigo', step: 5 },
-  CAAT_ANALYSIS:            { id: 'CAAT_ANALYSIS',            label: 'CAAT Analysis',            color: 'violet', step: 6 },
-  AUDIT_TESTING:            { id: 'AUDIT_TESTING',            label: 'Audit Testing',            color: 'yellow', step: 7 },
-  FINDINGS:                 { id: 'FINDINGS',                 label: 'Findings',                 color: 'amber',  step: 8 },
-  FINDINGS_REVISION:        { id: 'FINDINGS_REVISION',        label: 'Findings Revision',        color: 'orange', step: 8 },
-  TAXPAYER_RESPONSE:        { id: 'TAXPAYER_RESPONSE',        label: 'Taxpayer Response',        color: 'sky',    step: 9 },
-  CONCLUSION:               { id: 'CONCLUSION',               label: 'Conclusion',               color: 'emerald',step: 10 },
-  CONCLUDED:                { id: 'CONCLUDED',                label: 'Concluded',                color: 'green',  step: 11 },
+  CAAT_ANALYSIS:            { id: 'CAAT_ANALYSIS',            label: 'CAAT Analysis',            color: 'violet', step: 5 },
+  AUDIT_TESTING:            { id: 'AUDIT_TESTING',            label: 'Audit Testing',            color: 'yellow', step: 6 },
+  FINDINGS:                 { id: 'FINDINGS',                 label: 'Findings',                 color: 'amber',  step: 7 },
+  FINDINGS_REVISION:        { id: 'FINDINGS_REVISION',        label: 'Findings Revision',        color: 'orange', step: 7 },
+  TAXPAYER_RESPONSE:        { id: 'TAXPAYER_RESPONSE',        label: 'Taxpayer Response',        color: 'sky',    step: 8 },
+  CONCLUSION:               { id: 'CONCLUSION',               label: 'Conclusion',               color: 'emerald',step: 9 },
+  CONCLUDED:                { id: 'CONCLUDED',                label: 'Concluded',                color: 'green',  step: 10 },
 };
 
 // ── HANDOFF STATUS ──────────────────────────────────────────────────────────

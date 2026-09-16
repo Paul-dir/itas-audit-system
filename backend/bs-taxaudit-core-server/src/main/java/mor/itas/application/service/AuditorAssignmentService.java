@@ -101,6 +101,8 @@ public class AuditorAssignmentService {
         // by the plan-cascade (ASSIGNED_TO_TEAM_LEADER / ASSIGNED_TO_COMMITTEE) and
         // the committee bridge (HANDED_OFF / ASSIGNED) so JA cases can flow through
         // the validated workflow regardless of which ingestion path created them.
+        // WAITING_ASSIGNMENT is set by the committee when a team+leader is assigned but
+        // the team leader hasn't handed off yet — allow direct assignment from this status.
         String currentStatus = caseEntity.getStatus();
         Set<String> assignableStatuses = Set.of(
             "TEAM_ASSIGNED",
@@ -108,7 +110,8 @@ public class AuditorAssignmentService {
             "ASSIGNED_TO_COMMITTEE",
             "HANDED_OFF",
             "ASSIGNED",
-            "AUDITOR_ASSIGNED"  // reassignment: existing ACTIVE row gets superseded (Step 7b)
+            "WAITING_ASSIGNMENT",  // set by committee after team assignment, before handoff
+            "AUDITOR_ASSIGNED"     // reassignment: existing ACTIVE row gets superseded (Step 7b)
         );
         if (!assignableStatuses.contains(currentStatus)) {
             log.error("Invalid case state for auditor assignment: caseId={}, status={}", caseId, currentStatus);

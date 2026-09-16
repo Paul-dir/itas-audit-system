@@ -55,7 +55,7 @@ const DB_AUDITORS = [
  */
 const DB_TEAM_LEADERS = [
   // Federal LTO-1
-  { id: '10000000-0000-0000-0099-000000000001', username: 'fed.ja.tl',  name: 'Addis Zewde',    email: 'fed.ja.tl@mor.gov.et',  auditType: 'joint_audit', taxCenter: 'federal-lto1' },
+  { id: '10000000-0000-0000-0099-000000000001', username: 'fed.ja.tl',  name: 'Abebe Haile',    email: 'fed.ja.tl@mor.gov.et',  auditType: 'joint_audit', taxCenter: 'federal-lto1' },
   { id: '10000000-0000-0000-0099-000000000002', username: 'fed.ja.tl2', name: 'Nardos Negash',  email: 'fed.ja.tl2@mor.gov.et', auditType: 'joint_audit', taxCenter: 'federal-lto1' },
   // Federal LTO-2
   { id: '10000000-0000-0000-0098-000000000001', username: 'fed2.ja.tl',  name: 'Berhanu Bekele', email: 'fed2.ja.tl@mor.gov.et',  auditType: 'joint_audit', taxCenter: 'federal-lto2' },
@@ -176,13 +176,23 @@ export function useAuditors(caseId) {
   const [formedTeams, setFormedTeams] = useState([]);
   const fetchTeams = useCallback(async () => {
     try {
-      const data = await committeeAPI.getTeams();
-      setFormedTeams(Array.isArray(data) ? data.filter(t => t.active !== false) : []);
+      const data = await committeeAPI.getTeams(userTaxCenter ? { taxCenter: userTaxCenter } : {});
+      const activeTeams = Array.isArray(data) ? data.filter(t => t.active !== false) : [];
+      const scopedTeams = userTaxCenter
+        ? activeTeams.filter(t => {
+            const teamTc = t.taxCenter;
+            if (!teamTc) return true;
+            const normTeamTc = String(teamTc).toLowerCase().replace(/[-_]/g, '');
+            const normUserTc = String(userTaxCenter).toLowerCase().replace(/[-_]/g, '');
+            return normTeamTc === normUserTc;
+          })
+        : activeTeams;
+      setFormedTeams(scopedTeams);
     } catch (err) {
       console.warn('[useAuditors] Could not fetch active teams:', err.message);
       setFormedTeams([]);
     }
-  }, []);
+  }, [userTaxCenter]);
 
   const fetchNominations = useCallback(async () => {
     if (!caseId) return;

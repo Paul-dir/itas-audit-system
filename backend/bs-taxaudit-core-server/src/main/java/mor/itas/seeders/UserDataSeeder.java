@@ -82,7 +82,7 @@ public class UserDataSeeder implements CommandLineRunner {
         // ── Federal Tax Center (federal-lto1) ──
         seedUser("20000000-0000-0000-0099-000000000001", "fed.ja.chair", "fed.ja.chair@mor.gov.et", "Dr. Solomon Desta", "COMMITTEE_CHAIR", "joint_audit", "TAX_CENTER", "federal-lto1");
         seedUser("20000000-0000-0000-0099-000000000002", "fed.ja.member", "fed.ja.member@mor.gov.et", "Eleni Tesfaye", "COMMITTEE_MEMBER", "joint_audit", "TAX_CENTER", "federal-lto1");
-        seedUser("10000000-0000-0000-0099-000000000001", "fed.ja.tl", "fed.ja.tl@mor.gov.et", "Addis Zewde", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto1");
+        seedUser("10000000-0000-0000-0099-000000000001", "fed.ja.tl", "fed.ja.tl@mor.gov.et", "Abebe Haile", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto1");
         seedUser("10000000-0000-0000-0099-000000000002", "fed.ja.tl2", "fed.ja.tl2@mor.gov.et", "Nardos Negash", "TEAM_LEADER", "joint_audit", "TAX_CENTER", "federal-lto1");
         seedUser("a0000001-0000-0000-0099-000000000001", "fed.ja.auditor1", "fed.ja.auditor1@mor.gov.et", "Fikremariam Tilahun", "AUDITOR", "joint_audit", "TAX_CENTER", "federal-lto1");
         seedAuditor("a0000001-0000-0000-0099-000000000001", "Fikremariam", "Tilahun", "Customs & Tariffs Valuation", "SENIOR", 10, "fed.ja.auditor1@mor.gov.et", "+251-911-990001", "federal-lto1");

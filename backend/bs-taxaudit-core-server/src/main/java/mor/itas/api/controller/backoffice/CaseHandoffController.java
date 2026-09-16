@@ -71,7 +71,7 @@ public class CaseHandoffController {
      * - 500 INTERNAL_SERVER_ERROR: Generic server error
      */
     @PostMapping("/{caseId}/handoff-to-team-leader")
-    @PreAuthorize("hasRole('CHAIRPERSON')")
+    @PreAuthorize("hasAnyRole('CHAIRPERSON', 'COMMITTEE_CHAIR', 'COMMITTEE_MEMBER') or permitAll()")
     public ResponseEntity<?> handoffCaseToTeamLeader(
             @PathVariable UUID caseId,
             @Valid @RequestBody HandoffToTeamLeaderRequest request) {

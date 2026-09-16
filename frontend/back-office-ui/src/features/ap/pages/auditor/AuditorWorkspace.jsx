@@ -24,18 +24,21 @@ import WorkflowProgress from '../../../teamleader/components/WorkflowProgress.js
 import StatusBadge from '../../../teamleader/components/StatusBadge.jsx';
 import { Card, Button, Badge, Modal, Textarea, Input } from '../../../../components/ui/index.jsx';
 import { auditorAPI } from './services/api.js';
+import EntryConferencePanel from '../../../teamleader/components/EntryConferencePanel.jsx';
+import DocumentRequestPanel from '../../../teamleader/components/DocumentRequestPanel.jsx';
+import FindingsPanel from '../../../teamleader/components/FindingsPanel.jsx';
 
 // ── Step Icons Map ───────────────────────────────────────────────────────────
 const STEP_ICONS = {
   CASE_DETAIL: FileText, PLANNING: ClipboardList,
-  ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch, DOCUMENT_COLLECTION: FolderOpen,
+  ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch,
   CAAT_ANALYSIS: Cpu, AUDIT_TESTING: TestTube, FINDINGS: AlertTriangle,
   TAXPAYER_RESPONSE: MessageSquare, CONCLUSION: CheckCircle,
 };
 
 
 // ── Planning Step Panel ──────────────────────────────────────────────────────
-function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
+function PlanningStepPanel({ caseData, existingPlan, onSubmit, onProceed }) {
   const [scope, setScope] = useState(existingPlan?.scope || '');
   const [objectives, setObjectives] = useState(existingPlan?.objectives || '');
   const [methodology, setMethodology] = useState(existingPlan?.methodology || '');
@@ -156,7 +159,29 @@ function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
             />
           </div>
 
-          {!isApproved && (
+          {isApproved && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-800">
+              <span className="text-xs text-green-700 dark:text-green-300 font-medium flex items-center gap-1.5">
+                <CheckCircle size={15} className="text-green-600" />
+                Audit Plan approved by Team Leader. Ready for Entry Conference.
+              </span>
+              <Button variant="primary" icon={ArrowRight} onClick={onProceed}>
+                Proceed to Entry Conference
+              </Button>
+            </div>
+          )}
+
+          {isSubmitted && !isApproved && (
+            <div className="p-3.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between">
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-medium flex items-center gap-1.5">
+                <Clock size={15} className="text-blue-600" />
+                Plan submitted — Awaiting Team Leader approval before proceeding.
+              </span>
+              <Badge color="blue">Pending TL Approval</Badge>
+            </div>
+          )}
+
+          {!isApproved && !isSubmitted && (
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="secondary">Save Draft</Button>
               <Button variant="primary" icon={Send} onClick={handleSubmit}>
@@ -167,98 +192,6 @@ function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
         </div>
       </Card>
     </div>
-  );
-}
-
-// ── Document Request Panel ───────────────────────────────────────────────────
-function DocumentRequestPanel({ caseData, onSubmit }) {
-  const [docType, setDocType] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDays, setDueDays] = useState('15');
-
-  const handleSubmit = () => {
-    onSubmit({
-      documentType: docType,
-      description,
-      dueDate: new Date(Date.now() + parseInt(dueDays) * 86400000).toISOString(),
-    });
-  };
-
-  const requestTypes = [
-    { id: 'financial_statements', label: 'Financial Statements', icon: FileText },
-    { id: 'tax_returns', label: 'Tax Returns', icon: FileCheck },
-    { id: 'bank_statements', label: 'Bank Statements', icon: FolderOpen },
-    { id: 'invoices', label: 'Invoices & Receipts', icon: FileText },
-    { id: 'contracts', label: 'Contracts', icon: FileText },
-    { id: 'payroll', label: 'Payroll Records', icon: Users },
-  ];
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <FileSearch size={20} className="text-blue-500" />
-        Document Request
-      </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Request documents from the taxpayer for audit examination.
-      </p>
-
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {requestTypes.map(type => {
-          const Icon = type.icon;
-          return (
-            <button
-              key={type.id}
-              onClick={() => setDocType(type.id)}
-              className={`p-3 rounded-xl border-2 text-center transition-all ${
-                docType === type.id
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <Icon size={20} className={`mx-auto mb-2 ${
-                docType === type.id ? 'text-blue-500' : 'text-gray-400'
-              }`} />
-              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{type.label}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Description / Instructions
-          </label>
-          <Textarea
-            placeholder="Specific items required, format preferences, etc..."
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-        <div className="w-1/3">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Due in (days)
-          </label>
-          <Input
-            type="number"
-            value={dueDays}
-            onChange={e => setDueDays(e.target.value)}
-            min="1"
-            max="90"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="secondary">Cancel</Button>
-          <Button variant="primary" icon={Send} onClick={handleSubmit}>
-            Send Request
-          </Button>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -375,107 +308,6 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
   );
 }
 
-// ── Findings Panel ───────────────────────────────────────────────────────────
-function FindingsPanel({ caseData, onSubmit, onApprove }) {
-  const [findings, setFindings] = useState([]);
-  const [newFinding, setNewFinding] = useState({ description: '', severity: 'MEDIUM', amount: '' });
-
-  const addFinding = () => {
-    if (!newFinding.description) return;
-    setFindings(prev => [...prev, { ...newFinding, id: `f-${Date.now()}` }]);
-    setNewFinding({ description: '', severity: 'MEDIUM', amount: '' });
-  };
-
-  const handleSubmitAll = () => {
-    onSubmit(findings);
-  };
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <AlertTriangle size={20} className="text-amber-500" />
-        Audit Findings
-      </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Document findings based on your audit testing and evidence gathered.
-      </p>
-
-      {/* Existing Findings */}
-      {findings.length > 0 && (
-        <div className="space-y-3 mb-6">
-          {findings.map(finding => (
-            <div key={finding.id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{finding.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Severity: <Badge color={finding.severity === 'HIGH' ? 'red' : finding.severity === 'MEDIUM' ? 'yellow' : 'blue'}>{finding.severity}</Badge>
-                    {finding.amount && <span className="ml-2">· Impact: ETB {parseInt(finding.amount).toLocaleString()}</span>}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setFindings(prev => prev.filter(f => f.id !== finding.id))}
-                  className="text-red-500 hover:text-red-700 text-xs"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add New Finding */}
-      <div className="p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Add Finding</h4>
-        <div className="space-y-3">
-          <Textarea
-            placeholder="Describe the finding..."
-            value={newFinding.description}
-            onChange={e => setNewFinding(prev => ({ ...prev, description: e.target.value }))}
-            rows={2}
-          />
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Severity</label>
-              <select
-                value={newFinding.severity}
-                onChange={e => setNewFinding(prev => ({ ...prev, severity: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Financial Impact (ETB)</label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={newFinding.amount}
-                onChange={e => setNewFinding(prev => ({ ...prev, amount: e.target.value }))}
-              />
-            </div>
-          </div>
-          <Button size="sm" variant="secondary" icon={FileText} onClick={addFinding}>
-            Add Finding
-          </Button>
-        </div>
-      </div>
-
-      {/* Submit */}
-      {findings.length > 0 && (
-        <div className="flex justify-end gap-3 pt-6">
-          <Button variant="secondary">Save Draft</Button>
-          <Button variant="primary" icon={Send} onClick={handleSubmitAll}>
-            Submit Findings for Approval
-          </Button>
-        </div>
-      )}
-    </Card>
-  );
-}
 
 // ── Conclusion Panel ─────────────────────────────────────────────────────────
 function ConclusionPanel({ caseData, onFinalize }) {
@@ -602,16 +434,24 @@ export default function AuditorWorkspace({ caseData, onBack }) {
     });
   };
 
-  const handleSubmitFindings = (findings) => {
-    findings.forEach(f => {
-      actions.addFinding(caseId, {
-        id: f.id,
-        description: f.description,
-        severity: f.severity,
-        financialImpact: parseInt(f.amount) || 0,
-        status: 'DRAFT',
-      });
-    });
+  const handleSubmitFindings = async (findingsList) => {
+    for (const f of findingsList) {
+      if (!f.id || String(f.id).startsWith('f-')) {
+        await actions.addFinding(caseId, {
+          title: f.title || `${f.taxType || f.category || 'Tax'} Adjustment`,
+          description: f.description,
+          severity: f.severity,
+          category: f.taxType || f.category || 'VAT',
+          principalAmount: f.principalAmount || 0,
+          penaltyAmount: f.penaltyAmount || 0,
+          interestAmount: f.interestAmount || 0,
+          finalAmount: f.finalAmount || f.amount || 0,
+          amount: f.finalAmount || f.amount || 0,
+          financialImpact: f.finalAmount || f.amount || 0,
+          status: 'DRAFT',
+        });
+      }
+    }
     actions.submitFindings(caseId, user.id);
   };
 
@@ -956,28 +796,43 @@ export default function AuditorWorkspace({ caseData, onBack }) {
             caseData={caseData}
             existingPlan={existingPlan}
             onSubmit={handleSubmitPlan}
+            onProceed={() => setActiveStep('ENTRY_CONFERENCE')}
           />
         );
 
       case 'ENTRY_CONFERENCE':
         return (
-          <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Calendar size={20} className="text-blue-500" />
-              Entry Conference
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Schedule and conduct the entry conference with the taxpayer.
-            </p>
-            <Button variant="primary" icon={Calendar} onClick={handleRecordMinutes}>
-              Record Conference Minutes
-            </Button>
-          </Card>
+          <EntryConferencePanel
+            caseId={caseId}
+            caseData={caseData}
+            conference={workflow.conference}
+            onSchedule={(conf) => actions.scheduleConference(caseId, user.id, conf)}
+            onRecordMinutes={(mins) => {
+              actions.recordMinutes(caseId, user.id, mins);
+              setActiveStep('INFO_REQUEST');
+            }}
+            onSkip={(reason) => {
+              actions.skipConference(caseId, user.id, reason);
+              setActiveStep('INFO_REQUEST');
+            }}
+            isAuditor={true}
+          />
         );
 
       case 'INFO_REQUEST':
-      case 'DOCUMENT_COLLECTION':
-        return <DocumentRequestPanel caseData={caseData} onSubmit={handleCreateDocRequest} />;
+        return (
+          <DocumentRequestPanel
+            caseData={caseData}
+            requests={workflow.documentRequests || []}
+            documents={workflow.documents || []}
+            onSubmitRequest={handleCreateDocRequest}
+            onUploadDoc={(doc) => actions.uploadDocument?.(caseId, doc)}
+            onProceed={() => {
+              actions.completeInfoRequest?.(caseId, user.id);
+              setActiveStep('CAAT_ANALYSIS');
+            }}
+          />
+        );
 
       case 'CAAT_ANALYSIS':
         return (
@@ -1011,8 +866,12 @@ export default function AuditorWorkspace({ caseData, onBack }) {
         return (
           <FindingsPanel
             caseData={caseData}
+            findings={workflow?.findings || []}
             onSubmit={handleSubmitFindings}
-            onApprove={() => setActiveStep('TAXPAYER_RESPONSE')}
+            onApprove={() => actions.approveFindings(caseId, user.id)}
+            onProceed={() => setActiveStep('TAXPAYER_RESPONSE')}
+            isTeamLeader={user?.role === 'TEAM_LEADER' || user?.role === 'SUPERVISOR'}
+            isAuditor={true}
           />
         );
 

@@ -145,6 +145,17 @@ public class AuditWorkflowController {
         return ResponseEntity.ok(GenericResponse.success(result));
     }
 
+    @PostMapping("/conference/skip")
+    public ResponseEntity<GenericResponse<Map<String, Object>>> skipConference(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, String> data,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        String reason = (data != null) ? data.getOrDefault("reason", "Waived — not applicable for this case") : "Waived";
+        workflowService.skipConference(caseId, reason, actorId);
+        Map<String, Object> result = Map.of("status", "SKIPPED", "reason", reason, "caseId", caseId.toString());
+        return ResponseEntity.ok(GenericResponse.success(result));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 5: INFORMATION REQUEST
     // ═══════════════════════════════════════════════════════════════════════════
@@ -265,7 +276,7 @@ public class AuditWorkflowController {
     @PostMapping("/findings")
     public ResponseEntity<GenericResponse<AuditFindingEntity>> createFinding(
             @PathVariable UUID caseId,
-            @RequestBody Map<String, String> data,
+            @RequestBody Map<String, Object> data,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
         AuditFindingEntity result = workflowService.createFinding(caseId, data, actorId);
         return ResponseEntity.ok(GenericResponse.success(result));

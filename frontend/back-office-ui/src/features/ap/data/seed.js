@@ -40,7 +40,7 @@ export const SEED_USERS = [
 
   { id: 'fed.ja.chair', name: 'Dr. Solomon Desta', email: 'fed.ja.chair@mor.gov.et', role: 'committee_chair', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
   { id: 'fed.ja.member', name: 'Eleni Tesfaye', email: 'fed.ja.member@mor.gov.et', role: 'committee_member', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
-  { id: 'fed.ja.tl', name: 'Addis Zewde', email: 'fed.ja.tl@mor.gov.et', role: 'team_leader', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
+  { id: 'fed.ja.tl', name: 'Abebe Haile', email: 'fed.ja.tl@mor.gov.et', role: 'team_leader', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
   { id: 'fed.ja.auditor1', name: 'Fikremariam Tilahun', email: 'fed.ja.auditor1@mor.gov.et', role: 'auditor', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
   { id: 'fed.ja.auditor2', name: 'Saron Assefa', email: 'fed.ja.auditor2@mor.gov.et', role: 'auditor', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },
   { id: 'fed.ja.auditor3', name: 'Bikila Worku', email: 'fed.ja.auditor3@mor.gov.et', role: 'auditor', region: 'federal_level', taxCenter: 'federal-lto1', auditType: 'joint_audit', password: 'password123' },

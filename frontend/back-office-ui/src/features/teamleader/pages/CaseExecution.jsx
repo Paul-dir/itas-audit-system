@@ -13,6 +13,8 @@ import { WORKFLOW_STEPS, WORKFLOW_STEP_IDS } from '../data/workflowConstants';
 import WorkflowProgress from '../components/WorkflowProgress';
 import StatusBadge from '../components/StatusBadge';
 import Card from '../../../components/Card';
+import EntryConferencePanel from '../components/EntryConferencePanel.jsx';
+import FindingsPanel from '../components/FindingsPanel.jsx';
 import { UnifiedCaseInfo } from '../../../components/shared/UnifiedCaseDetail.jsx';
 import {
   ArrowLeft, ArrowRight, ArrowRightLeft, CheckCircle, Clock, FileText, Users,
@@ -26,7 +28,7 @@ import {
 function StepHeader({ step, stepData, isCurrent, isCompleted }) {
   const STEP_ICONS = {
     CASE_DETAIL: FileText, PLANNING: ClipboardList,
-    ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch, DOCUMENT_COLLECTION: FolderOpen,
+    ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch,
     CAAT_ANALYSIS: Cpu, AUDIT_TESTING: TestTube, FINDINGS: AlertTriangle,
     TAXPAYER_RESPONSE: MessageSquare, CONCLUSION: CheckCircle,
   };
@@ -311,47 +313,22 @@ export default function CaseExecution({ caseId, caseData, onBack, initialStep })
 
       case 'ENTRY_CONFERENCE':
         return (
-          <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Entry Conference</h3>
-            <div className="space-y-4">
-              {workflow.conference?.minutes ? (
-                <div className="space-y-3">
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                    <CheckCircle size={18} className="text-green-600 dark:text-green-400 mb-2" />
-                    <p className="font-medium text-green-800 dark:text-green-200">Conference Completed</p>
-                  </div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Attendees</p>
-                    <p className="text-sm text-gray-900 dark:text-white mt-1">{workflow.conference.minutes.attendees?.join(', ')}</p>
-                  </div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Agreements</p>
-                    <ul className="mt-1 space-y-1">
-                      {workflow.conference.minutes.agreements?.map((a, i) => (
-                        <li key={i} className="text-sm text-gray-900 dark:text-white flex items-start gap-2">
-                          <CheckCircle size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
-                          {a}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ) : isAuditor ? (
-                <button onClick={handleRecordMinutes} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
-                  <Calendar size={18} /> Record Conference Minutes
-                </button>
-              ) : (
-                <p className="text-sm text-gray-500">Auditor is scheduling the entry conference with the taxpayer...</p>
-              )}
-            </div>
-          </Card>
+          <EntryConferencePanel
+            caseId={caseId}
+            caseData={caseData}
+            conference={workflow.conference}
+            onSchedule={(conf) => actions.scheduleConference?.(caseId, user?.id, conf)}
+            onRecordMinutes={(mins) => actions.recordMinutes?.(caseId, user?.id, mins)}
+            onSkip={(reason) => actions.skipConference?.(caseId, user?.id, reason)}
+            isAuditor={isAuditor}
+            isTeamLeader={isTeamLeader}
+          />
         );
 
       case 'INFO_REQUEST':
-      case 'DOCUMENT_COLLECTION':
         return (
           <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Document Requests & Collection</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Information Requests &amp; Records Intake</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
@@ -471,53 +448,34 @@ export default function CaseExecution({ caseId, caseData, onBack, initialStep })
       case 'FINDINGS':
       case 'FINDINGS_REVISION':
         return (
-          <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Audit Findings</h3>
-            <div className="space-y-4">
-              {workflow.findings?.length > 0 ? (
-                <div className="space-y-3">
-                  {workflow.findings.map((finding) => (
-                    <div key={finding.id} className="p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{finding.description}</p>
-                          <p className="text-xs text-gray-500 mt-1">Severity: {finding.severity} · Impact: ETB {finding.financialImpact?.toLocaleString()}</p>
-                          <div className="flex gap-1 mt-2">
-                            <StatusBadge status={finding.status} />
-                            {finding.taxpayerResponse && (
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                finding.taxpayerResponse.responseType === 'AGREE' ? 'bg-green-100 text-green-700' :
-                                finding.taxpayerResponse.responseType === 'DISAGREE' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-700'
-                              }`}>
-                                Taxpayer: {finding.taxpayerResponse.responseType}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {isAuditor && workflow.steps.FINDINGS?.status === 'in_progress' && (
-                    <button onClick={handleSubmitFindings} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
-                      <Send size={18} /> Submit Findings for TL Approval
-                    </button>
-                  )}
-                  {isTeamLeader && workflow.findings.some(f => f.status === 'SUBMITTED') && (
-                    <button onClick={handleApproveFindings} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
-                      <CheckCircle size={18} /> Approve Findings — Send to Taxpayer
-                    </button>
-                  )}
-                </div>
-              ) : isAuditor ? (
-                <button onClick={handleSubmitFindings} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
-                  <AlertTriangle size={18} /> Create Findings
-                </button>
-              ) : (
-                <p className="text-sm text-gray-500">Auditor is drafting findings based on testing results...</p>
-              )}
-            </div>
-          </Card>
+          <FindingsPanel
+            caseData={workflow.caseData}
+            findings={workflow.findings || []}
+            onSubmit={(findingsList) => {
+              findingsList.forEach(f => {
+                if (!f.id || String(f.id).startsWith('f-')) {
+                  actions.addFinding(caseId, {
+                    title: f.title || `${f.taxType || f.category || 'Tax'} Adjustment`,
+                    description: f.description,
+                    severity: f.severity,
+                    category: f.taxType || f.category || 'VAT',
+                    principalAmount: f.principalAmount || 0,
+                    penaltyAmount: f.penaltyAmount || 0,
+                    interestAmount: f.interestAmount || 0,
+                    finalAmount: f.finalAmount || f.amount || 0,
+                    amount: f.finalAmount || f.amount || 0,
+                    financialImpact: f.finalAmount || f.amount || 0,
+                    status: 'DRAFT',
+                  });
+                }
+              });
+              actions.submitFindings(caseId, user.id);
+            }}
+            onApprove={() => actions.approveFindings(caseId, user.id)}
+            onProceed={() => setActiveStep('TAXPAYER_RESPONSE')}
+            isTeamLeader={isTeamLeader}
+            isAuditor={isAuditor}
+          />
         );
 
       case 'TAXPAYER_RESPONSE':

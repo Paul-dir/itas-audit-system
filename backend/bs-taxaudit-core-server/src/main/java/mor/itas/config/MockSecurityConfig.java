@@ -26,14 +26,14 @@ public class MockSecurityConfig {
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     http
-        .csrf().disable()
-        .cors().and()
+        .csrf(csrf -> csrf.disable())
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .authorizeHttpRequests(authz -> authz
             .requestMatchers("/actuator/**").permitAll()
             .anyRequest().permitAll()  // Allow all requests in mock mode
         )
-        .sessionManagement()
-          .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+        .sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     
     return http.build();
   }
@@ -41,11 +41,12 @@ public class MockSecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:5173", "http://127.0.0.1:3002"));
+    configuration.setAllowedOriginPatterns(Arrays.asList("*"));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
-    configuration.setExposedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Actor-Id"));
+    configuration.setExposedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Actor-Id", "X-Total-Count"));
     configuration.setAllowCredentials(true);
+    configuration.setMaxAge(3600L);
     
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

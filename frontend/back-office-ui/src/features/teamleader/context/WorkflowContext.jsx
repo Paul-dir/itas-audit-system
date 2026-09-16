@@ -33,7 +33,6 @@ function createInitialCaseWorkflow(caseId) {
       PLANNING:            { status: 'pending', completedAt: null, data: null },
       ENTRY_CONFERENCE:    { status: 'pending', completedAt: null, data: null },
       INFO_REQUEST:        { status: 'pending', completedAt: null, data: null },
-      DOCUMENT_COLLECTION: { status: 'pending', completedAt: null, data: null },
       CAAT_ANALYSIS:       { status: 'pending', completedAt: null, data: null },
       AUDIT_TESTING:       { status: 'pending', completedAt: null, data: null },
       FINDINGS:            { status: 'pending', completedAt: null, data: null },
@@ -201,6 +200,38 @@ function workflowReducer(state, action) {
         },
       };
 
+    case 'SKIP_CONFERENCE':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          conference: { status: 'SKIPPED', minutes: action.payload.reason, skippedAt: new Date().toISOString() },
+          steps: {
+            ...state[action.payload.caseId]?.steps,
+            ENTRY_CONFERENCE: { status: 'completed', completedAt: new Date().toISOString(), data: { status: 'SKIPPED', reason: action.payload.reason } },
+          },
+          status: 'INFO_GATHERING',
+          currentStep: 'INFO_REQUEST',
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'ENTRY_CONFERENCE', action: `Conference waived: ${action.payload.reason}`, timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
+    case 'APPROVE_CONFERENCE':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          conference: { ...state[action.payload.caseId]?.conference, status: 'APPROVED' },
+          steps: {
+            ...state[action.payload.caseId]?.steps,
+            ENTRY_CONFERENCE: { status: 'completed', completedAt: new Date().toISOString() },
+          },
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'ENTRY_CONFERENCE', action: 'Conference approved by Team Leader', timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
     case 'CREATE_DOC_REQUEST':
       return {
         ...state,
@@ -224,13 +255,25 @@ function workflowReducer(state, action) {
         [action.payload.caseId]: {
           ...state[action.payload.caseId],
           documents: [...(state[action.payload.caseId]?.documents || []), action.payload.document],
-          status: 'DOCUMENT_COLLECTION',
-          currentStep: 'DOCUMENT_COLLECTION',
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'INFO_REQUEST', action: `Document recorded: ${action.payload.document.fileName || action.payload.document.title || 'Attachment'}`, timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
+    case 'COMPLETE_INFO_REQUEST':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          status: 'CAAT_ANALYSIS',
+          currentStep: 'CAAT_ANALYSIS',
           steps: {
             ...state[action.payload.caseId]?.steps,
-            DOCUMENT_COLLECTION: { status: 'in_progress', completedAt: null },
-            INFO_REQUEST: { ...state[action.payload.caseId]?.steps?.INFO_REQUEST, status: 'completed', completedAt: new Date().toISOString() },
+            INFO_REQUEST: { status: 'completed', completedAt: new Date().toISOString() },
+            CAAT_ANALYSIS: { status: 'in_progress', completedAt: null },
           },
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'INFO_REQUEST', action: 'Information gathering completed — moving to CAAT analysis', timestamp: new Date().toISOString(), actor: action.payload.actorId }],
         },
       };
 
@@ -256,7 +299,7 @@ function workflowReducer(state, action) {
           currentStep: 'CAAT_ANALYSIS',
           steps: {
             ...state[action.payload.caseId]?.steps,
-            DOCUMENT_COLLECTION: { ...state[action.payload.caseId]?.steps?.DOCUMENT_COLLECTION, status: 'completed', completedAt: new Date().toISOString() },
+            INFO_REQUEST: { ...state[action.payload.caseId]?.steps?.INFO_REQUEST, status: 'completed', completedAt: state[action.payload.caseId]?.steps?.INFO_REQUEST?.completedAt || new Date().toISOString() },
             CAAT_ANALYSIS: { status: 'in_progress', completedAt: null },
           },
           timeline: [...(state[action.payload.caseId]?.timeline || []),
@@ -437,7 +480,9 @@ export function WorkflowProvider({ children }) {
     // ─── Hydrate from backend ────────────────────────────────────────────
     loadWorkflow: useCallback(async (caseId) => {
       try {
-        const data = await workflowAPI.getCaseWorkflow(caseId);
+        const raw = await workflowAPI.getCaseWorkflow(caseId);
+        // Backend wraps response in { data: {...}, status: 'SUCCESS' } — unwrap
+        const data = raw?.data || raw;
         // Backend returns a different step-key scheme; map to local keys
         const backendSteps = data.steps || {};
         const mapBackendStep = (backendKey, frontendKey) => {
@@ -451,13 +496,12 @@ export function WorkflowProvider({ children }) {
         };
 
         // Derive currentStep from which steps are completed
-        const stepOrder = ['CASE_DETAIL', 'PLANNING', 'ENTRY_CONFERENCE', 'INFO_REQUEST', 'DOCUMENT_COLLECTION', 'CAAT_ANALYSIS', 'AUDIT_TESTING', 'FINDINGS', 'TAXPAYER_RESPONSE', 'CONCLUSION'];
+        const stepOrder = ['CASE_DETAIL', 'PLANNING', 'ENTRY_CONFERENCE', 'INFO_REQUEST', 'CAAT_ANALYSIS', 'AUDIT_TESTING', 'FINDINGS', 'TAXPAYER_RESPONSE', 'CONCLUSION'];
         const backendKeyMap = {
           CASE_DETAIL: 'HANDOFF',
           PLANNING: 'PLANNING',
           ENTRY_CONFERENCE: 'CONFERENCE',
           INFO_REQUEST: 'INFO_REQUEST',
-          DOCUMENT_COLLECTION: 'DOC_COLLECTION',
           CAAT_ANALYSIS: 'CAAT',
           AUDIT_TESTING: 'TESTING',
           FINDINGS: 'FINDINGS',
@@ -550,6 +594,16 @@ export function WorkflowProvider({ children }) {
       fireAPI('recordMinutes', workflowAPI.recordConferenceMinutes(caseId, minutesPayload));
     }, []),
 
+    skipConference: useCallback((caseId, actorId, reason) => {
+      dispatch({ type: 'SKIP_CONFERENCE', payload: { caseId, actorId, reason } });
+      fireAPI('skipConference', workflowAPI.skipConference(caseId, reason));
+    }, []),
+
+    approveConference: useCallback((caseId, actorId) => {
+      dispatch({ type: 'APPROVE_CONFERENCE', payload: { caseId, actorId } });
+      fireAPI('approveConference', workflowAPI.approveConference(caseId));
+    }, []),
+
     // ─── Step 5: Information Request ─────────────────────────────────────
     createDocRequest: useCallback((caseId, actorId, request) => {
       dispatch({ type: 'CREATE_DOC_REQUEST', payload: { caseId, actorId, request } });
@@ -562,7 +616,11 @@ export function WorkflowProvider({ children }) {
       fireAPI('createDocRequest', workflowAPI.createDocumentRequest(caseId, requestData));
     }, []),
 
-    // ─── Step 6: Document Collection ─────────────────────────────────────
+    completeInfoRequest: useCallback((caseId, actorId) => {
+      dispatch({ type: 'COMPLETE_INFO_REQUEST', payload: { caseId, actorId } });
+    }, []),
+
+    // ─── Document Uploads ─────────────────────────────────────────────
     uploadDocument: useCallback((caseId, document) => {
       dispatch({ type: 'UPLOAD_DOCUMENT', payload: { caseId, document } });
       // Backend uploadDocument expects (caseId, requestId, file, metadata)

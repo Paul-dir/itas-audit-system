@@ -46,6 +46,8 @@ public class ApAuditCaseEntity {
     public static final String STATUS_IN_PROGRESS             = "IN_PROGRESS";
     /** Committee has approved planning meeting and issued statutory mandate */
     public static final String STATUS_PLANNING_TRIGGERED      = "PLANNING_TRIGGERED";
+    /** Assigned to committee or team leader — awaiting auditor assignment */
+    public static final String STATUS_WAITING_ASSIGNMENT      = "WAITING_ASSIGNMENT";
     /** Audit execution finished */
     public static final String STATUS_COMPLETED               = "COMPLETED";
 

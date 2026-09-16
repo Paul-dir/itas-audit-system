@@ -48,10 +48,10 @@ export function useDashboard(teamLeaderId) {
 
       // Incoming cases for this team leader are those assigned to them awaiting an auditor
       const viableIncoming = Array.isArray(assignedCases)
-        ? assignedCases.filter(c => (!c.assignedAuditor && !c.assignedAuditorId) || c.status === 'ASSIGNED' || c.status === 'TEAM_ASSIGNED' || c.status === 'PENDING_ASSIGNMENT')
+        ? assignedCases.filter(c => (!c.assignedAuditor && !c.assignedAuditorId) || ['ASSIGNED', 'TEAM_ASSIGNED', 'PENDING_ASSIGNMENT', 'WAITING_ASSIGNMENT'].includes(c.status))
         : [];
       const onlyAssigned = Array.isArray(assignedCases)
-        ? assignedCases.filter(c => (c.assignedAuditor || c.assignedAuditorId) && c.status !== 'ASSIGNED' && c.status !== 'TEAM_ASSIGNED' && c.status !== 'PENDING_ASSIGNMENT')
+        ? assignedCases.filter(c => (c.assignedAuditor || c.assignedAuditorId) && !['ASSIGNED', 'TEAM_ASSIGNED', 'PENDING_ASSIGNMENT', 'WAITING_ASSIGNMENT'].includes(c.status))
         : [];
 
       // Calculate metrics

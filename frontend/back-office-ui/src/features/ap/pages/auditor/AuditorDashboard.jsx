@@ -25,6 +25,7 @@ import useAuditorData from './hooks/useAuditorData.js';
 import AuditorWorkspace from './AuditorWorkspace.jsx';
 import TpAuditorWorkspace from '../../../tp/pages/TpAuditorWorkspace.jsx';
 import CaseDetailModal from '../shared/CaseDetailModal.jsx';
+import { isJointAuditUser, getEffectiveAuditType } from '../../../../components/layout/Sidebar.jsx';
 
 // ── Risk Level Colors ────────────────────────────────────────────────────────
 const RISK_COLORS = {
@@ -148,7 +149,7 @@ function CasesView({ cases, loading, refreshing, error, refresh, onExecuteCase, 
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded text-xs font-medium">
-                          AP System
+                          {caseItem.auditType ? caseItem.auditType.replace(/_/g, ' ') : 'Audit Case'}
                         </span>
                       </td>
                       <td className="px-6 py-4">{getRiskBadge(caseItem.riskPriority || caseItem.riskLevel)}</td>
@@ -494,8 +495,8 @@ function CaseStepSelectorView({ stepKey, stepConfig, cases, loading, onSelectCas
 
                   <div className="flex items-center gap-2 mt-3">
                     {getSegmentBadge(caseItem.segment || caseItem.sector)}
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                      Transfer Pricing
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                      {caseItem.auditType ? caseItem.auditType.replace(/_/g, ' ') : (isJointAuditUser(user) ? 'Joint Audit' : 'Transfer Pricing')}
                     </span>
                   </div>
 
@@ -544,15 +545,20 @@ export default function AuditorDashboard({ view, onNavigate }) {
   const { user } = useAuth();
   const { getWorkflow, actions: workflowActions } = useWorkflow();
 
+  const isJoint = isJointAuditUser(user);
+  const isTp = !isJoint && getEffectiveAuditType(user) === 'TRANSFER_PRICING';
+
   // Active selected case for the active audit execution view
   const [activeStepCase, setActiveStepCase] = useState(null);
   const [lastStepView, setLastStepView] = useState(view);
   const [dossierCase, setDossierCase] = useState(null);
 
-  // If user clicks a different phase in the sidebar, reset activeStepCase so they can select a case
+  // If user clicks a different phase in the sidebar, reset activeStepCase so they can select a case (TP only)
   if (view !== lastStepView) {
     setLastStepView(view);
-    setActiveStepCase(null);
+    if (!isJoint) {
+      setActiveStepCase(null);
+    }
   }
 
   // Active selected case stored in sessionStorage for general workflow
@@ -624,10 +630,10 @@ export default function AuditorDashboard({ view, onNavigate }) {
     sessionStorage.setItem('auditor_active_case_id', caseId);
     setExecutingCaseOverride(fullCase);
 
-    if (targetStep && onNavigate) {
+    if (!isJoint && isTp && targetStep && onNavigate) {
       onNavigate(targetStep);
     }
-  }, [getWorkflow, workflowActions, user?.id, onNavigate]);
+  }, [getWorkflow, workflowActions, user?.id, onNavigate, isJoint, isTp]);
 
   const handleCloseWorkspace = useCallback(() => {
     setActiveStepCase(null);
@@ -649,38 +655,42 @@ export default function AuditorDashboard({ view, onNavigate }) {
     );
   }
 
-  // ── TP AUDIT EXECUTION Steps ─────────────────────────────────────────────
-  if (view && STEP_CONFIG[view]) {
-    const step = STEP_CONFIG[view];
-
-    // If an assigned case is selected for this step, render the workspace at this gate
-    if (activeStepCase) {
-      const isTp = (activeStepCase.auditType || '').toUpperCase().includes('TP') ||
-                   (activeStepCase.auditType || '').toUpperCase().includes('TRANSFER') ||
-                   (user?.auditType || '').toUpperCase().includes('TP') ||
-                   (user?.username || '').toLowerCase().includes('tp');
-      if (isTp) {
-        return (
-          <TpAuditorWorkspace
-            caseData={activeStepCase}
-            user={user}
-            initialGate={step.gate}
-            assignedCases={cases}
-            onSwitchCase={(newCase) => setActiveStepCase(newCase)}
-            onClose={() => setActiveStepCase(null)}
-            onRefresh={refresh}
-          />
-        );
-      }
+  // ── Render Case Workspace if Active ──────────────────────────────────────
+  if (activeStepCase) {
+    const caseIsTp = (activeStepCase.auditType || '').toUpperCase().includes('TP') ||
+                     (activeStepCase.auditType || '').toUpperCase().includes('TRANSFER');
+    if (!isJoint && (isTp || caseIsTp)) {
       return (
-        <AuditorWorkspace
+        <TpAuditorWorkspace
           caseData={activeStepCase}
-          onBack={() => setActiveStepCase(null)}
+          user={user}
+          initialGate={STEP_CONFIG[view]?.gate || 'DETAILED_RISK_ASSESSMENT'}
+          assignedCases={cases}
+          onSwitchCase={(newCase) => setActiveStepCase(newCase)}
+          onClose={() => {
+            setActiveStepCase(null);
+            setExecutingCaseOverride(null);
+          }}
+          onRefresh={refresh}
         />
       );
     }
+    return (
+      <AuditorWorkspace
+        caseData={activeStepCase}
+        onBack={() => {
+          setActiveStepCase(null);
+          setExecutingCaseOverride(null);
+          setSelectedCaseId(null);
+          sessionStorage.removeItem('auditor_active_case_id');
+        }}
+      />
+    );
+  }
 
-    // No case selected yet: Show dynamic case selection screen for this step!
+  // ── TP AUDIT EXECUTION Steps (Strictly for Transfer Pricing, NEVER for Joint Audit) ──
+  if (!isJoint && isTp && view && STEP_CONFIG[view]) {
+    const step = STEP_CONFIG[view];
     return (
       <CaseStepSelectorView
         stepKey={view}
@@ -724,7 +734,13 @@ export default function AuditorDashboard({ view, onNavigate }) {
                 Clear Selection
               </button>
               <button
-                onClick={() => onNavigate && onNavigate('phase-1')}
+                onClick={() => {
+                  if (!isJoint && isTp) {
+                    onNavigate && onNavigate('phase-1');
+                  } else if (activeCase) {
+                    handleExecuteCase(activeCase, null);
+                  }
+                }}
                 className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
               >
                 Open Workspace →
@@ -738,7 +754,7 @@ export default function AuditorDashboard({ view, onNavigate }) {
           refreshing={refreshing}
           error={error}
           refresh={refresh}
-          onExecuteCase={(c) => handleExecuteCase(c, 'phase-1')}
+          onExecuteCase={(c) => handleExecuteCase(c, (!isJoint && isTp) ? 'phase-1' : null)}
           onViewDossier={(c) => setDossierCase(c)}
         />
       </div>
@@ -810,7 +826,13 @@ export default function AuditorDashboard({ view, onNavigate }) {
               Clear Selection
             </button>
             <button
-              onClick={() => onNavigate && onNavigate('phase-1')}
+              onClick={() => {
+                if (!isJoint && isTp) {
+                  onNavigate && onNavigate('phase-1');
+                } else if (activeCase) {
+                  handleExecuteCase(activeCase, null);
+                }
+              }}
               className="px-4 py-2 bg-white hover:bg-blue-50 text-blue-700 rounded-lg text-xs font-bold transition-all shadow-md inline-flex items-center gap-1.5"
             >
               <PlayCircle size={15} />
@@ -898,7 +920,7 @@ export default function AuditorDashboard({ view, onNavigate }) {
                   <ActiveWorkItem
                     key={caseItem.id || caseItem.caseId}
                     caseItem={caseItem}
-                    onExecute={(c) => handleExecuteCase(c, 'phase-1')}
+                    onExecute={(c) => handleExecuteCase(c, (!isJoint && isTp) ? 'phase-1' : null)}
                   />
                 ))}
                 {activeCases.length > 5 && (

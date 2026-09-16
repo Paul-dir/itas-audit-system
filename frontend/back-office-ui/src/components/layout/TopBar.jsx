@@ -9,7 +9,7 @@ const QUICK_SWITCH_USERS = [
   // Federal LTO-1 Joint Audit Roster
   { username: 'fed.ja.chair', name: 'Dr. Solomon Desta', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
   { username: 'fed.ja.member', name: 'Eleni Tesfaye', role: 'Joint Committee Member', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.tl', name: 'Addis Zewde', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'fed.ja.tl', name: 'Abebe Haile', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
   { username: 'fed.ja.auditor1', name: 'Fikremariam Tilahun', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
   { username: 'fed.ja.auditor2', name: 'Saron Assefa', role: 'Joint Auditor (Cross-Border)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
   { username: 'fed.ja.auditor3', name: 'Bikila Worku', role: 'Joint Auditor (VAT/Sales)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },

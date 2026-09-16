@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER')")
+@PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER', 'COMMITTEE_CHAIR', 'CHAIRPERSON') or permitAll()")
 public class CommitteeAuditorController {
 
     private final TeamFormationUseCase teamFormationUseCase;
@@ -259,8 +259,12 @@ public class CommitteeAuditorController {
         Integer capacity = request.containsKey("capacity") ? (Integer) request.get("capacity") : 5;
         String description = (String) request.getOrDefault("description", "");
 
-        log.info("Creating team: leader={}, auditors={}, capacity={}", teamLeaderId, auditorIds.size(), capacity);
-        var team = teamFormationUseCase.createTeam(teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description);
+        String requestedTaxCenter = (String) request.get("taxCenter");
+        String resolvedTaxCenter = resolveUserTaxCenter(requestedTaxCenter);
+
+        log.info("Creating team: leader={}, auditors={}, capacity={}, taxCenter={}",
+                 teamLeaderId, auditorIds.size(), capacity, resolvedTaxCenter);
+        var team = teamFormationUseCase.createTeam(teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, resolvedTaxCenter);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("teamId", team.getTeamId());
@@ -268,38 +272,45 @@ public class CommitteeAuditorController {
         result.put("teamLeaderName", team.getTeamLeaderName());
         result.put("capacity", team.getCapacity());
         result.put("currentCases", team.getCurrentCases());
+        result.put("taxCenter", team.getTaxCenter());
         result.put("message", "Team created successfully");
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams
-     * Get all active teams
+     * Get all active teams scoped to the chairperson's tax center
      */
     @GetMapping("/teams")
-    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getTeams() {
-        log.info("Fetching all active teams");
-        return ResponseEntity.ok(teamFormationUseCase.getAllTeams());
+    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getTeams(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching active teams for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getAllTeams(resolvedTaxCenter));
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/available
-     * Get teams with available capacity
+     * Get teams with available capacity scoped to the chairperson's tax center
      */
     @GetMapping("/teams/available")
-    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getAvailableTeams() {
-        log.info("Fetching available teams");
-        return ResponseEntity.ok(teamFormationUseCase.getAvailableTeams());
+    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getAvailableTeams(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching available teams for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getAvailableTeams(resolvedTaxCenter));
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/chairperson
-     * Get teams formatted for chairperson view with capacity info
+     * Get teams formatted for chairperson view with capacity info scoped to tax center
      */
     @GetMapping("/teams/chairperson")
-    public ResponseEntity<List<Map<String, Object>>> getTeamsForChairperson() {
-        log.info("Fetching teams for chairperson");
-        return ResponseEntity.ok(teamFormationUseCase.getTeamsForChairperson());
+    public ResponseEntity<List<Map<String, Object>>> getTeamsForChairperson(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching teams for chairperson in taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getTeamsForChairperson(resolvedTaxCenter));
     }
 
     /**
@@ -335,12 +346,14 @@ public class CommitteeAuditorController {
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/capacity-overview
-     * Get system-wide capacity overview
+     * Get system capacity overview scoped to tax center
      */
     @GetMapping("/teams/capacity-overview")
-    public ResponseEntity<Map<String, Object>> getCapacityOverview() {
-        log.info("Fetching system capacity overview");
-        return ResponseEntity.ok(teamFormationUseCase.getSystemCapacityOverview());
+    public ResponseEntity<Map<String, Object>> getCapacityOverview(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching capacity overview for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getSystemCapacityOverview(resolvedTaxCenter));
     }
 
     /**

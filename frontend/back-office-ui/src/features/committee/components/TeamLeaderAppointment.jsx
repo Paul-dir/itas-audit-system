@@ -94,8 +94,14 @@ export default function TeamLeaderAppointment({ open, onClose, caseData }) {
     return 'bg-green-100 dark:bg-green-900/30';
   };
 
+  const isAlreadyAssigned = Boolean(caseData?.teamLeadId || caseData?.teamId);
+
   const handleConfirm = async () => {
     if (!selectedTeam || !caseData) return;
+    if (isAlreadyAssigned) {
+      setError('A team is already assigned to this case. Re-assignment is not permitted.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -186,6 +192,12 @@ export default function TeamLeaderAppointment({ open, onClose, caseData }) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
+          {isAlreadyAssigned && (
+            <div className="mx-6 mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>A team has already been assigned to this case. Re-assignment is not permitted.</span>
+            </div>
+          )}
           {confirmed ? (
             /* Confirmation Success */
             <div className="flex flex-col items-center justify-center py-16 px-6">
@@ -223,61 +235,100 @@ export default function TeamLeaderAppointment({ open, onClose, caseData }) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredTeams.map((team) => (
-                    <button
-                      key={team.teamId}
-                      onClick={() => !team.atCapacity && setSelectedTeam(team)}
-                      disabled={team.atCapacity}
-                      className={`w-full text-left px-4 py-4 rounded-lg border transition-all ${
-                        team.atCapacity
-                          ? 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/30 opacity-60 cursor-not-allowed'
-                          : 'border-gray-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-800/50 flex items-center justify-center flex-shrink-0">
-                          <Users size={18} className="text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{team.teamLeaderName}</p>
-                            {team.atCapacity && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 font-bold">FULL</span>
+                  {filteredTeams.map((team, idx) => {
+                    const auditors = parseStringOrArray(team.auditorNames);
+                    return (
+                      <button
+                        key={team.teamId}
+                        onClick={() => !team.atCapacity && setSelectedTeam(team)}
+                        disabled={team.atCapacity}
+                        className={`w-full text-left p-4 rounded-xl border transition-all ${
+                          team.atCapacity
+                            ? 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/30 opacity-60 cursor-not-allowed'
+                            : 'border-gray-200 dark:border-slate-600 hover:border-purple-500 hover:shadow-md hover:bg-purple-50/50 dark:hover:bg-purple-900/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-800/50 text-purple-700 dark:text-purple-300 font-bold text-sm flex items-center justify-center flex-shrink-0 border border-purple-200 dark:border-purple-700">
+                              T{idx + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-bold">
+                                  Team {idx + 1}
+                                </span>
+                                <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                  {team.teamLeaderName}
+                                </p>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
+                                  Leader
+                                </span>
+                                {team.atCapacity && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 font-bold">FULL</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{team.description || 'Joint Audit Team'}</p>
+                              
+                              {/* Auditors preview */}
+                              {auditors.length > 0 && (
+                                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                    Auditors ({auditors.length}):
+                                  </span>
+                                  {auditors.map((aud, aIdx) => (
+                                    <span
+                                      key={aIdx}
+                                      className="text-[10px] px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium"
+                                    >
+                                      {aud}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            {/* Capacity Gauge */}
+                            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${getCapacityBg(team)} ${getCapacityColor(team)}`}>
+                              <Gauge size={12} />
+                              {team.currentCases}/{team.capacity} cases
+                            </div>
+                            {/* Capacity Bar */}
+                            <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  team.atCapacity ? 'bg-red-500' :
+                                  team.currentCases >= team.capacity * 0.8 ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${Math.min(100, (team.currentCases / team.capacity) * 100)}%` }}
+                              />
+                            </div>
+                            {!team.atCapacity && (
+                              <div className="text-xs text-purple-600 dark:text-purple-400 font-semibold flex items-center gap-1 mt-1">
+                                Select Team <ChevronRight size={14} />
+                              </div>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{team.description || 'Audit Team'}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                            {parseStringOrArray(team.auditorNames).length || 0} auditor(s) in team
-                          </p>
                         </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          {/* Capacity Gauge */}
-                          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getCapacityBg(team)} ${getCapacityColor(team)}`}>
-                            <Gauge size={12} />
-                            {team.currentCases}/{team.capacity} cases
-                          </div>
-                          {/* Capacity Bar */}
-                          <div className="w-20 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                team.atCapacity ? 'bg-red-500' :
-                                team.currentCases >= team.capacity * 0.8 ? 'bg-amber-500' : 'bg-green-500'
-                              }`}
-                              style={{ width: `${(team.currentCases / team.capacity) * 100}%` }}
-                            />
-                          </div>
-                          {!team.atCapacity && (
-                            <ChevronRight size={16} className="text-gray-400 group-hover:text-purple-500 transition-colors" />
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                   {filteredTeams.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                      <Users size={32} className="mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No teams found</p>
-                      <p className="text-xs text-gray-400 mt-1">Committee members must form teams first via Team Formation.</p>
+                    <div className="text-center py-10 px-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                      <AlertCircle size={40} className="mx-auto mb-3 text-amber-600 dark:text-amber-400" />
+                      <h4 className="text-base font-bold text-amber-900 dark:text-amber-200">No Formed Teams Available</h4>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-1 max-w-md mx-auto">
+                        A team must be formed first before a case can be assigned to a team leader.
+                      </p>
+                      <a
+                        href="/committee/team-formation"
+                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold transition-colors"
+                      >
+                        <Users size={16} />
+                        Go to Team Formation
+                      </a>
                     </div>
                   )}
                 </div>
@@ -377,7 +428,7 @@ export default function TeamLeaderAppointment({ open, onClose, caseData }) {
               {selectedTeam && !selectedTeam.atCapacity && (
                 <button
                   onClick={handleConfirm}
-                  disabled={loading}
+                  disabled={loading || isAlreadyAssigned}
                   className="px-5 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
                 >
                   {loading ? (

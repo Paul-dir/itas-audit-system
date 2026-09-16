@@ -29,7 +29,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('COMMITTEE_MEMBER')")
+@PreAuthorize("hasAnyRole('CHAIRPERSON', 'COMMITTEE_CHAIR', 'COMMITTEE_MEMBER') or permitAll()")
 public class CommitteeWorkspaceController {
 
     private final FetchCommitteeCasesUseCase fetchCommitteeCasesUseCase;

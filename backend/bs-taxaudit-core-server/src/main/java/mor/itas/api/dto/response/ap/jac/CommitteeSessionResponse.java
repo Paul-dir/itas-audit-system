@@ -28,4 +28,8 @@ public class CommitteeSessionResponse {
     private List<SessionAttendeeResponse> attendees;
     private OffsetDateTime actualStartTime;
     private OffsetDateTime actualEndTime;
+
+    public UUID getId() {
+        return sessionId;
+    }
 }

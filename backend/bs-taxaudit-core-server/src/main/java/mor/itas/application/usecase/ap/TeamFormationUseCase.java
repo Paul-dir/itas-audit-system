@@ -33,6 +33,7 @@ public class TeamFormationUseCase {
     private final AuditTeamRepository auditTeamRepository;
     private final AuditorRepository auditorRepository;
     private final UserJpaRepository userJpaRepository;
+    private final ApAuditCaseRepository apCaseRepository;
 
     public AuditorNominationResponse nominateAuditor(UUID caseId, NominateAuditorRequest request) {
         log.info("Nominating auditor={} for caseId={}, role={}", request.getAuditorId(), caseId, request.getRole());
@@ -312,7 +313,31 @@ public class TeamFormationUseCase {
     public AuditTeamEntity createTeam(UUID teamLeaderId, String teamLeaderName,
                                       List<UUID> auditorIds, List<String> auditorNames,
                                       Integer capacity, String description) {
-        log.info("Creating team: leader={}, auditors={}, capacity={}", teamLeaderId, auditorIds.size(), capacity);
+        return createTeam(teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, null);
+    }
+
+    /**
+     * Create an audit team scoped to a specific tax center.
+     */
+    public AuditTeamEntity createTeam(UUID teamLeaderId, String teamLeaderName,
+                                      List<UUID> auditorIds, List<String> auditorNames,
+                                      Integer capacity, String description, String taxCenter) {
+        log.info("Creating team: leader={}, auditors={}, capacity={}, taxCenter={}",
+                 teamLeaderId, auditorIds.size(), capacity, taxCenter);
+
+        // Resolve tax center if not provided
+        if (taxCenter == null || taxCenter.isBlank()) {
+            taxCenter = userJpaRepository.findById(teamLeaderId)
+                .map(UserEntity::getAssignedLocation)
+                .orElse(null);
+        }
+        if (taxCenter == null || taxCenter.isBlank()) {
+            if (!auditorIds.isEmpty()) {
+                taxCenter = auditorRepository.findById(auditorIds.get(0))
+                    .map(AuditorEntity::getTaxCenter)
+                    .orElse(null);
+            }
+        }
 
         // Convert lists to proper JSON arrays
         String auditorIdsJson = auditorIds.stream().map(UUID::toString)
@@ -328,6 +353,7 @@ public class TeamFormationUseCase {
             existingTeam.setAuditorNames(auditorNamesJson);
             if (capacity != null) existingTeam.setCapacity(capacity);
             if (description != null) existingTeam.setDescription(description);
+            if (taxCenter != null) existingTeam.setTaxCenter(taxCenter);
             return auditTeamRepository.save(existingTeam);
         }
 
@@ -342,9 +368,36 @@ public class TeamFormationUseCase {
             .currentCases(0)
             .active(true)
             .description(description)
+            .taxCenter(taxCenter)
             .build();
 
         return auditTeamRepository.save(team);
+    }
+
+    public String resolveTeamTaxCenter(AuditTeamEntity team) {
+        if (team.getTaxCenter() != null && !team.getTaxCenter().isBlank()) {
+            return team.getTaxCenter();
+        }
+        if (team.getTeamLeaderId() != null) {
+            String loc = userJpaRepository.findById(team.getTeamLeaderId())
+                .map(UserEntity::getAssignedLocation)
+                .orElse(null);
+            if (loc != null && !loc.isBlank()) {
+                team.setTaxCenter(loc);
+                auditTeamRepository.save(team);
+                return loc;
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesTaxCenter(AuditTeamEntity team, String taxCenter) {
+        if (taxCenter == null || taxCenter.isBlank()) return true;
+        String teamTc = resolveTeamTaxCenter(team);
+        if (teamTc == null || teamTc.isBlank()) return false;
+        String normalizedTeamTc = teamTc.trim().toLowerCase().replaceAll("[-_]", "");
+        String normalizedTc = taxCenter.trim().toLowerCase().replaceAll("[-_]", "");
+        return normalizedTeamTc.equals(normalizedTc);
     }
 
     /**
@@ -352,8 +405,21 @@ public class TeamFormationUseCase {
      */
     @Transactional(readOnly = true)
     public List<AuditTeamEntity> getAllTeams() {
-        return auditTeamRepository.findByActiveTrue();
+        return getAllTeams(null);
+    }
 
+    /**
+     * Get all active teams scoped to a tax center.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditTeamEntity> getAllTeams(String taxCenter) {
+        List<AuditTeamEntity> teams = auditTeamRepository.findByActiveTrue();
+        if (taxCenter == null || taxCenter.isBlank()) {
+            return teams;
+        }
+        return teams.stream()
+            .filter(t -> matchesTaxCenter(t, taxCenter))
+            .toList();
     }
 
     /**
@@ -361,7 +427,21 @@ public class TeamFormationUseCase {
      */
     @Transactional(readOnly = true)
     public List<AuditTeamEntity> getAvailableTeams() {
-        return auditTeamRepository.findAvailableTeams();
+        return getAvailableTeams(null);
+    }
+
+    /**
+     * Get teams with available capacity scoped to a tax center.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditTeamEntity> getAvailableTeams(String taxCenter) {
+        List<AuditTeamEntity> teams = auditTeamRepository.findAvailableTeams();
+        if (taxCenter == null || taxCenter.isBlank()) {
+            return teams;
+        }
+        return teams.stream()
+            .filter(t -> matchesTaxCenter(t, taxCenter))
+            .toList();
     }
 
     /**
@@ -378,10 +458,21 @@ public class TeamFormationUseCase {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getTeamsForChairperson() {
+        return getTeamsForChairperson(null);
+    }
+
+    /**
+     * Get team summary for chairperson display scoped to a tax center.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getTeamsForChairperson(String taxCenter) {
         List<AuditTeamEntity> teams = auditTeamRepository.findByActiveTrue();
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (AuditTeamEntity team : teams) {
+            if (taxCenter != null && !taxCenter.isBlank() && !matchesTaxCenter(team, taxCenter)) {
+                continue;
+            }
             Map<String, Object> teamInfo = new LinkedHashMap<>();
             teamInfo.put("teamId", team.getTeamId());
             teamInfo.put("teamLeaderId", team.getTeamLeaderId());
@@ -393,6 +484,7 @@ public class TeamFormationUseCase {
             teamInfo.put("availableSlots", team.getCapacity() - team.getCurrentCases());
             teamInfo.put("atCapacity", team.isAtCapacity());
             teamInfo.put("description", team.getDescription());
+            teamInfo.put("taxCenter", resolveTeamTaxCenter(team));
             result.add(teamInfo);
         }
 
@@ -415,6 +507,12 @@ public class TeamFormationUseCase {
 
         if (!team.getActive()) {
             throw new IllegalStateException("Team is not active: " + teamId);
+        }
+
+        // Validate that a team or team leader is not already assigned to this case
+        if (caseEntity.getTeamLeadId() != null || caseEntity.getTeamId() != null) {
+            throw new IllegalStateException(
+                "A team is already assigned to this case. Re-assignment is not permitted.");
         }
 
         if (team.isAtCapacity()) {
@@ -441,17 +539,38 @@ public class TeamFormationUseCase {
         team.incrementCases();
         auditTeamRepository.save(team);
 
-        // Update case with team assignment and move to PENDING_VIABILITY
-        // This allows the chairperson to proceed with viability determination
+        // Update case with team assignment and move to WAITING_ASSIGNMENT
         caseEntity.setTeamLeadId(team.getTeamLeaderId());
-        caseEntity.setChairpersonId(team.getTeamLeaderId());
-        caseEntity.setStatus("PENDING_VIABILITY");
+        caseEntity.setTeamId(team.getTeamId());
+        caseEntity.setStatus("WAITING_ASSIGNMENT");
         caseRepository.save(caseEntity);
+
+        // Synchronize with linked AP Audit Case
+        java.util.Optional<ApAuditCaseEntity> existingApCase = java.util.Optional.empty();
+        if (caseEntity.getOriginalCaseId() != null) {
+            existingApCase = apCaseRepository.findById(caseEntity.getOriginalCaseId());
+        }
+        if (existingApCase.isEmpty() && caseEntity.getCaseCode() != null) {
+            existingApCase = apCaseRepository.findByCaseNumber(caseEntity.getCaseCode());
+        }
+        if (existingApCase.isPresent()) {
+            ApAuditCaseEntity apCase = existingApCase.get();
+            apCase.setAssignedTeamLeaderId(team.getTeamLeaderId().toString());
+            apCase.setStatus("WAITING_ASSIGNMENT");
+            apCase.setAssignedAt(OffsetDateTime.now());
+            apCase.setUpdatedAt(OffsetDateTime.now());
+            apCaseRepository.save(apCase);
+            log.info("Synchronized AP case {} with team leader {} (status=WAITING_ASSIGNMENT)",
+                apCase.getCaseNumber(), team.getTeamLeaderId());
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("caseId", caseId);
         result.put("teamId", team.getTeamId());
+        result.put("teamName", team.getDescription() != null ? team.getDescription() : "Team " + team.getTeamLeaderName());
         result.put("teamLeaderId", team.getTeamLeaderId());
+        result.put("teamLeaderName", team.getTeamLeaderName());
+        result.put("auditorNames", team.getAuditorNames());
         result.put("teamLeaderName", team.getTeamLeaderName());
         result.put("teamCapacity", team.getCapacity());
         result.put("teamCurrentCases", team.getCurrentCases());
@@ -500,8 +619,16 @@ public class TeamFormationUseCase {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getSystemCapacityOverview() {
-        List<AuditTeamEntity> allTeams = auditTeamRepository.findByActiveTrue();
-        long atCapacityCount = auditTeamRepository.countTeamsAtCapacity();
+        return getSystemCapacityOverview(null);
+    }
+
+    /**
+     * Get capacity overview scoped to a tax center.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getSystemCapacityOverview(String taxCenter) {
+        List<AuditTeamEntity> allTeams = getAllTeams(taxCenter);
+        long atCapacityCount = allTeams.stream().filter(AuditTeamEntity::isAtCapacity).count();
 
         int totalCapacity = allTeams.stream().mapToInt(AuditTeamEntity::getCapacity).sum();
         int totalCurrentCases = allTeams.stream().mapToInt(AuditTeamEntity::getCurrentCases).sum();
@@ -514,6 +641,9 @@ public class TeamFormationUseCase {
         overview.put("availableSlots", totalCapacity - totalCurrentCases);
         overview.put("systemUtilizationPercent",
             totalCapacity > 0 ? (totalCurrentCases * 100 / totalCapacity) : 0);
+        if (taxCenter != null && !taxCenter.isBlank()) {
+            overview.put("taxCenter", taxCenter);
+        }
 
         return overview;
     }

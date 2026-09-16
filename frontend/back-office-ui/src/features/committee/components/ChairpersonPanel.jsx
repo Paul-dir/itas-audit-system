@@ -121,19 +121,21 @@ export default function ChairpersonPanel({ caseData, onActionComplete }) {
   }, [focusIndex, focusButton]);
 
   // ── Check if team lead is assigned ───────────────────────────────
-  const hasTeamLead = Boolean(caseData?.teamLeadId);
+  const hasTeamLead = Boolean(caseData?.teamLeadId || caseData?.teamId);
   const isTeamLeadPhase = caseData?.status === 'TEAM_ASSIGNED';
 
   // ── Panel actions configuration ───────────────────────────────────
   const actions = [
     {
       id: 'appoint-leader',
-      label: 'Appoint Joint Audit Team Leader',
-      description: 'Select and designate the official team leader for this case.',
+      label: hasTeamLead ? 'Team Leader Appointed' : 'Appoint Joint Audit Team Leader',
+      description: hasTeamLead
+        ? 'Team already assigned to this case. Re-assignment is not permitted.'
+        : 'Select and designate the official team leader for this case.',
       icon: Users,
-      onClick: openTeamLeader,
+      onClick: hasTeamLead ? undefined : openTeamLeader,
       variant: 'default',
-      disabled: !isTeamLeadPhase && hasTeamLead,
+      disabled: hasTeamLead,
     },
     {
       id: 'viability',

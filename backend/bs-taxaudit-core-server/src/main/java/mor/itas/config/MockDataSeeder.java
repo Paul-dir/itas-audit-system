@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 @Component
 @Profile("mock")
@@ -27,15 +29,16 @@ public class MockDataSeeder implements CommandLineRunner {
         int count = 0;
         for (Map<String, Object> mockUser : mockUsers) {
             String username = (String) mockUser.get("username");
+            String fullName = (String) mockUser.get("fullName");
             
-            if (userRepository.findByUsername(username).isEmpty()) {
+            Optional<User> existing = userRepository.findByUsername(username);
+            if (existing.isEmpty() || !Objects.equals(fullName, existing.get().getFullName())) {
                 
                 String userType = (String) mockUser.get("userType"); // TEAM_LEADER, AUDITOR, etc.
                 String auditType = (String) mockUser.get("auditType");
                 String assignedLevel = (String) mockUser.get("assignedLevel");
                 String assignedLocation = (String) mockUser.get("assignedLocation");
                 String email = (String) mockUser.get("email");
-                String fullName = (String) mockUser.get("fullName");
                 String rawUserId = (String) mockUser.get("userId");
 
                 java.util.UUID userId = null;

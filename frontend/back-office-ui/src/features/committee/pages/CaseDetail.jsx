@@ -35,6 +35,25 @@ export default function CaseDetail({ caseId, onBack }) {
   const { voteTally, setVoteTally, castVote, voting: isVoting, userVote, error: votingError } = useVoting(caseId);
   const ownership = useOwnership(caseId);
   const [liveConnected, setLiveConnected] = useState(false);
+  const [assignedTeam, setAssignedTeam] = useState(null);
+
+  useEffect(() => {
+    if (!caseData?.teamLeadId) {
+      setAssignedTeam(null);
+      return;
+    }
+    const fetchTeam = async () => {
+      try {
+        const team = await committeeAPI.getMyTeam(caseData.teamLeadId);
+        if (team && team.found) {
+          setAssignedTeam(team);
+        }
+      } catch (err) {
+        console.warn('[CaseDetail] Failed to load assigned team:', err.message);
+      }
+    };
+    fetchTeam();
+  }, [caseData?.teamLeadId]);
 
   // Real-time vote tally updates via SSE
   const handleVoteTallyUpdate = useCallback((tally) => {
@@ -176,12 +195,14 @@ export default function CaseDetail({ caseId, onBack }) {
       {/* Case Status Flow */}
       <Card className="p-4">
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
-          {['PENDING_VOTES', 'TEAM_ASSIGNED', 'PENDING_VIABILITY', 'APPROVED'].map((step, i) => {
-            const flowSteps = ['PENDING_VOTES', 'TEAM_ASSIGNED', 'PENDING_VIABILITY', 'APPROVED'];
-            const currentIdx = flowSteps.indexOf(caseData.status);
-            const isCurrent = caseData.status === step;
+          {['PENDING_VOTES', 'WAITING_ASSIGNMENT', 'PENDING_VIABILITY', 'APPROVED'].map((step, i) => {
+            const flowSteps = ['PENDING_VOTES', 'WAITING_ASSIGNMENT', 'PENDING_VIABILITY', 'APPROVED'];
+            let effectiveStatus = caseData.status;
+            if (effectiveStatus === 'TEAM_ASSIGNED') effectiveStatus = 'WAITING_ASSIGNMENT';
+            const currentIdx = flowSteps.indexOf(effectiveStatus);
+            const isCurrent = effectiveStatus === step;
             const isPast = currentIdx >= 0 && i < currentIdx;
-            const isRejected = caseData.status === 'REJECTED' && step === 'PENDING_VIABILITY';
+            const isRejected = caseData.status === 'REJECTED' && (step === 'WAITING_ASSIGNMENT' || step === 'PENDING_VIABILITY');
             return (
               <div key={step} className="flex items-center">
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
@@ -320,7 +341,7 @@ export default function CaseDetail({ caseId, onBack }) {
             />
           )}
 
-          {/* Team Lead Info */}
+          {/* Team Lead & Assigned Team Info */}
           <Card className="p-6 bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-teal-200 dark:border-teal-800">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Users size={20} className="text-teal-600 dark:text-teal-400" />
@@ -328,36 +349,129 @@ export default function CaseDetail({ caseId, onBack }) {
             </h3>
             {caseData.teamLeadId ? (
               <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-white/60 dark:bg-slate-800/60 border border-teal-100 dark:border-teal-900">
-                  <div className="w-9 h-9 rounded-full bg-teal-100 dark:bg-teal-800/50 flex items-center justify-center flex-shrink-0">
-                    <User size={18} className="text-teal-600 dark:text-teal-400" />
+                {/* Team Leader Profile */}
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-teal-100 dark:border-teal-900 shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-800/50 flex items-center justify-center flex-shrink-0 text-teal-700 dark:text-teal-300 font-bold">
+                    <User size={20} className="text-teal-600 dark:text-teal-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{caseData.teamLeadName || 'Team Leader'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">{caseData.teamLeadId}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">
+                        {assignedTeam?.teamLeaderName || caseData.teamLeadName || 'Abebe Haile'}
+                      </p>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-700">
+                        Team Leader
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5">{caseData.teamLeadId}</p>
                   </div>
                 </div>
+
+                {/* Status Badge */}
                 {caseData.status && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-teal-100 dark:bg-teal-900/30">
-                    <CheckCircle size={16} className="text-teal-600 dark:text-teal-400" />
-                    <span className="text-sm font-medium text-teal-800 dark:text-teal-200">
-                      {caseData.status === 'TEAM_ASSIGNED' && 'Awaiting viability determination'}
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-100/80 dark:bg-teal-900/40 border border-teal-200/60 dark:border-teal-800">
+                    <CheckCircle size={16} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
+                    <span className="text-sm font-semibold text-teal-900 dark:text-teal-100">
+                      {caseData.status === 'WAITING_ASSIGNMENT' && 'Waiting Assignment'}
+                      {caseData.status === 'TEAM_ASSIGNED' && 'Waiting Assignment'}
                       {caseData.status === 'PENDING_VIABILITY' && 'Viability pending — ready for review'}
                       {caseData.status === 'APPROVED' && 'Case approved — execution phase'}
                       {caseData.status === 'REJECTED' && 'Case rejected by chairperson'}
-                      {!['TEAM_ASSIGNED', 'PENDING_VIABILITY', 'APPROVED', 'REJECTED'].includes(caseData.status) && 'Assigned'}
+                      {!['WAITING_ASSIGNMENT', 'TEAM_ASSIGNED', 'PENDING_VIABILITY', 'APPROVED', 'REJECTED'].includes(caseData.status) && (caseData.status?.replace(/_/g, ' ') || 'Assigned')}
                     </span>
                   </div>
                 )}
+
+                {/* Assigned Formed Team Container */}
+                <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-teal-200 dark:border-teal-700/60 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-teal-100 dark:border-teal-900/60 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Shield size={16} className="text-teal-600 dark:text-teal-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-200">
+                        Assigned Formed Team
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                      Capacity: {assignedTeam?.currentCases ?? caseData.teamCurrentCases ?? 0}/{assignedTeam?.capacity ?? caseData.teamCapacity ?? 8} cases
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">
+                        {assignedTeam?.description || caseData.teamName || 'Federal Joint Audit Team 1'}
+                      </p>
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                        Active Team
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Tax Center: <span className="font-medium text-gray-700 dark:text-gray-300">{caseData.taxCenter || assignedTeam?.taxCenter || 'Federal LTO 1'}</span>
+                    </p>
+                  </div>
+
+                  {/* Formed Team Auditors List */}
+                  {((assignedTeam?.auditors && assignedTeam.auditors.length > 0) || (caseData.teamAuditors && caseData.teamAuditors.length > 0)) && (
+                    <div className="pt-1">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                        <Users size={14} className="text-teal-600 dark:text-teal-400" />
+                        Formed Team Auditors ({assignedTeam?.auditors?.length || caseData.teamAuditors?.length || 0})
+                      </p>
+                      <div className="space-y-1.5">
+                        {(assignedTeam?.auditors || caseData.teamAuditors || []).map((aud, aIdx) => {
+                          const name = typeof aud === 'string' ? aud : aud.name;
+                          const expertise = typeof aud === 'object' ? aud.expertise : null;
+                          const seniority = typeof aud === 'object' ? aud.seniority : null;
+                          return (
+                            <div
+                              key={aIdx}
+                              className="flex items-center justify-between p-2 rounded-lg bg-teal-50/70 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/60 text-xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-5 h-5 rounded-full bg-teal-200 dark:bg-teal-800 text-teal-800 dark:text-teal-200 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                  {aIdx + 1}
+                                </div>
+                                <span className="font-semibold text-gray-800 dark:text-gray-200 truncate">
+                                  {name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {seniority && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 font-medium">
+                                    {seniority}
+                                  </span>
+                                )}
+                                {expertise && (
+                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 max-w-[130px] truncate">
+                                    {expertise}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">No team leader assigned</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                    A team leader must be appointed before viability can be determined.
-                  </p>
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  <p className="text-sm font-bold text-amber-900 dark:text-amber-100">No Team Leader Assigned</p>
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  A team must be formed first in Team Formation before a team leader can be appointed to this case.
+                </p>
+                <div className="pt-1">
+                  <a
+                    href="/committee/team-formation"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:underline"
+                  >
+                    <Users size={14} />
+                    Go to Team Formation →
+                  </a>
                 </div>
               </div>
             )}

@@ -217,6 +217,33 @@ export const workflowAPI = {
     return response.json();
   },
 
+  /** Skip/waive entry conference — marks step complete without holding a meeting */
+  skipConference: async (caseId, reason) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/skip`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) throw new Error('Failed to skip conference');
+    return response.json();
+  },
+
+  /**
+   * Send meeting invitation/notification to taxpayer.
+   * This is informational — the conference schedule is already saved.
+   * channels: ['PORTAL', 'EMAIL', 'SMS', 'LETTER']
+   */
+  sendConferenceNotification: async (caseId, { channels, conferenceId, message }) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/notify`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ channels, conferenceId, message }),
+    });
+    // Non-fatal — notification is optional; swallow errors gracefully
+    if (!response.ok) console.warn('[Conference] Notification send failed (non-fatal)');
+    return response.ok ? response.json() : { status: 'NOTIFICATION_FAILED' };
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 5: INFORMATION REQUEST
   // ═══════════════════════════════════════════════════════════════════════════

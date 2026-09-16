@@ -216,9 +216,16 @@ function RoleRouter({ user, view, onNavigate }) {
     return <TaxpayerPortalDashboard />;
   }
 
-  // Global Governance Audit Trail (accessible across all roles/dashboards)
+  // Global Governance Audit Trail (accessible across all roles/dashboards except Joint Audit Committee)
   if (view === 'audit_trail' || view === 'audit-trail') {
-    return <AuditTrail />;
+    const isCommittee = ['committee', 'committee_member', 'committee_chair'].includes(role);
+    const isTp = (user?.auditType || '').toUpperCase().includes('TP') ||
+                 (user?.auditType || '').toUpperCase().includes('TRANSFER') ||
+                 (user?.username || '').toLowerCase().includes('tp') ||
+                 (user?.name || '').toLowerCase().includes('tp');
+    if (!isCommittee || isTp) {
+      return <AuditTrail />;
+    }
   }
 
   // Risk Engine page (accessible to tax center managers, directors, planning team)
@@ -259,9 +266,10 @@ function RoleRouter({ user, view, onNavigate }) {
     return <TeamLeaderDashboard view={view} onNavigate={onNavigate} />;
   }
   if (role === 'auditor') {
+    const activeView = (isJointAuditUser(user) && view && view.startsWith('phase-')) ? 'dashboard' : view;
     return (
       <WorkflowProvider>
-        <AuditorDashboard view={view} onNavigate={onNavigate} />
+        <AuditorDashboard view={activeView} onNavigate={onNavigate} />
       </WorkflowProvider>
     );
   }
@@ -284,8 +292,8 @@ function RoleRouter({ user, view, onNavigate }) {
         {view === 'research' && <JaResearchWorkspace />}
         {view === 'auditors' && (isChair ? <JaAuditorNomination /> : <JaCommitteeDashboard />)}
         {view === 'sessions' && <JaSessionManager />}
-        {view === 'audit-trail' && <JaAuditTrail />}
-        {(!['cases', 'research', 'auditors', 'sessions', 'audit-trail'].includes(view)) && (
+        {(view === 'audit-trail' || view === 'audit_trail') && <JaAuditTrail />}
+        {(!['cases', 'research', 'auditors', 'sessions', 'audit-trail', 'audit_trail'].includes(view)) && (
           <JaCommitteeDashboard />
         )}
       </CommitteeProvider>
@@ -309,6 +317,13 @@ export default function App() {
   useEffect(() => {
     setView('dashboard');
   }, [user?.id, user?.username, user?.role, user?.auditType]);
+
+  // For Joint Audit users, TP phases are not valid views
+  useEffect(() => {
+    if (isJointAuditUser(user) && view && view.startsWith('phase-')) {
+      setView('dashboard');
+    }
+  }, [user, view]);
 
   if (authLoading || !ready) {
     return (

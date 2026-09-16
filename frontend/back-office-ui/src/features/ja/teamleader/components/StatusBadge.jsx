@@ -12,6 +12,7 @@ export default function StatusBadge({ status, variant = 'status' }) {
       COMPLETED: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200',
       CLOSED: 'bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200',
       TEAM_ASSIGNED: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200',
+      WAITING_ASSIGNMENT: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
       PENDING_HANDOFF: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
       HANDED_OFF: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200',
     };
@@ -35,6 +36,7 @@ export default function StatusBadge({ status, variant = 'status' }) {
       COMPLETED: 'Completed',
       CLOSED: 'Closed',
       TEAM_ASSIGNED: 'Team Assigned',
+      WAITING_ASSIGNMENT: 'Waiting Assignment',
       PENDING_HANDOFF: 'Pending Handoff',
       HANDED_OFF: 'Handed Off',
     };

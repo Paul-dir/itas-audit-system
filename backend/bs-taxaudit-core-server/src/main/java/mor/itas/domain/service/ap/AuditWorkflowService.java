@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.*;
 
@@ -94,6 +95,8 @@ public class AuditWorkflowService {
         }
 
         // Validate case is in a handoff-eligible state
+        // WAITING_ASSIGNMENT is the status set by the committee when a team+team-leader has been
+        // assigned but the team leader has not yet accepted (handed off) the case.
         String currentStatus = auditCase.getStatus();
         if ("AUDITOR_ASSIGNED".equals(currentStatus)
                 || "IN_PROGRESS".equals(currentStatus) || "COMPLETED".equals(currentStatus)) {
@@ -102,9 +105,10 @@ public class AuditWorkflowService {
         }
         if (!"ASSIGNED".equals(currentStatus) && !"PENDING_ASSIGNMENT".equals(currentStatus)
                 && !"TEAM_ASSIGNED".equals(currentStatus)
+                && !"WAITING_ASSIGNMENT".equals(currentStatus)
                 && !ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(currentStatus)) {
             throw new IllegalStateException(
-                "Case must be in ASSIGNED, PENDING_ASSIGNMENT, TEAM_ASSIGNED or ASSIGNED_TO_TEAM_LEADER status for handoff. Current: " + currentStatus);
+                "Case must be in ASSIGNED, PENDING_ASSIGNMENT, TEAM_ASSIGNED, WAITING_ASSIGNMENT or ASSIGNED_TO_TEAM_LEADER status for handoff. Current: " + currentStatus);
         }
 
         // Record handoff
@@ -145,9 +149,10 @@ public class AuditWorkflowService {
             } else if (!isSameTeamLeader(teamLeaderId, auditCase.getAssignedTeamLeaderId())) {
                 log.warn("Case {} has assigned TL {} but import requested by {}", auditCase.getId(), auditCase.getAssignedTeamLeaderId(), teamLeaderId);
             }
-            if ("PENDING_ASSIGNMENT".equals(auditCase.getStatus()) || ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(auditCase.getStatus())) {
-            }
-            if ("PENDING_ASSIGNMENT".equals(auditCase.getStatus()) || "ASSIGNED_TO_COMMITTEE".equals(auditCase.getStatus())) {
+            if ("PENDING_ASSIGNMENT".equals(auditCase.getStatus()) 
+                    || ApAuditCaseEntity.STATUS_ASSIGNED_TO_TEAM_LEADER.equals(auditCase.getStatus())
+                    || "ASSIGNED_TO_COMMITTEE".equals(auditCase.getStatus())
+                    || "WAITING_ASSIGNMENT".equals(auditCase.getStatus())) {
                 auditCase.setStatus("ASSIGNED");
             }
             auditCase.setUpdatedAt(OffsetDateTime.now());
@@ -189,10 +194,7 @@ public class AuditWorkflowService {
         var committeeCase = committeeCaseRepository.findById(committeeCaseId)
             .orElseThrow(() -> new IllegalArgumentException("Case not found: " + committeeCaseId));
 
-        if (committeeCase.getTeamLeadId() != null && !isSameTeamLeader(teamLeaderId, committeeCase.getTeamLeadId().toString())) {
-
         if (committeeCase.getTeamLeadId() != null && !isTeamLeaderMatch(teamLeaderId, committeeCase.getTeamLeadId().toString())) {
-
             throw new IllegalStateException("Case is assigned to a different team leader");
         }
 
@@ -279,6 +281,8 @@ public class AuditWorkflowService {
 
         // ── Handoff-first enforcement ──────────────────────────────────
         // A team leader MUST hand off the case before assigning an auditor.
+        // Exception: WAITING_ASSIGNMENT cases from the JA committee flow already have
+        // a designated team+leader and can be assigned directly (implicit handoff).
         String currentStatus = auditCase.getStatus();
         if ("ASSIGNED".equals(currentStatus) || "PENDING_ASSIGNMENT".equals(currentStatus)) {
             throw new IllegalStateException(
@@ -286,10 +290,11 @@ public class AuditWorkflowService {
                 "Current status: " + currentStatus);
         }
         if (!"HANDED_OFF".equals(currentStatus) && !"AUDITOR_ASSIGNED".equals(currentStatus)
-                && !"IN_PROGRESS".equals(currentStatus) && !"COMPLETED".equals(currentStatus)) {
+                && !"IN_PROGRESS".equals(currentStatus) && !"COMPLETED".equals(currentStatus)
+                && !"WAITING_ASSIGNMENT".equals(currentStatus)) {
             throw new IllegalStateException(
                 "Cannot assign auditor in status: " + currentStatus + ". " +
-                "Case must be in HANDED_OFF status.");
+                "Case must be in HANDED_OFF or WAITING_ASSIGNMENT status.");
         }
         // Prevent duplicate assignment if already assigned
         if ("AUDITOR_ASSIGNED".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus)
@@ -411,6 +416,22 @@ public class AuditWorkflowService {
         conf.setStatus("APPROVED");
         conf.setApprovedBy(approvedBy);
         conf.setApprovedAt(OffsetDateTime.now());
+        return conferenceRepository.save(conf);
+    }
+
+    public ConferenceRecordEntity skipConference(UUID caseId, String reason, String skippedBy) {
+        ConferenceRecordEntity conf = ConferenceRecordEntity.builder()
+                .caseId(caseId)
+                .scheduledBy(skippedBy)
+                .agenda("N/A — Conference waived")
+                .location("N/A")
+                .status("SKIPPED")
+                .minutes(reason != null ? reason : "Waived — not applicable for this case")
+                .minutesRecordedBy(skippedBy)
+                .approvedBy(skippedBy)
+                .approvedAt(OffsetDateTime.now())
+                .build();
+        log.info("Conference skipped for case {} by {} — reason: {}", caseId, skippedBy, reason);
         return conferenceRepository.save(conf);
     }
 
@@ -556,17 +577,43 @@ public class AuditWorkflowService {
     // STEP 9: FINDINGS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    public AuditFindingEntity createFinding(UUID caseId, Map<String, String> data, String createdBy) {
+    public AuditFindingEntity createFinding(UUID caseId, Map<String, Object> data, String createdBy) {
+        BigDecimal principal = parseAmount(data.get("principalAmount"));
+        if (principal.compareTo(BigDecimal.ZERO) == 0 && data.containsKey("amount")) {
+            principal = parseAmount(data.get("amount"));
+        }
+        BigDecimal penalty = parseAmount(data.get("penaltyAmount"));
+        BigDecimal interest = parseAmount(data.get("interestAmount"));
+        BigDecimal total = principal.add(penalty).add(interest);
+        if (data.containsKey("finalAmount") && parseAmount(data.get("finalAmount")).compareTo(BigDecimal.ZERO) > 0) {
+            total = parseAmount(data.get("finalAmount"));
+        }
+
         AuditFindingEntity finding = AuditFindingEntity.builder()
                 .caseId(caseId)
-                .title(data.getOrDefault("title", ""))
-                .description(data.getOrDefault("description", ""))
-                .category(data.getOrDefault("category", ""))
-                .severity(data.getOrDefault("severity", "MEDIUM"))
+                .title(data.get("title") != null ? data.get("title").toString() : "Audit Finding")
+                .description(data.get("description") != null ? data.get("description").toString() : "")
+                .category(data.get("category") != null ? data.get("category").toString() : "VAT")
+                .severity(data.get("severity") != null ? data.get("severity").toString() : "MEDIUM")
+                .principalAmount(principal)
+                .penaltyAmount(penalty)
+                .interestAmount(interest)
+                .finalAmount(total)
                 .createdBy(createdBy)
                 .status("DRAFT")
                 .build();
         return findingRepository.save(finding);
+    }
+
+    private BigDecimal parseAmount(Object val) {
+        if (val == null) return BigDecimal.ZERO;
+        String s = val.toString().trim().replace(",", "");
+        if (s.isEmpty()) return BigDecimal.ZERO;
+        try {
+            return new BigDecimal(s);
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     public void submitFindings(UUID caseId) {
@@ -781,11 +828,23 @@ public class AuditWorkflowService {
             workflow.put("findings", findings.stream().map(f -> {
                 Map<String, Object> fm = new LinkedHashMap<>();
                 fm.put("id", f.getId() != null ? f.getId().toString() : null);
+                fm.put("title", f.getTitle());
                 fm.put("description", f.getDescription());
+                fm.put("category", f.getCategory());
+                fm.put("taxType", f.getCategory());
                 fm.put("severity", f.getSeverity());
                 fm.put("status", f.getStatus());
+                fm.put("principalAmount", f.getPrincipalAmount());
+                fm.put("penaltyAmount", f.getPenaltyAmount());
+                fm.put("interestAmount", f.getInterestAmount());
+                fm.put("finalAmount", f.getFinalAmount());
+                fm.put("amount", f.getFinalAmount());
+                fm.put("financialImpact", f.getFinalAmount());
                 fm.put("responseType", f.getResponseType());
+                fm.put("taxpayerExplanation", f.getTaxpayerExplanation());
+                fm.put("taxpayerEvidence", f.getTaxpayerEvidence());
                 fm.put("conclusion", f.getConclusion());
+                fm.put("createdAt", f.getCreatedAt() != null ? f.getCreatedAt().toString() : null);
                 return fm;
             }).collect(java.util.stream.Collectors.toList()));
         }

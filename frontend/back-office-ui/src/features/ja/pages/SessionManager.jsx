@@ -60,19 +60,27 @@ export default function SessionManager() {
     }
     try {
       setFormError(null);
-      await createSession(form);
+      await createSession({
+        sessionName: form.sessionName.trim(),
+        agenda: form.agenda.trim() || 'General committee review and deliberation session',
+        scheduledDate: form.scheduledDate,
+        caseId: form.caseId.trim() || undefined,
+      });
       setShowCreateModal(false);
       setForm({ sessionName: '', agenda: '', scheduledDate: '', caseId: '' });
-    } catch { /* handled by hook */ }
+    } catch (err) {
+      setFormError(err.message || 'Failed to create session');
+    }
   };
 
   const openDetail = async (session) => {
+    const sId = session.id || session.sessionId;
     setSelectedSession(session);
-    setMinutes(session.minutes || session.decisions || '');
+    setMinutes(session.minutes || session.decisions || session.sessionMinutes || '');
     setMinutesSaved(false);
     setShowDetailModal(true);
     try {
-      const attendees = await getAttendees(session.id);
+      const attendees = await getAttendees(sId);
       setSessionAttendees(attendees);
     } catch {
       setSessionAttendees([]);
@@ -80,13 +88,14 @@ export default function SessionManager() {
   };
 
   const handleAddAttendees = async () => {
-    if (!attendeeIds.trim() || !selectedSession) return;
+    const sId = selectedSession?.id || selectedSession?.sessionId;
+    if (!attendeeIds.trim() || !sId) return;
     const ids = attendeeIds.split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length === 0) return;
     try {
-      await addAttendees(selectedSession.id, ids);
+      await addAttendees(sId, ids);
       setAttendeeIds('');
-      const updated = await getAttendees(selectedSession.id);
+      const updated = await getAttendees(sId);
       setSessionAttendees(updated);
     } catch { /* handled by hook */ }
   };
@@ -288,7 +297,9 @@ export default function SessionManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Agenda</label>
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                  Agenda <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                </label>
                 <textarea
                   value={form.agenda}
                   onChange={(e) => setForm(f => ({ ...f, agenda: e.target.value }))}

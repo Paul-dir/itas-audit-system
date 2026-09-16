@@ -23,3 +23,6 @@ dist/
 
 # Presentation documents
 **/Presentation/**
+
+# AI assistant configs
+.claude/

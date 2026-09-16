@@ -113,7 +113,7 @@ public class JointCaseRoutingBridgeService {
                 .businessType("Industrial Manufacturing & Multimodal Cross-Border Importation")
                 .riskScore(apCase.getRiskScore() != null ? apCase.getRiskScore() : 89)
                 .riskPriority(apCase.getRiskPriority() != null ? apCase.getRiskPriority() : "CRITICAL")
-                .status("PENDING_VIABILITY")
+                .status("TEAM_ASSIGNED")
                 .createdDate(OffsetDateTime.now())
                 .committeeDeadline(OffsetDateTime.now().plusDays(14))
                 .extensionCount(0)
