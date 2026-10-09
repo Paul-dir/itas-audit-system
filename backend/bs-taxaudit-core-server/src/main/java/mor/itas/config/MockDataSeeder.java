@@ -30,16 +30,16 @@ public class MockDataSeeder implements CommandLineRunner {
         for (Map<String, Object> mockUser : mockUsers) {
             String username = (String) mockUser.get("username");
             String fullName = (String) mockUser.get("fullName");
+            String email = (String) mockUser.get("email");
+            String rawUserId = (String) mockUser.get("userId");
             
             Optional<User> existing = userRepository.findByUsername(username);
-            String email = (String) mockUser.get("email");
             if (existing.isEmpty() || !Objects.equals(fullName, existing.get().getFullName()) || !Objects.equals(email, existing.get().getEmail())) {
                 
                 String userType = (String) mockUser.get("userType"); // TEAM_LEADER, AUDITOR, etc.
                 String auditType = (String) mockUser.get("auditType");
                 String assignedLevel = (String) mockUser.get("assignedLevel");
                 String assignedLocation = (String) mockUser.get("assignedLocation");
-                String rawUserId = (String) mockUser.get("userId");
 
                 java.util.UUID userId = null;
                 if (rawUserId != null) {
@@ -57,6 +57,21 @@ public class MockDataSeeder implements CommandLineRunner {
                 
                 userRepository.save(domainUser);
                 count++;
+            }
+
+            if (userRepository instanceof mor.itas.persistence.repository.ap.MockUserRepository mur) {
+                String legacyUsername = (String) mockUser.get("legacyUsername");
+                String legacyEmail = (String) mockUser.get("legacyEmail");
+                java.util.UUID uId = null;
+                if (rawUserId != null) {
+                    try { uId = java.util.UUID.fromString(rawUserId); } catch (Exception ignored) {}
+                }
+                if (uId == null) {
+                    uId = java.util.UUID.nameUUIDFromBytes(("itas-user:" + (legacyUsername != null ? legacyUsername : username)).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                if (legacyUsername != null) mur.registerAlias(legacyUsername, uId);
+                if (rawUserId != null) mur.registerAlias(rawUserId, uId);
+                if (legacyEmail != null) mur.registerAlias(legacyEmail, uId);
             }
         }
         

@@ -11,6 +11,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,10 +31,14 @@ public class UserDataSeeder implements CommandLineRunner {
 
     private final UserJpaRepository userJpaRepo;
     private final AuditorRepository auditorRepo;
+    private final Set<String> assignedEmails = new HashSet<>();
+    private final Set<String> assignedUsernames = new HashSet<>();
 
     @Override
     public void run(String... args) throws Exception {
         log.info("[UserDataSeeder] Initializing clean state for Joint Audit users across 18 tax centers...");
+        assignedEmails.clear();
+        assignedUsernames.clear();
         
         auditorRepo.deleteAll();
         userJpaRepo.deleteAll();
@@ -459,8 +465,38 @@ public class UserDataSeeder implements CommandLineRunner {
                  userJpaRepo.count(), auditorRepo.count());
     }
 
-    private void seedUser(String id, String username, String email, String fullName,
+    private void seedUser(String id, String rawUsername, String rawEmail, String fullName,
                           String userType, String auditType, String level, String location) {
+        String username = mor.itas.engineadapter.usermanagement.MockUserManagementAdapter.toPrefixedUsername(rawUsername, userType);
+        String rolePrefix = mor.itas.engineadapter.usermanagement.MockUserManagementAdapter.getRolePrefix(userType);
+        String cleanName = fullName.replace("Dr. ", "").replace("Dr.", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
+        String[] parts = cleanName.split("\\s+");
+        String namePart;
+        if (cleanName.toLowerCase().startsWith("manager") || cleanName.toLowerCase().startsWith("joint") || parts.length < 2) {
+            namePart = username.toLowerCase().replace("-", ".");
+        } else {
+            namePart = (parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase()).replaceAll("[^a-z0-9.]", "");
+        }
+        String candidate = rolePrefix + "." + namePart;
+        String email = candidate + "@mor.gov.et";
+        if (assignedEmails.contains(email)) {
+            int seq = 2;
+            while (assignedEmails.contains(candidate + seq + "@mor.gov.et")) {
+                seq++;
+            }
+            email = candidate + seq + "@mor.gov.et";
+        }
+        assignedEmails.add(email);
+
+        if (assignedUsernames.contains(username)) {
+            int seq = 2;
+            while (assignedUsernames.contains(username + "-" + seq)) {
+                seq++;
+            }
+            username = username + "-" + seq;
+        }
+        assignedUsernames.add(username);
+
         UserEntity entity = UserEntity.builder()
                 .userId(UUID.fromString(id))
                 .username(username)
@@ -468,7 +504,7 @@ public class UserDataSeeder implements CommandLineRunner {
                 .fullName(fullName)
                 .userType(userType)
                 .auditType(auditType)
-                .assignedLevel(level)
+                .assignedLevel(level != null ? level : "TAX_CENTER")
                 .assignedLocation(location)
                 .status("ACTIVE")
                 .createdAt(OffsetDateTime.now())
@@ -478,7 +514,10 @@ public class UserDataSeeder implements CommandLineRunner {
     }
 
     private void seedAuditor(String id, String firstName, String lastName, String expertise,
-                             String seniority, int yearsExp, String email, String phone, String taxCenter) {
+                             String seniority, int yearsExp, String rawEmail, String phone, String taxCenter) {
+        String cleanFirst = firstName.replaceAll("[^a-zA-Z]", "").toLowerCase();
+        String cleanLast = lastName.replaceAll("[^a-zA-Z]", "").toLowerCase();
+        String email = "auditor." + cleanFirst + "." + cleanLast + "@mor.gov.et";
         AuditorEntity auditor = AuditorEntity.builder()
                 .auditorId(UUID.fromString(id))
                 .firstName(firstName)

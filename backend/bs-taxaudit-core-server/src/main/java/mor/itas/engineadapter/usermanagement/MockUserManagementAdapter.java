@@ -4,6 +4,7 @@ import mor.itas.application.port.outboundport.usermanagement.UserManagementPort;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -30,7 +31,9 @@ import java.util.stream.Collectors;
 public class MockUserManagementAdapter implements UserManagementPort {
 
     private static final Map<String, Map<String, Object>> USERS = new LinkedHashMap<>();
+    private static final Map<String, Map<String, Object>> USER_LOOKUP = new ConcurrentHashMap<>();
     private static final Set<String> ASSIGNED_EMAILS = new HashSet<>();
+    private static final Set<String> ASSIGNED_USERNAMES = new HashSet<>();
 
     // Ethiopian names pool
     private static final String[] FIRST_NAMES = {
@@ -367,8 +370,71 @@ public class MockUserManagementAdapter implements UserManagementPort {
             || s.matches(".*\\b(joint|desk|tp|comp|issue)\\s+aud-\\d+.*");
     }
 
+    public static String getRolePrefix(String userType) {
+        if (userType == null) return "officer";
+        switch (userType.toUpperCase()) {
+            case "DIRECTOR": return "director";
+            case "PLANNING_TEAM": return "planning";
+            case "SENIOR_MANAGEMENT": return "seniormanagement";
+            case "REGIONAL_DIRECTOR": return "regionaldirector";
+            case "TAX_CENTER_MANAGER": return "taxcentermanager";
+            case "COMMITTEE_CHAIR": return "committeechair";
+            case "COMMITTEE_MEMBER": return "committeemember";
+            case "TEAM_LEADER": return "teamleader";
+            case "AUDITOR": return "auditor";
+            case "AUDIT_REQUESTER": return "auditrequester";
+            default: return userType.toLowerCase().replace("_", "");
+        }
+    }
+
+    public static String toPrefixedUsername(String rawUsername, String userType) {
+        if (rawUsername == null || rawUsername.isBlank()) return "user";
+        String u = rawUsername.trim();
+        String prefix = getRolePrefix(userType);
+
+        if (u.startsWith(prefix + "-")) return u;
+        if (u.startsWith("u-pt-")) return u.replace("u-pt-", "planning-");
+        if (u.startsWith("u-ad-")) return u.replace("u-ad-", "director-");
+        if (u.startsWith("u-sm-")) return u.replace("u-sm-", "seniormanagement-");
+        if (u.startsWith("u-rd-")) return u.replace("u-rd-", "regionaldirector-");
+        if (u.startsWith("u-tcm-")) return u.replace("u-tcm-", "taxcentermanager-");
+        if (u.startsWith("u-tl-")) return u.replace("u-tl-", "teamleader-");
+        if (u.startsWith("u-aud-")) return u.replace("u-aud-", "auditor-");
+        if (u.startsWith("u-req-")) return u.replace("u-req-", "auditrequester-");
+        if (u.startsWith("u-com-")) {
+            return u.replace("u-com-", "committee-");
+        }
+
+        if ("fed.ja.chair".equals(u)) return "committeechair-federal-lto1-ja";
+        if ("fed.ja.member".equals(u)) return "committeemember-federal-lto1-ja";
+        if ("fed.ja.tl".equals(u)) return "teamleader-federal-lto1-ja-1";
+        if ("fed.ja.tl2".equals(u)) return "teamleader-federal-lto1-ja-2";
+        if (u.startsWith("fed.ja.auditor")) return u.replace("fed.ja.auditor", "auditor-federal-lto1-ja-");
+
+        if ("fed2.ja.chair".equals(u)) return "committeechair-federal-lto2-ja";
+        if ("fed2.ja.member".equals(u)) return "committeemember-federal-lto2-ja";
+        if ("fed2.ja.tl".equals(u)) return "teamleader-federal-lto2-ja-1";
+        if ("fed2.ja.tl2".equals(u)) return "teamleader-federal-lto2-ja-2";
+        if (u.startsWith("fed2.ja.auditor")) return u.replace("fed2.ja.auditor", "auditor-federal-lto2-ja-");
+
+        if (u.matches("^[a-z]{2}\\d+\\.chair$")) return "committeechair-" + u.replace(".chair", "");
+        if (u.matches("^[a-z]{2}\\d+\\.member$")) return "committeemember-" + u.replace(".member", "");
+        if (u.matches("^[a-z]{2}\\d+\\.tl\\d*$")) {
+            String base = u.replaceAll("\\.tl.*", "");
+            String num = u.contains(".tl2") ? "2" : "1";
+            return "teamleader-" + base + "-" + num;
+        }
+        if (u.matches("^[a-z]{2}\\d+\\.auditor\\d+$")) {
+            String base = u.replaceAll("\\.auditor.*", "");
+            String num = u.replaceAll(".*\\.auditor", "");
+            return "auditor-" + base + "-" + num;
+        }
+
+        return prefix + "-" + u;
+    }
+
     private static void addUser(String userId, String username, String email, String title,
-                               String userType, String auditType, String level, String location) {
+                                String userType, String auditType, String level, String location) {
 
         boolean isGenericRole = isGenericRoleTitle(title);
 
@@ -400,25 +466,23 @@ public class MockUserManagementAdapter implements UserManagementPort {
             fullName = firstName + " " + lastName;
         }
 
-        String cleanName = fullName.replace("Dr. ", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
+        String rolePrefix = getRolePrefix(userType);
+        String prefixedUsername = toPrefixedUsername(username, userType);
+
+        String cleanName = fullName.replace("Dr. ", "").replace("Dr.", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
         String[] parts = cleanName.split("\\s+");
         String realisticEmail;
-        if (parts.length >= 2 && !isGenericRoleTitle(cleanName)) {
-            String candidate = (parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase()).replaceAll("[^a-z0-9.]", "");
-            String baseEmail = candidate + "@mor.gov.et";
-            if (!ASSIGNED_EMAILS.contains(baseEmail)) {
-                realisticEmail = baseEmail;
-            } else {
-                int seq = 2;
-                while (ASSIGNED_EMAILS.contains(candidate + seq + "@mor.gov.et")) {
-                    seq++;
-                }
-                realisticEmail = candidate + seq + "@mor.gov.et";
-            }
-        } else if (email != null && !email.startsWith("u-") && email.contains("@") && !email.contains(".chair") && !email.contains(".member") && !email.contains(".tl") && !email.contains(".auditor") && !email.contains(".manager")) {
-            realisticEmail = email.toLowerCase();
+        String baseNamePart = (parts.length >= 2 ? (parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase()) : prefixedUsername.toLowerCase().replace("-", ".")).replaceAll("[^a-z0-9.]", "");
+        String candidate = rolePrefix + "." + baseNamePart;
+        String baseEmail = candidate + "@mor.gov.et";
+        if (!ASSIGNED_EMAILS.contains(baseEmail)) {
+            realisticEmail = baseEmail;
         } else {
-            realisticEmail = username.toLowerCase() + "@mor.gov.et";
+            int seq = 2;
+            while (ASSIGNED_EMAILS.contains(candidate + seq + "@mor.gov.et")) {
+                seq++;
+            }
+            realisticEmail = candidate + seq + "@mor.gov.et";
         }
         ASSIGNED_EMAILS.add(realisticEmail);
 
@@ -436,8 +500,10 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
         Map<String, Object> user = new LinkedHashMap<>();
         user.put("userId",           userId);
-        user.put("username",         username);
+        user.put("username",         prefixedUsername);
+        user.put("legacyUsername",   username);
         user.put("email",            realisticEmail);
+        user.put("legacyEmail",      baseNamePart + "@mor.gov.et");
         user.put("fullName",         fullName);
         user.put("jobTitle",         jobTitle);
         user.put("department",       department);
@@ -448,27 +514,38 @@ public class MockUserManagementAdapter implements UserManagementPort {
         user.put("assignedLocation", location);
         user.put("employeeId",       "MOR-" + (employeeCounter++));
         user.put("status",           "ACTIVE");
-        user.put("supervisorId",     "u-ad-01");
+        user.put("supervisorId",     "director-01");
 
         List<String> roles = new ArrayList<>(Arrays.asList("ROLE_USER"));
         roles.add("ROLE_" + userType);
         user.put("roles", roles);
 
         USERS.put(userId, user);
+        USER_LOOKUP.put(userId.toLowerCase(), user);
+        USER_LOOKUP.put(prefixedUsername.toLowerCase(), user);
+        if (username != null) {
+            USER_LOOKUP.put(username.toLowerCase(), user);
+        }
+        USER_LOOKUP.put(realisticEmail.toLowerCase(), user);
+        USER_LOOKUP.put(baseNamePart.toLowerCase() + "@mor.gov.et", user);
     }
 
     // ───────── Port interface ─────────
 
     @Override
     public String getUserRole(String userId) {
-        Map<String, Object> user = USERS.get(userId);
+        if (userId == null) return "ROLE_USER";
+        Map<String, Object> user = USER_LOOKUP.get(userId.toLowerCase());
+        if (user == null) user = USERS.get(userId);
         if (user == null) return "ROLE_USER";
         return (String) user.get("userType");
     }
 
     @Override
     public String getUserTaxCenter(String userId) {
-        Map<String, Object> user = USERS.get(userId);
+        if (userId == null) return null;
+        Map<String, Object> user = USER_LOOKUP.get(userId.toLowerCase());
+        if (user == null) user = USERS.get(userId);
         if (user == null) return null;
         return (String) user.get("assignedLocation");
     }
@@ -492,11 +569,14 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
     @Override
     public Map<String, Object> getUserById(String userId) {
+        if (userId == null) return null;
+        Map<String, Object> user = USER_LOOKUP.get(userId.toLowerCase());
+        if (user != null) return user;
         return USERS.get(userId);
     }
 
     public Optional<Map<String, Object>> getUserProfile(String userId) {
-        return Optional.ofNullable(USERS.get(userId));
+        return Optional.ofNullable(getUserById(userId));
     }
 
     /** Used by MockDataSeeder to seed all users into the AP UserRepository / DB. */

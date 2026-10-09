@@ -16,13 +16,22 @@ public class MockUserRepository implements UserRepository {
     private final Map<UUID, User> userStore = new ConcurrentHashMap<>();
     private final Map<String, UUID> usernameIndex = new ConcurrentHashMap<>();
     private final Map<String, UUID> emailIndex = new ConcurrentHashMap<>();
+    private final Map<String, UUID> aliasIndex = new ConcurrentHashMap<>();
+
+    public void registerAlias(String alias, UUID userId) {
+        if (alias != null && userId != null) {
+            aliasIndex.put(alias.toLowerCase(), userId);
+        }
+    }
 
     @Override
     public User save(User user) {
         if (user == null) throw new IllegalArgumentException("User cannot be null");
         userStore.put(user.getUserId(), user);
         usernameIndex.put(user.getUsername(), user.getUserId());
+        usernameIndex.put(user.getUsername().toLowerCase(), user.getUserId());
         emailIndex.put(user.getEmail(), user.getUserId());
+        emailIndex.put(user.getEmail().toLowerCase(), user.getUserId());
         return user;
     }
 
@@ -33,13 +42,30 @@ public class MockUserRepository implements UserRepository {
 
     @Override
     public Optional<User> findByUsername(String username) {
+        if (username == null) return Optional.empty();
         UUID userId = usernameIndex.get(username);
+        if (userId == null) {
+            userId = usernameIndex.get(username.toLowerCase());
+        }
+        if (userId == null) {
+            userId = aliasIndex.get(username.toLowerCase());
+        }
+        if (userId == null) {
+            userId = emailIndex.get(username.toLowerCase());
+        }
         return userId != null ? Optional.ofNullable(userStore.get(userId)) : Optional.empty();
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
+        if (email == null) return Optional.empty();
         UUID userId = emailIndex.get(email);
+        if (userId == null) {
+            userId = emailIndex.get(email.toLowerCase());
+        }
+        if (userId == null) {
+            userId = aliasIndex.get(email.toLowerCase());
+        }
         return userId != null ? Optional.ofNullable(userStore.get(userId)) : Optional.empty();
     }
 

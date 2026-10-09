@@ -161,17 +161,25 @@ export const AuthProvider = ({ children }) => {
         if (!u) return false;
         const uId = (u.id || '').toLowerCase();
         const uUsername = (u.username || '').toLowerCase();
+        const uLegacyUsername = (u.legacyUsername || '').toLowerCase();
         const uEmail = (u.email || '').toLowerCase();
         const uEmailBase = uEmail.replace(/@mor\.gov\.et$/, '');
+        const uLegacyEmail = (u.legacyEmail || '').toLowerCase();
+        const uLegacyEmailBase = uLegacyEmail.replace(/@mor\.gov\.et$/, '');
         const uName = (u.name || u.fullName || '').toLowerCase();
         const uUserId = (u.userId || '').toLowerCase();
 
         return uId === inputLower ||
                uUsername === inputLower ||
                uUsername === inputBase ||
+               uLegacyUsername === inputLower ||
+               uLegacyUsername === inputBase ||
                uEmail === inputLower ||
                uEmailBase === inputLower ||
                uEmailBase === inputBase ||
+               uLegacyEmail === inputLower ||
+               uLegacyEmailBase === inputLower ||
+               uLegacyEmailBase === inputBase ||
                uName === inputLower ||
                uUserId === inputLower;
       };

@@ -7,48 +7,50 @@ import NotificationPopover from '../notifications/NotificationPopover.jsx';
 
 const QUICK_SWITCH_USERS = [
   // Federal LTO-1 Joint Audit Roster
-  { username: 'fed.ja.chair', name: 'Dr. Solomon Desta', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.member', name: 'Eleni Tesfaye', role: 'Joint Committee Member', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.tl', name: 'Abebe Haile', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.auditor1', name: 'Fikremariam Tilahun', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.auditor2', name: 'Saron Assefa', role: 'Joint Auditor (Cross-Border)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.auditor3', name: 'Bikila Worku', role: 'Joint Auditor (VAT/Sales)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.auditor4', name: 'Michael Zewde', role: 'Joint Auditor (CIT/Deductions)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
-  { username: 'fed.ja.auditor5', name: 'Saron Negash', role: 'Joint Auditor (Forensics)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  // Federal LTO-1 Joint Audit Roster
+  { username: 'committeechair-federal-lto1-ja', name: 'Dr. Solomon Desta', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'committeemember-federal-lto1-ja', name: 'Eleni Tesfaye', role: 'Joint Committee Member', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'teamleader-federal-lto1-ja-1', name: 'Abebe Haile', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto1-ja-1', name: 'Fikremariam Tilahun', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto1-ja-2', name: 'Saron Assefa', role: 'Joint Auditor (Cross-Border)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto1-ja-3', name: 'Bikila Worku', role: 'Joint Auditor (VAT/Sales)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto1-ja-4', name: 'Michael Zewde', role: 'Joint Auditor (CIT/Deductions)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto1-ja-5', name: 'Saron Negash', role: 'Joint Auditor (Forensics)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-1', category: 'Joint Audit' },
 
   // Federal LTO-2 Joint Audit Roster
-  { username: 'fed2.ja.chair', name: 'Dr. Worku Alemayehu', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.member', name: 'Tigist Hailu', role: 'Joint Committee Member', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.tl', name: 'Berhanu Bekele', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.auditor1', name: 'Dawit Mengistu', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.auditor2', name: 'Eden Tadesse', role: 'Joint Auditor (Cross-Border)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.auditor3', name: 'Henok Girma', role: 'Joint Auditor (VAT/Sales)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.auditor4', name: 'Meron Kebede', role: 'Joint Auditor (CIT/Deductions)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
-  { username: 'fed2.ja.auditor5', name: 'Natnael Assefa', role: 'Joint Auditor (Forensics)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'committeechair-federal-lto2-ja', name: 'Dr. Worku Alemayehu', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'committeemember-federal-lto2-ja', name: 'Tigist Hailu', role: 'Joint Committee Member', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'teamleader-federal-lto2-ja-1', name: 'Berhanu Bekele', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto2-ja-1', name: 'Dawit Mengistu', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto2-ja-2', name: 'Eden Tadesse', role: 'Joint Auditor (Cross-Border)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto2-ja-3', name: 'Henok Girma', role: 'Joint Auditor (VAT/Sales)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto2-ja-4', name: 'Meron Kebede', role: 'Joint Auditor (CIT/Deductions)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
+  { username: 'auditor-federal-lto2-ja-5', name: 'Natnael Assefa', role: 'Joint Auditor (Forensics)', auditType: 'JOINT_AUDIT', location: 'Federal LTO-2', category: 'Joint Audit' },
 
   // Transfer Pricing Roster
-  { username: 'u-com-fed-chair-tp', name: 'TP Process Owner', role: 'TP Committee Chair', auditType: 'TRANSFER_PRICING', location: 'Federal Level', category: 'Transfer Pricing' },
-  { username: 'u-tl-addis_ababa-tc1-tp-1', name: 'Robel Girma', role: 'TP Team Leader', auditType: 'TRANSFER_PRICING', location: 'Addis Ababa TC-1', category: 'Transfer Pricing' },
-  { username: 'u-aud-addis_ababa-tc1-tp-1-1', name: 'Michael Abera', role: 'TP Auditor', auditType: 'TRANSFER_PRICING', location: 'Addis Ababa TC-1', category: 'Transfer Pricing' },
+  { username: 'committeechair-federal-lto1-tp', name: 'Fikadu Belay', role: 'TP Committee Chair', auditType: 'TRANSFER_PRICING', location: 'Federal Level', category: 'Transfer Pricing' },
+  { username: 'teamleader-addis_ababa-tc1-tp-1', name: 'Robel Girma', role: 'TP Team Leader', auditType: 'TRANSFER_PRICING', location: 'Addis Ababa TC-1', category: 'Transfer Pricing' },
+  { username: 'auditor-addis_ababa-tc1-tp-1-1', name: 'Michael Abera', role: 'TP Auditor', auditType: 'TRANSFER_PRICING', location: 'Addis Ababa TC-1', category: 'Transfer Pricing' },
 
   // Addis Ababa Joint Audit
-  { username: 'aa1.chair', name: 'Dr. Abebe Kebede', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
-  { username: 'aa1.tl', name: 'Dawit Tadesse', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
-  { username: 'aa1.auditor1', name: 'Sara Mohammed', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-aa1', name: 'Dr. Abebe Kebede', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
+  { username: 'teamleader-aa1-1', name: 'Dawit Tadesse', role: 'Joint Audit Team Leader', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
+  { username: 'auditor-aa1-1', name: 'Sara Mohammed', role: 'Joint Auditor (Customs)', auditType: 'JOINT_AUDIT', location: 'Addis Ababa TC-1', category: 'Joint Audit' },
 
   // Regional Joint Audit Chairs
-  { username: 'or1.chair', name: 'Dr. Chaltu Negash', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Oromia TC-1', category: 'Joint Audit' },
-  { username: 'ba1.chair', name: 'Dr. Tadesse Kebede', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Amhara TC-1', category: 'Joint Audit' },
-  { username: 'dd1.chair', name: 'Dr. Yonas Mengistu', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Dire Dawa TC-1', category: 'Joint Audit' },
-  { username: 'sn1.chair', name: 'Dr. Tekle Lemma', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'SNNPR TC-1', category: 'Joint Audit' },
-  { username: 'so1.chair', name: 'Dr. Ibrahim Hassan', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Somali TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-or1', name: 'Dr. Chaltu Negash', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Oromia TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-ba1', name: 'Dr. Tadesse Kebede', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Amhara TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-dd1', name: 'Dr. Yonas Mengistu', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Dire Dawa TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-sn1', name: 'Dr. Tekle Lemma', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'SNNPR TC-1', category: 'Joint Audit' },
+  { username: 'committeechair-so1', name: 'Dr. Ibrahim Hassan', role: 'Joint Committee Chair', auditType: 'JOINT_AUDIT', location: 'Somali TC-1', category: 'Joint Audit' },
 
   // Standard Audits & Management
-  { username: 'u-tcm-federal-lto1', name: 'Tsega Mulugeta', role: 'Tax Center Manager', auditType: 'MANAGEMENT', location: 'Federal LTO-1', category: 'Leadership' },
-  { username: 'u-tcm-federal-lto2', name: 'Tirhas Gebre', role: 'Tax Center Manager', auditType: 'MANAGEMENT', location: 'Federal LTO-2', category: 'Leadership' },
-  { username: 'u-pt-01', name: 'Eden Haile', role: 'National Planning Lead', auditType: 'PLANNING', location: 'Federal Level', category: 'Leadership' },
-  { username: 'u-ad-01', name: 'Getnet Bekele', role: 'National Audit Director', auditType: 'DIRECTORATE', location: 'Federal Level', category: 'Leadership' },
-  { username: 'u-sm-01', name: 'Almaz Berhane', role: 'Senior Management Exec', auditType: 'EXECUTIVE', location: 'Federal Level', category: 'Leadership' },
+  { username: 'taxcentermanager-federal-lto1', name: 'Tsega Mulugeta', role: 'Tax Center Manager', auditType: 'MANAGEMENT', location: 'Federal LTO-1', category: 'Leadership' },
+  { username: 'taxcentermanager-federal-lto2', name: 'Berihun Tesfaye', role: 'Tax Center Manager', auditType: 'MANAGEMENT', location: 'Federal LTO-2', category: 'Leadership' },
+  { username: 'planning-01', name: 'Eden Haile', role: 'National Planning Lead', auditType: 'PLANNING', location: 'Federal Level', category: 'Leadership' },
+  { username: 'director-01', name: 'Getnet Bekele', role: 'National Audit Director', auditType: 'DIRECTORATE', location: 'Federal Level', category: 'Leadership' },
+  { username: 'seniormanagement-01', name: 'Almaz Berhane', role: 'Senior Management Exec', auditType: 'EXECUTIVE', location: 'Federal Level', category: 'Leadership' },
+
 ];
 
 export default function TopBar({ title, subtitle, onNavigate }) {
