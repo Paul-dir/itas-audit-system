@@ -146,7 +146,9 @@ public class DeskAuditController {
         }
         
         if ("SUBMIT_FOR_REVIEW".equals(action)) {
-            String teamLeaderId = (String) payload.getOrDefault("teamLeaderId", "u-tl-addis_ababa-tc1-desk-1");
+            String teamLeaderId = apAuditCaseRepository.findById(caseId)
+                .map(mor.itas.persistence.jpa.entity.ap.ApAuditCaseEntity::getAssignedTeamLeaderId)
+                .orElse("u-tl-addis_ababa-tc1-desk-1");
             notificationService.sendNotification(
                     teamLeaderId,
                     "REVIEW_REQUEST",

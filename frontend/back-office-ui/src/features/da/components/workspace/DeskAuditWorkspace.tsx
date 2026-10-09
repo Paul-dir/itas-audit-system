@@ -424,7 +424,9 @@ export const DeskAuditWorkspace: React.FC<DeskAuditWorkspaceProps> = ({
 
       {/* WORKSPACE CONTENT AREA */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-6">
-        {(caseData?.status === 'SUBMITTED' || caseData?.status === 'APPROVED') && (
+        
+        {/* Team Leader Feedback Banners */}
+        {caseData?.status === 'SUBMITTED' && (
           <div className="mb-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded flex items-start gap-3 shadow-sm">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             <div>
@@ -433,6 +435,37 @@ export const DeskAuditWorkspace: React.FC<DeskAuditWorkspaceProps> = ({
             </div>
           </div>
         )}
+
+        {caseData?.status === 'APPROVED' && (
+          <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded flex items-start gap-3 shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <div>
+              <span className="font-bold text-sm block">Case Approved by Team Leader</span>
+              <span className="text-xs">The Team Leader has approved your audit findings and report. No further modifications can be made.</span>
+              {caseData?.teamLeaderComment && (
+                <div className="mt-2 p-2 bg-emerald-100/50 rounded border border-emerald-100 text-sm">
+                  <span className="font-semibold block">Team Leader Comment:</span>
+                  {caseData.teamLeaderComment}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {caseData?.status === 'IN_PROGRESS' && caseData?.teamLeaderComment && (
+          <div className="mb-4 p-4 bg-rose-50 border border-rose-200 text-rose-900 rounded flex items-start gap-3 shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <div>
+              <span className="font-bold text-sm block">Returned for Correction</span>
+              <span className="text-xs">The Team Leader has returned this case. Please review the feedback and update the case accordingly.</span>
+              <div className="mt-2 p-2 bg-white rounded border border-rose-100 text-sm">
+                <span className="font-semibold block text-rose-800">Team Leader Feedback:</span>
+                {caseData.teamLeaderComment}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className={`bg-white border border-gray-200 rounded shadow-2xs min-h-[560px] flex flex-col ${caseData?.status === 'SUBMITTED' || caseData?.status === 'APPROVED' ? 'pointer-events-none opacity-90' : ''}`}>
           {/* Step Title Header */}
           <div className="border-b border-gray-200 px-6 sm:px-8 py-4 bg-gray-50/50 flex items-center justify-between">

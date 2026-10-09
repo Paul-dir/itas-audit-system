@@ -241,7 +241,8 @@ export const itasApi = {
             dueDate: rawData.auditCase.dueDate || new Date().toISOString(),
             assignedAuditor: rawData.auditCase.assignedAuditorId || 'Unknown',
             teamLeader: rawData.auditCase.assignedTeamLeaderId || 'Unknown',
-            taxPeriod: '2024-2025' // fallback
+            taxPeriod: '2024-2025', // fallback
+            teamLeaderComment: getLocalCaseData(caseId)?.auditCase?.teamLeaderComment
           },
           evidence: rawData.evidence || [],
           procedures: rawData.procedures || [],
