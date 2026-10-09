@@ -164,8 +164,11 @@ const recommendedUsers = [
     { username: 'admin', fullName: 'System Administrator', email: 'admin@mor.gov.et', role: 'PLANNING_TEAM', category: 'System Admin', auditType: 'ADMINISTRATION', assignedLocation: 'FEDERAL', description: 'System Administrator (Full Configuration Access)' },
     { username: 'taxpayer1', fullName: 'Crest Textiles CFO', email: 'cfo@cresttextiles.et', role: 'TAXPAYER', category: 'Taxpayer Portal', auditType: 'EXTERNAL_PORTAL', assignedLocation: 'FEDERAL', description: 'Taxpayer Compliance Portal (Crest Textiles CFO)' },
     { username: 'u-rd-aa', fullName: 'Getnet Alemu', email: 'getnet.alemu@mor.gov.et', role: 'REGIONAL_DIRECTOR', category: 'Regional Reference', auditType: 'REGIONAL_DIRECTORATE', assignedLocation: 'AA', description: 'Regional Director Reference (Addis Ababa)' },
-    { username: 'u-tcm-addis_ababa-tc1', fullName: 'Mahlet Tesfa', email: 'mahlet.tesfa@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Regional Reference', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'addis_ababa-tc1', description: 'Tax Center Manager Reference (Addis Ababa TC 1)' }
-  ];
+    { username: 'u-tcm-addis_ababa-tc1', fullName: 'Mahlet Tesfa', email: 'mahlet.tesfa@mor.gov.et', role: 'TAX_CENTER_MANAGER', category: 'Regional Reference', auditType: 'TAX_CENTER_MANAGEMENT', assignedLocation: 'addis_ababa-tc1', description: 'Tax Center Manager Reference (Addis Ababa TC 1)' },
+    { username: 'qa.officer1', fullName: 'Elena Rostova', email: 'elena.rostova@itas.gov.tax', role: 'qa_officer', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Officer' },
+      { username: 'qa.tl1', fullName: 'Marcus Chen', email: 'marcus.chen@itas.gov.tax', role: 'qa_team_leader', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Team Leader' },
+      { username: 'qa.director', fullName: 'Sarah Jenkins', email: 'sarah.jenkins@itas.gov.tax', role: 'qa_director', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Director' }
+];
 
 export const useUserValidation = () => {
   const [loading, setLoading] = useState(false);
@@ -227,9 +230,15 @@ export const useUserValidation = () => {
 
   // Get audit types
   const getUserAuditTypes = useCallback((username) => {
-    if (!username) return [];
+    if (!username) return [      { username: 'qa.officer1', fullName: 'Elena Rostova', email: 'elena.rostova@itas.gov.tax', role: 'qa_officer', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Officer' },
+      { username: 'qa.tl1', fullName: 'Marcus Chen', email: 'marcus.chen@itas.gov.tax', role: 'qa_team_leader', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Team Leader' },
+      { username: 'qa.director', fullName: 'Sarah Jenkins', email: 'sarah.jenkins@itas.gov.tax', role: 'qa_director', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Director' }
+];
     const at = resolveAuditType(username);
-    return at ? [at] : [];
+    return at ? [at] : [      { username: 'qa.officer1', fullName: 'Elena Rostova', email: 'elena.rostova@itas.gov.tax', role: 'qa_officer', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Officer' },
+      { username: 'qa.tl1', fullName: 'Marcus Chen', email: 'marcus.chen@itas.gov.tax', role: 'qa_team_leader', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Team Leader' },
+      { username: 'qa.director', fullName: 'Sarah Jenkins', email: 'sarah.jenkins@itas.gov.tax', role: 'qa_director', category: 'Quality Assurance', auditType: 'QUALITY_ASSURANCE', assignedLocation: 'FEDERAL', description: 'QA Director' }
+];
   }, []);
 
   // Validate user (non-blocking)
