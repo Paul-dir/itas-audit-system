@@ -157,14 +157,26 @@ export const AuthProvider = ({ children }) => {
       allUsers = mergeUserPools(allUsers, seedList);
 
       // Search directory
-      let found = allUsers.find(u => 
-        (u.id && u.id.toLowerCase() === inputLower) ||
-        (u.username && u.username.toLowerCase() === inputLower) ||
-        (u.username && u.username.toLowerCase() === inputBase) ||
-        (u.email && u.email.toLowerCase() === inputLower) ||
-        (u.name && u.name.toLowerCase() === inputLower) ||
-        (u.userId && u.userId.toLowerCase() === inputLower)
-      );
+      const matchesUser = (u) => {
+        if (!u) return false;
+        const uId = (u.id || '').toLowerCase();
+        const uUsername = (u.username || '').toLowerCase();
+        const uEmail = (u.email || '').toLowerCase();
+        const uEmailBase = uEmail.replace(/@mor\.gov\.et$/, '');
+        const uName = (u.name || u.fullName || '').toLowerCase();
+        const uUserId = (u.userId || '').toLowerCase();
+
+        return uId === inputLower ||
+               uUsername === inputLower ||
+               uUsername === inputBase ||
+               uEmail === inputLower ||
+               uEmailBase === inputLower ||
+               uEmailBase === inputBase ||
+               uName === inputLower ||
+               uUserId === inputLower;
+      };
+
+      let found = allUsers.find(matchesUser);
 
       // If still not found, fetch fresh from backend API
       if (!found) {
@@ -173,14 +185,7 @@ export const AuthProvider = ({ children }) => {
           const merged = mergeUserPools(freshUsers, seedList);
           directoryUsersRef.current = merged;
           storage.set(STORE_KEYS.USERS, merged);
-          found = merged.find(u => 
-            (u.id && u.id.toLowerCase() === inputLower) ||
-            (u.username && u.username.toLowerCase() === inputLower) ||
-            (u.username && u.username.toLowerCase() === inputBase) ||
-            (u.email && u.email.toLowerCase() === inputLower) ||
-            (u.name && u.name.toLowerCase() === inputLower) ||
-            (u.userId && u.userId.toLowerCase() === inputLower)
-          );
+          found = merged.find(matchesUser);
         }
       }
 

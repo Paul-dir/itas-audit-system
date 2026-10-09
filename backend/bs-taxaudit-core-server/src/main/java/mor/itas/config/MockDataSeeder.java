@@ -32,13 +32,13 @@ public class MockDataSeeder implements CommandLineRunner {
             String fullName = (String) mockUser.get("fullName");
             
             Optional<User> existing = userRepository.findByUsername(username);
-            if (existing.isEmpty() || !Objects.equals(fullName, existing.get().getFullName())) {
+            String email = (String) mockUser.get("email");
+            if (existing.isEmpty() || !Objects.equals(fullName, existing.get().getFullName()) || !Objects.equals(email, existing.get().getEmail())) {
                 
                 String userType = (String) mockUser.get("userType"); // TEAM_LEADER, AUDITOR, etc.
                 String auditType = (String) mockUser.get("auditType");
                 String assignedLevel = (String) mockUser.get("assignedLevel");
                 String assignedLocation = (String) mockUser.get("assignedLocation");
-                String email = (String) mockUser.get("email");
                 String rawUserId = (String) mockUser.get("userId");
 
                 java.util.UUID userId = null;

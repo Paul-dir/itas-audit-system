@@ -101,14 +101,14 @@ export default function Login() {
                   autoComplete="username"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="e.g. u-pt-01, u-ad-01, or planning.auditor1@mor.gov.et"
+                  placeholder="e.g. getnet.bekele@mor.gov.et, u-ad-01, or eden.haile@mor.gov.et"
                   className="w-full pl-10 pr-4 py-3 bg-[#111827] border border-gray-800 text-white placeholder-gray-500 text-[13px]
                              rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500
                              transition-all duration-200 font-mono"
                 />
               </div>
               <p className="text-[11px] text-gray-500 mt-1.5">
-                Use your system username or official MOR email address.
+                Sign in using your official MOR email address (e.g. <code className="text-blue-400">getnet.bekele@mor.gov.et</code>) or system username.
               </p>
             </div>
 

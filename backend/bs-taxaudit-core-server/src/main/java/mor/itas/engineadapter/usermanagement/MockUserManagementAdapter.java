@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 public class MockUserManagementAdapter implements UserManagementPort {
 
     private static final Map<String, Map<String, Object>> USERS = new LinkedHashMap<>();
+    private static final Set<String> ASSIGNED_EMAILS = new HashSet<>();
 
     // Ethiopian names pool
     private static final String[] FIRST_NAMES = {
@@ -61,24 +62,24 @@ public class MockUserManagementAdapter implements UserManagementPort {
     private static void initializeUsers() {
 
         // ── Planning Team ──
-        addUser("u-pt-01", "u-pt-01", "planning.auditor1@mor.gov.et",
-                "Planning Auditor", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
-        addUser("u-pt-02", "u-pt-02", "abebe.tadesse@mor.gov.et",
-                "Abebe Tadesse", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
-        addUser("u-pt-03", "u-pt-03", "hanna.girma@mor.gov.et",
-                "Hanna Girma", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+        addUser("u-pt-01", "u-pt-01", "eden.haile@mor.gov.et",
+                "Eden Haile", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+        addUser("u-pt-02", "u-pt-02", "samuel.worku@mor.gov.et",
+                "Samuel Worku", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
+        addUser("u-pt-03", "u-pt-03", "yodit.kassa@mor.gov.et",
+                "Yodit Kassa", "PLANNING_TEAM", null, "NATIONAL", "FEDERAL");
 
         // ── Director ──
-        addUser("u-ad-01", "u-ad-01", "tesfaye.bekele@mor.gov.et",
-                "Tesfaye Bekele", "DIRECTOR", null, "NATIONAL", "FEDERAL");
-        addUser("u-ad-02", "u-ad-02", "deputy.director@mor.gov.et",
-                "Deputy Director", "DIRECTOR", null, "NATIONAL", "FEDERAL");
+        addUser("u-ad-01", "u-ad-01", "getnet.bekele@mor.gov.et",
+                "Getnet Bekele", "DIRECTOR", null, "NATIONAL", "FEDERAL");
+        addUser("u-ad-02", "u-ad-02", "gemechu.kebede@mor.gov.et",
+                "Gemechu Kebede", "DIRECTOR", null, "NATIONAL", "FEDERAL");
 
         // ── Senior Management ──
-        addUser("u-sm-01", "u-sm-01", "rahel.hailu@mor.gov.et",
-                "Rahel Hailu", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
-        addUser("u-sm-02", "u-sm-02", "biruk.assefa@mor.gov.et",
-                "Biruk Assefa", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
+        addUser("u-sm-01", "u-sm-01", "almaz.berhane@mor.gov.et",
+                "Almaz Berhane", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
+        addUser("u-sm-02", "u-sm-02", "workneh.wolde@mor.gov.et",
+                "Workneh Wolde", "SENIOR_MANAGEMENT", null, "NATIONAL", "FEDERAL");
 
         // ── Federal LTO-1 Joint Audit Personnel ──
         addUser("20000000-0000-0000-0099-000000000001", "fed.ja.chair", "fed.ja.chair@mor.gov.et",
@@ -177,63 +178,63 @@ public class MockUserManagementAdapter implements UserManagementPort {
                 "Dr. Ibrahim Hassan", "COMMITTEE_CHAIR", "JOINT_AUDIT", "TAX_CENTER", "somali-tc1");
 
         // ── JA Committee (Federal) ──
-        addUser("u-com-fed-chair", "u-com-fed-chair", "fed.committee1@mor.gov.et",
-                "Federal Joint Committee Chair", "COMMITTEE_CHAIR", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-mem1", "u-com-fed-mem1", "fed.committee2@mor.gov.et",
-                "Federal Joint Committee Member 1", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-mem2", "u-com-fed-mem2", "fed.committee3@mor.gov.et",
-                "Federal Joint Committee Member 2", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-chair", "u-com-fed-chair", "nardos.belay@mor.gov.et",
+                "Nardos Belay", "COMMITTEE_CHAIR", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-mem1", "u-com-fed-mem1", "fatuma.abera@mor.gov.et",
+                "Fatuma Abera", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-mem2", "u-com-fed-mem2", "kassahun.desta@mor.gov.et",
+                "Kassahun Desta", "COMMITTEE_MEMBER", "JOINT_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── TP Committee (Federal) ──
-        addUser("u-com-fed-tpchair", "u-com-fed-tpchair", "fed.tpcommittee1@mor.gov.et",
-                "Federal TP Committee Chair", "COMMITTEE_CHAIR", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-tpmem1", "u-com-fed-tpmem1", "fed.tpcommittee2@mor.gov.et",
-                "Federal TP Committee Member 1", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-tpmem2", "u-com-fed-tpmem2", "fed.tpcommittee3@mor.gov.et",
-                "Federal TP Committee Member 2", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-tpchair", "u-com-fed-tpchair", "fikadu.belay@mor.gov.et",
+                "Fikadu Belay", "COMMITTEE_CHAIR", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-tpmem1", "u-com-fed-tpmem1", "dereje.kebede@mor.gov.et",
+                "Dereje Kebede", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-tpmem2", "u-com-fed-tpmem2", "ruth.tadesse@mor.gov.et",
+                "Ruth Tadesse", "COMMITTEE_MEMBER", "TRANSFER_PRICING", "NATIONAL", "FEDERAL");
 
         // ── Desk Audit Committee (Federal) ──
-        addUser("u-com-fed-deskchair", "u-com-fed-deskchair", "fed.deskcommittee@mor.gov.et",
-                "Federal Desk Audit Committee Chair", "COMMITTEE_CHAIR", "DESK_AUDIT", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-deskmem1", "u-com-fed-deskmem1", "fed.deskmem1@mor.gov.et",
-                "Federal Desk Audit Committee Member 1", "COMMITTEE_MEMBER", "DESK_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-deskchair", "u-com-fed-deskchair", "tigist.alemu@mor.gov.et",
+                "Tigist Alemu", "COMMITTEE_CHAIR", "DESK_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-deskmem1", "u-com-fed-deskmem1", "ephrem.bekele@mor.gov.et",
+                "Ephrem Bekele", "COMMITTEE_MEMBER", "DESK_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── Comprehensive Audit Committee (Federal) ──
-        addUser("u-com-fed-compchair", "u-com-fed-compchair", "fed.compcommittee@mor.gov.et",
-                "Federal Comprehensive Audit Committee Chair", "COMMITTEE_CHAIR", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-compmem1", "u-com-fed-compmem1", "fed.compmem1@mor.gov.et",
-                "Federal Comprehensive Audit Committee Member 1", "COMMITTEE_MEMBER", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-compchair", "u-com-fed-compchair", "mamo.bekele@mor.gov.et",
+                "Mamo Bekele", "COMMITTEE_CHAIR", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-compmem1", "u-com-fed-compmem1", "kassa.kebede@mor.gov.et",
+                "Kassa Kebede", "COMMITTEE_MEMBER", "COMPREHENSIVE_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── Issue Audit Committee (Federal) ──
-        addUser("u-com-fed-issuechair", "u-com-fed-issuechair", "fed.issuecommittee@mor.gov.et",
-                "Federal Issue Audit Committee Chair", "COMMITTEE_CHAIR", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
-        addUser("u-com-fed-issuemem1", "u-com-fed-issuemem1", "fed.issuemem1@mor.gov.et",
-                "Federal Issue Audit Committee Member 1", "COMMITTEE_MEMBER", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-issuechair", "u-com-fed-issuechair", "kassahun.assefa@mor.gov.et",
+                "Kassahun Assefa", "COMMITTEE_CHAIR", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
+        addUser("u-com-fed-issuemem1", "u-com-fed-issuemem1", "fatuma.tilahun@mor.gov.et",
+                "Fatuma Tilahun", "COMMITTEE_MEMBER", "ISSUE_AUDIT", "NATIONAL", "FEDERAL");
 
         // ── Audit Requesters (internal & external directorates) ──
-        addUser("u-req-01", "u-req-01", "clearance.officer@mor.gov.et",
-                "Getachew Zewde (Tax Clearance)", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
-        addUser("u-req-02", "u-req-02", "closure.directorate@mor.gov.et",
-                "Tigist Worku (Business Closure)", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
-        addUser("u-req-03", "u-req-03", "fraud.intel@mor.gov.et",
-                "Deriba Alemayehu (Fraud & Intel)", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
+        addUser("u-req-01", "u-req-01", "getachew.zewde@mor.gov.et",
+                "Getachew Zewde", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
+        addUser("u-req-02", "u-req-02", "tigist.worku@mor.gov.et",
+                "Tigist Worku", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
+        addUser("u-req-03", "u-req-03", "deriba.alemayehu@mor.gov.et",
+                "Deriba Alemayehu", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
         addUser("u-req-04", "u-req-04", "external.motri@gov.et",
-                "Ministry of Trade (External)", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
+                "Ministry of Trade", "AUDIT_REQUESTER", null, "NATIONAL", "FEDERAL");
 
         // ───────── REGIONAL LEVEL ─────────
         // One Regional Director per region
-        addUser("u-rd-fed", "u-rd-fed", "solomon.worku@mor.gov.et",
-                "Solomon Worku (Federal LTO)", "REGIONAL_DIRECTOR", null, "REGIONAL", "FED");
+        addUser("u-rd-fed", "u-rd-fed", "berihun.lemma@mor.gov.et",
+                "Berihun Lemma", "REGIONAL_DIRECTOR", null, "REGIONAL", "FED");
         addUser("u-rd-aa", "u-rd-aa", "getnet.alemu@mor.gov.et",
                 "Getnet Alemu", "REGIONAL_DIRECTOR", null, "REGIONAL", "AA");
         addUser("u-rd-am", "u-rd-am", "tadesse.kebede@mor.gov.et",
                 "Tadesse Kebede", "REGIONAL_DIRECTOR", null, "REGIONAL", "BA");
         addUser("u-rd-or", "u-rd-or", "gemechu.negash@mor.gov.et",
                 "Gemechu Negash", "REGIONAL_DIRECTOR", null, "REGIONAL", "BB");
-        addUser("u-rd-dd", "u-rd-dd", "yonas.mengistu.dd@mor.gov.et",
-                "Yonas Mengistu (Dire Dawa)", "REGIONAL_DIRECTOR", null, "REGIONAL", "AB");
-        addUser("u-rd-sn", "u-rd-sn", "yonas.mengistu@mor.gov.et",
-                "Yonas Mengistu", "REGIONAL_DIRECTOR", null, "REGIONAL", "CA");
+        addUser("u-rd-dd", "u-rd-dd", "yonas.mengistu@mor.gov.et",
+                "Yonas Mengistu", "REGIONAL_DIRECTOR", null, "REGIONAL", "AB");
+        addUser("u-rd-sn", "u-rd-sn", "tekle.lemma@mor.gov.et",
+                "Tekle Lemma", "REGIONAL_DIRECTOR", null, "REGIONAL", "CA");
         addUser("u-rd-so", "u-rd-so", "ibrahim.hassan@mor.gov.et",
                 "Ibrahim Hassan", "REGIONAL_DIRECTOR", null, "REGIONAL", "SO");
 
@@ -280,8 +281,11 @@ public class MockUserManagementAdapter implements UserManagementPort {
 
             // Tax Center Manager
             String tcmId = "u-tcm-" + tcId;
-            addUser(tcmId, tcmId, tcmId + "@mor.gov.et",
-                    "Tax Center Manager " + tcShort, "TAX_CENTER_MANAGER", null, "TAX_CENTER", tcId);
+            String tcmName = "federal-lto1".equals(tcId) ? "Tsega Mulugeta"
+                           : "federal-lto2".equals(tcId) ? "Berihun Tesfaye"
+                           : "Tax Center Manager " + tcShort;
+            addUser(tcmId, tcmId, null,
+                    tcmName, "TAX_CENTER_MANAGER", null, "TAX_CENTER", tcId);
 
             // JA Committee at this TC (only if not already registered above)
             if (!"federal-lto1".equals(tcId) && !"federal-lto2".equals(tcId) && !"addis_ababa-tc1".equals(tcId)
@@ -396,16 +400,27 @@ public class MockUserManagementAdapter implements UserManagementPort {
             fullName = firstName + " " + lastName;
         }
 
-        String realisticEmail = email;
-        if (realisticEmail == null || realisticEmail.startsWith("u-")) {
-            String cleanName = fullName.replace("Dr. ", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
-            String[] parts = cleanName.split("\\s+");
-            if (parts.length >= 2) {
-                realisticEmail = parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase() + "@mor.gov.et";
+        String cleanName = fullName.replace("Dr. ", "").replaceAll("\\s*\\([^)]*\\)", "").trim();
+        String[] parts = cleanName.split("\\s+");
+        String realisticEmail;
+        if (parts.length >= 2 && !isGenericRoleTitle(cleanName)) {
+            String candidate = (parts[0].toLowerCase() + "." + parts[parts.length - 1].toLowerCase()).replaceAll("[^a-z0-9.]", "");
+            String baseEmail = candidate + "@mor.gov.et";
+            if (!ASSIGNED_EMAILS.contains(baseEmail)) {
+                realisticEmail = baseEmail;
             } else {
-                realisticEmail = username + "@mor.gov.et";
+                int seq = 2;
+                while (ASSIGNED_EMAILS.contains(candidate + seq + "@mor.gov.et")) {
+                    seq++;
+                }
+                realisticEmail = candidate + seq + "@mor.gov.et";
             }
+        } else if (email != null && !email.startsWith("u-") && email.contains("@") && !email.contains(".chair") && !email.contains(".member") && !email.contains(".tl") && !email.contains(".auditor") && !email.contains(".manager")) {
+            realisticEmail = email.toLowerCase();
+        } else {
+            realisticEmail = username.toLowerCase() + "@mor.gov.et";
         }
+        ASSIGNED_EMAILS.add(realisticEmail);
 
         String department = "Tax Audit";
         if (auditType != null) {

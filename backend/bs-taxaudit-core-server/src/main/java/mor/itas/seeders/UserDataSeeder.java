@@ -40,11 +40,11 @@ public class UserDataSeeder implements CommandLineRunner {
         // ════════════════════════════════════════════════════════════════════════════
         // 1. NATIONAL & REGIONAL LEADERSHIP
         // ════════════════════════════════════════════════════════════════════════════
-        seedUser("00000000-0000-0000-0001-000000000001", "planning.auditor1", "planning.auditor1@mor.gov.et", "Planning Auditor", "PLANNING_TEAM", null, "NATIONAL", null);
-        seedUser("00000000-0000-0000-0001-000000000002", "abebe.tadesse", "abebe.tadesse@mor.gov.et", "Abebe Tadesse", "PLANNING_TEAM", null, "NATIONAL", null);
-        seedUser("00000000-0000-0000-0002-000000000001", "tesfaye.bekele", "tesfaye.bekele@mor.gov.et", "Tesfaye Bekele", "DIRECTOR", null, "NATIONAL", null);
-        seedUser("00000000-0000-0000-0003-000000000001", "rahel.hailu", "rahel.hailu@mor.gov.et", "Rahel Hailu", "SENIOR_MANAGEMENT", null, "NATIONAL", null);
-        seedUser("00000000-0000-0000-0003-000000000002", "biruk.assefa", "biruk.assefa@mor.gov.et", "Biruk Assefa", "SENIOR_MANAGEMENT", null, "NATIONAL", null);
+        seedUser("00000000-0000-0000-0001-000000000001", "eden.haile", "eden.haile@mor.gov.et", "Eden Haile", "PLANNING_TEAM", null, "NATIONAL", null);
+        seedUser("00000000-0000-0000-0001-000000000002", "samuel.worku", "samuel.worku@mor.gov.et", "Samuel Worku", "PLANNING_TEAM", null, "NATIONAL", null);
+        seedUser("00000000-0000-0000-0002-000000000001", "getnet.bekele", "getnet.bekele@mor.gov.et", "Getnet Bekele", "DIRECTOR", null, "NATIONAL", null);
+        seedUser("00000000-0000-0000-0003-000000000001", "almaz.berhane", "almaz.berhane@mor.gov.et", "Almaz Berhane", "SENIOR_MANAGEMENT", null, "NATIONAL", null);
+        seedUser("00000000-0000-0000-0003-000000000002", "workneh.wolde", "workneh.wolde@mor.gov.et", "Workneh Wolde", "SENIOR_MANAGEMENT", null, "NATIONAL", null);
 
         // Regional Directors (6)
         seedUser("00000000-0000-0000-0004-000000000001", "getnet.alemu", "getnet.alemu@mor.gov.et", "Getnet Alemu", "REGIONAL_DIRECTOR", null, "REGIONAL", "addis_ababa");
