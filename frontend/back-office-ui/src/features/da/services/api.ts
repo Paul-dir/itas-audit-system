@@ -12,6 +12,26 @@ import {
 } from '../types/audit';
 import { INITIAL_CASES_DATA, CaseFullData } from '../data/initialData';
 
+// Resolve the logged-in actor ID from session/localStorage (set during login)
+function getActorId(): string {
+  return (
+    localStorage.getItem('itas_actor_id') ||
+    sessionStorage.getItem('itas_actor_id') ||
+    localStorage.getItem('userId') ||
+    sessionStorage.getItem('userId') ||
+    'u-aud-federal-lto1-desk-1-1'
+  );
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+  return {
+    'Content-Type': 'application/json',
+    'X-Actor-Id': getActorId(),
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
 // Local storage key prefix
 const STORAGE_PREFIX = 'itas_audit_case_';
 
@@ -256,10 +276,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/autosave`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(snapshot)
       });
       if (res.ok) {
@@ -293,7 +310,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/procedures/${procId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updates)
       });
       if (res.ok) return await res.json();
@@ -315,7 +332,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/evidence`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(item)
       });
       if (res.ok) return await res.json();
@@ -346,7 +363,7 @@ export const itasApi = {
 
   async deleteEvidence(caseId: string, evidenceId: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/evidence/${evidenceId}`, { method: 'DELETE', headers: { 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' } });
+      const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/evidence/${evidenceId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (res.ok) return true;
     } catch {
       // Fallback
@@ -362,7 +379,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/queries`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(query)
       });
       if (res.ok) return await res.json();
@@ -390,7 +407,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/queries/${queryId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updates)
       });
       if (res.ok) return await res.json();
@@ -412,7 +429,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/findings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(finding)
       });
       if (res.ok) return await res.json();
@@ -461,7 +478,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/findings/${findingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updates)
       });
       if (res.ok) return await res.json();
@@ -489,7 +506,7 @@ export const itasApi = {
 
   async deleteFinding(caseId: string, findingId: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/findings/${findingId}`, { method: 'DELETE', headers: { 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' } });
+      const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/findings/${findingId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (res.ok) return true;
     } catch {
       // Fallback
@@ -505,7 +522,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/working-papers`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(wp)
       });
       if (res.ok) return await res.json();
@@ -537,7 +554,7 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/working-papers/${wpId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Actor-Id': 'u-aud-federal-lto1-desk-1-1' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updates)
       });
       if (res.ok) return await res.json();
@@ -607,12 +624,20 @@ export const itasApi = {
     try {
       const res = await fetch(`/api/v1/backoffice/da/cases/${caseId}/workflow`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const json = await res.json();
+        // Backend returns { success, status, auditCase } — normalize the shape
+        return {
+          success: json.success ?? true,
+          status: json.status || payload.action,
+          auditCase: json.auditCase || { status: json.status }
+        };
+      }
     } catch {
-      // Fallback
+      // Fallback to local state
     }
 
     const current = getLocalCaseData(caseId);
