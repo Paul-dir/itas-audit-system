@@ -309,6 +309,17 @@ public class TpAuditExecutionController {
         TpPhaseGateEntity gate = phaseGateRepository.findByAuditCaseIdAndPhaseId(caseId, phaseId)
                 .orElseThrow(() -> new IllegalArgumentException("Phase gate not found: " + phaseId));
 
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Auditors cannot review or endorse phase gates. Statutory separation of duties requires review by Team Leader or Review Committee."));
+        }
+
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && actorId != null && !"SYSTEM".equalsIgnoreCase(actorId) && actorId.equals(c.getAssignedAuditorId())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Assigned Auditor cannot review their own audit phase. Statutory separation of duties requires review by Team Leader or Review Committee."));
+        }
+
         String decision = req.get("decision") != null ? req.get("decision").toString().toUpperCase() : "APPROVED";
         String comments = req.get("comments") != null ? req.get("comments").toString() : "";
 
@@ -321,8 +332,6 @@ public class TpAuditExecutionController {
         boolean isEndorseToCommittee = "ENDORSE_TO_COMMITTEE".equalsIgnoreCase(decision)
                 || "SUBMIT_TO_COMMITTEE".equalsIgnoreCase(decision)
                 || "ENDORSED".equalsIgnoreCase(decision);
-
-        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
 
         if (isEndorseToCommittee) {
             // Team Leader routes case to Review Committee
@@ -495,9 +504,18 @@ public class TpAuditExecutionController {
     public ResponseEntity<Map<String, Object>> submitRiskAssessmentToCommittee(
             @PathVariable UUID caseId,
             @RequestBody(required = false) Map<String, Object> req,
-            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "TEAM_LEADER") String actorRole) {
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Auditors cannot endorse Risk Assessment to Committee. Endorsement must be performed by Team Leader."));
+        }
         ApAuditCaseEntity c = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        if (c.getAssignedAuditorId() != null && c.getAssignedAuditorId().equals(actorId) && !"SYSTEM".equalsIgnoreCase(actorId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Assigned Auditor cannot endorse Risk Assessment to Committee. Endorsement must be performed by Team Leader."));
+        }
         c.setStatus("SUBMITTED_FOR_COMMITTEE");
         c.setTpCurrentPhase("WORKING_HYPOTHESIS");
         caseRepository.save(c);
@@ -616,14 +634,22 @@ public class TpAuditExecutionController {
     public ResponseEntity<Map<String, Object>> tlEndorseAuditPlan(
             @PathVariable UUID caseId,
             @RequestBody(required = false) Map<String, Object> req,
-            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "TEAM_LEADER") String actorRole) {
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Auditors cannot endorse Audit Plans to Review Committee. Endorsement must be performed by Team Leader."));
+        }
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && c.getAssignedAuditorId() != null && c.getAssignedAuditorId().equals(actorId) && !"SYSTEM".equalsIgnoreCase(actorId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Assigned Auditor cannot endorse their own Audit Plan."));
+        }
         TpAuditPlanEntity plan = auditPlanRepository.findByAuditCaseId(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Audit plan not found for case: " + caseId));
         plan.setStatus("SUBMITTED_FOR_REVIEW");
         plan.setUpdatedBy(actorId);
         auditPlanRepository.save(plan);
-
-        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
         if (c != null) {
             c.setStatus("AUDIT_PLAN_SUBMITTED_COMMITTEE");
             caseRepository.save(c);
@@ -715,7 +741,17 @@ public class TpAuditExecutionController {
     public ResponseEntity<Map<String, Object>> approveAuditPlan(
             @PathVariable UUID caseId,
             @RequestBody(required = false) Map<String, Object> req,
-            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "COMMITTEE") String actorRole) {
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Auditors cannot approve Audit Plans. Review Committee / Process Owner approval is required."));
+        }
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && c.getAssignedAuditorId() != null && c.getAssignedAuditorId().equals(actorId) && !"SYSTEM".equalsIgnoreCase(actorId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Assigned Auditor cannot approve their own Audit Plan."));
+        }
         TpAuditPlanEntity plan = auditPlanRepository.findByAuditCaseId(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Audit plan not found for case: " + caseId));
         plan.setStatus("APPROVED");
@@ -731,7 +767,6 @@ public class TpAuditExecutionController {
             phaseGateRepository.save(gate);
         });
 
-        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
         if (c != null) {
             c.setStatus("IN_PROGRESS");
             c.setTpCurrentPhase("FIELD_WORK");
@@ -1211,7 +1246,19 @@ public class TpAuditExecutionController {
     }
 
     @PostMapping("/report/{reportId}/team-leader-review")
-    public ResponseEntity<Void> teamLeaderReview(@PathVariable UUID caseId, @PathVariable String reportId, @RequestBody TpReportReviewRequest req, @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+    public ResponseEntity<Void> teamLeaderReview(
+            @PathVariable UUID caseId,
+            @PathVariable String reportId,
+            @RequestBody TpReportReviewRequest req,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "TEAM_LEADER") String actorRole) {
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && c.getAssignedAuditorId() != null && c.getAssignedAuditorId().equals(actorId) && !"SYSTEM".equalsIgnoreCase(actorId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         UUID actualReportId = resolveReportId(caseId, reportId, actorId);
         auditReportUseCase.recordTeamLeaderReview(actualReportId, req.getDecision(), req.getComments(), actorId);
         logAction(caseId, "TL_REVIEW_DECISION", "REPORT", actorId, "TEAM_LEADER",
@@ -1259,7 +1306,17 @@ public class TpAuditExecutionController {
             @PathVariable UUID caseId,
             @PathVariable String reportId,
             @RequestBody(required = false) Map<String, Object> req,
-            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId) {
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "SYSTEM") String actorId,
+            @RequestHeader(value = "X-Actor-Role", defaultValue = "COMMITTEE") String actorRole) {
+        if ("AUDITOR".equalsIgnoreCase(actorRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Auditors cannot approve TP Audit Reports. Committee approval is required."));
+        }
+        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
+        if (c != null && c.getAssignedAuditorId() != null && c.getAssignedAuditorId().equals(actorId) && !"SYSTEM".equalsIgnoreCase(actorId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Assigned Auditor cannot approve their own TP Audit Report."));
+        }
         UUID actualReportId = resolveReportId(caseId, reportId, actorId);
         TpAuditReportEntity report = auditReportRepository.findById(actualReportId)
                 .orElseThrow(() -> new IllegalArgumentException("Report not found: " + actualReportId));
@@ -1273,7 +1330,6 @@ public class TpAuditExecutionController {
         report.setAuthorizedOfficialReview(reviewNode);
         auditReportRepository.save(report);
 
-        ApAuditCaseEntity c = caseRepository.findById(caseId).orElse(null);
         if (c != null) {
             c.setStatus("REPORT_APPROVED");
             c.setTpCurrentPhase("ASSESSMENT");

@@ -292,10 +292,20 @@ public class ApAuditCaseEntity {
 
     // ── Constructors ──────────────────────────────────────────────────────────
     public ApAuditCaseEntity() {
+        this.tpRiskAssessments = new java.util.ArrayList<>();
+        this.tpWorkingHypotheses = new java.util.ArrayList<>();
+        this.tpAuditPlans = new java.util.ArrayList<>();
+        this.tpPlanningMeetings = new java.util.ArrayList<>();
+        this.tpFieldWorkDatas = new java.util.ArrayList<>();
+        this.tpAnalysisDatas = new java.util.ArrayList<>();
+        this.tpAuditReports = new java.util.ArrayList<>();
+        this.tpAuditNotices = new java.util.ArrayList<>();
+        this.tpObjections = new java.util.ArrayList<>();
     }
 
     public ApAuditCaseEntity(UUID planId, String caseNumber, String taxpayerId, String auditType,
                              Integer riskScore, String createdBy) {
+        this();
         this.planId = planId;
         this.caseNumber = caseNumber;
         this.taxpayerId = taxpayerId;
@@ -378,40 +388,99 @@ public class ApAuditCaseEntity {
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpRiskAssessmentEntity getTpRiskAssessment() { return tpRiskAssessments.isEmpty() ? null : tpRiskAssessments.get(0); }
-    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) { this.tpRiskAssessments.clear(); if (tpRiskAssessment != null) this.tpRiskAssessments.add(tpRiskAssessment); }
+    public TpRiskAssessmentEntity getTpRiskAssessment() {
+        if (tpRiskAssessments == null) tpRiskAssessments = new java.util.ArrayList<>();
+        return tpRiskAssessments.isEmpty() ? null : tpRiskAssessments.get(0);
+    }
+    public void setTpRiskAssessment(TpRiskAssessmentEntity tpRiskAssessment) {
+        if (tpRiskAssessments == null) tpRiskAssessments = new java.util.ArrayList<>();
+        this.tpRiskAssessments.clear();
+        if (tpRiskAssessment != null) this.tpRiskAssessments.add(tpRiskAssessment);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpWorkingHypothesisEntity getTpWorkingHypothesis() { return tpWorkingHypotheses.isEmpty() ? null : tpWorkingHypotheses.get(0); }
-    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) { this.tpWorkingHypotheses.clear(); if (tpWorkingHypothesis != null) this.tpWorkingHypotheses.add(tpWorkingHypothesis); }
+    public TpWorkingHypothesisEntity getTpWorkingHypothesis() {
+        if (tpWorkingHypotheses == null) tpWorkingHypotheses = new java.util.ArrayList<>();
+        return tpWorkingHypotheses.isEmpty() ? null : tpWorkingHypotheses.get(0);
+    }
+    public void setTpWorkingHypothesis(TpWorkingHypothesisEntity tpWorkingHypothesis) {
+        if (tpWorkingHypotheses == null) tpWorkingHypotheses = new java.util.ArrayList<>();
+        this.tpWorkingHypotheses.clear();
+        if (tpWorkingHypothesis != null) this.tpWorkingHypotheses.add(tpWorkingHypothesis);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpAuditPlanEntity getTpAuditPlan() { return tpAuditPlans.isEmpty() ? null : tpAuditPlans.get(0); }
-    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) { this.tpAuditPlans.clear(); if (tpAuditPlan != null) this.tpAuditPlans.add(tpAuditPlan); }
+    public TpAuditPlanEntity getTpAuditPlan() {
+        if (tpAuditPlans == null) tpAuditPlans = new java.util.ArrayList<>();
+        return tpAuditPlans.isEmpty() ? null : tpAuditPlans.get(0);
+    }
+    public void setTpAuditPlan(TpAuditPlanEntity tpAuditPlan) {
+        if (tpAuditPlans == null) tpAuditPlans = new java.util.ArrayList<>();
+        this.tpAuditPlans.clear();
+        if (tpAuditPlan != null) this.tpAuditPlans.add(tpAuditPlan);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpPlanningMeetingEntity getTpPlanningMeeting() { return tpPlanningMeetings.isEmpty() ? null : tpPlanningMeetings.get(0); }
-    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) { this.tpPlanningMeetings.clear(); if (tpPlanningMeeting != null) this.tpPlanningMeetings.add(tpPlanningMeeting); }
+    public TpPlanningMeetingEntity getTpPlanningMeeting() {
+        if (tpPlanningMeetings == null) tpPlanningMeetings = new java.util.ArrayList<>();
+        return tpPlanningMeetings.isEmpty() ? null : tpPlanningMeetings.get(0);
+    }
+    public void setTpPlanningMeeting(TpPlanningMeetingEntity tpPlanningMeeting) {
+        if (tpPlanningMeetings == null) tpPlanningMeetings = new java.util.ArrayList<>();
+        this.tpPlanningMeetings.clear();
+        if (tpPlanningMeeting != null) this.tpPlanningMeetings.add(tpPlanningMeeting);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpFieldWorkDataEntity getTpFieldWorkData() { return tpFieldWorkDatas.isEmpty() ? null : tpFieldWorkDatas.get(0); }
-    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) { this.tpFieldWorkDatas.clear(); if (tpFieldWorkData != null) this.tpFieldWorkDatas.add(tpFieldWorkData); }
+    public TpFieldWorkDataEntity getTpFieldWorkData() {
+        if (tpFieldWorkDatas == null) tpFieldWorkDatas = new java.util.ArrayList<>();
+        return tpFieldWorkDatas.isEmpty() ? null : tpFieldWorkDatas.get(0);
+    }
+    public void setTpFieldWorkData(TpFieldWorkDataEntity tpFieldWorkData) {
+        if (tpFieldWorkDatas == null) tpFieldWorkDatas = new java.util.ArrayList<>();
+        this.tpFieldWorkDatas.clear();
+        if (tpFieldWorkData != null) this.tpFieldWorkDatas.add(tpFieldWorkData);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpAnalysisDataEntity getTpAnalysisData() { return tpAnalysisDatas.isEmpty() ? null : tpAnalysisDatas.get(0); }
-    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) { this.tpAnalysisDatas.clear(); if (tpAnalysisData != null) this.tpAnalysisDatas.add(tpAnalysisData); }
+    public TpAnalysisDataEntity getTpAnalysisData() {
+        if (tpAnalysisDatas == null) tpAnalysisDatas = new java.util.ArrayList<>();
+        return tpAnalysisDatas.isEmpty() ? null : tpAnalysisDatas.get(0);
+    }
+    public void setTpAnalysisData(TpAnalysisDataEntity tpAnalysisData) {
+        if (tpAnalysisDatas == null) tpAnalysisDatas = new java.util.ArrayList<>();
+        this.tpAnalysisDatas.clear();
+        if (tpAnalysisData != null) this.tpAnalysisDatas.add(tpAnalysisData);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public java.util.List<TpAuditReportEntity> getTpAuditReports() { return tpAuditReports; }
-    public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) { this.tpAuditReports = tpAuditReports; }
+    public java.util.List<TpAuditReportEntity> getTpAuditReports() {
+        if (tpAuditReports == null) tpAuditReports = new java.util.ArrayList<>();
+        return tpAuditReports;
+    }
+    public void setTpAuditReports(java.util.List<TpAuditReportEntity> tpAuditReports) {
+        this.tpAuditReports = tpAuditReports != null ? tpAuditReports : new java.util.ArrayList<>();
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public TpAuditNoticeEntity getTpAuditNotice() { return tpAuditNotices.isEmpty() ? null : tpAuditNotices.get(0); }
-    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) { this.tpAuditNotices.clear(); if (tpAuditNotice != null) this.tpAuditNotices.add(tpAuditNotice); }
+    public TpAuditNoticeEntity getTpAuditNotice() {
+        if (tpAuditNotices == null) tpAuditNotices = new java.util.ArrayList<>();
+        return tpAuditNotices.isEmpty() ? null : tpAuditNotices.get(0);
+    }
+    public void setTpAuditNotice(TpAuditNoticeEntity tpAuditNotice) {
+        if (tpAuditNotices == null) tpAuditNotices = new java.util.ArrayList<>();
+        this.tpAuditNotices.clear();
+        if (tpAuditNotice != null) this.tpAuditNotices.add(tpAuditNotice);
+    }
 
     @com.fasterxml.jackson.annotation.JsonIgnore
-    public java.util.List<TpObjectionEntity> getTpObjections() { return tpObjections; }
-    public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) { this.tpObjections = tpObjections; }
+    public java.util.List<TpObjectionEntity> getTpObjections() {
+        if (tpObjections == null) tpObjections = new java.util.ArrayList<>();
+        return tpObjections;
+    }
+    public void setTpObjections(java.util.List<TpObjectionEntity> tpObjections) {
+        this.tpObjections = tpObjections != null ? tpObjections : new java.util.ArrayList<>();
+    }
 
     public String getTpCurrentPhase() { return tpCurrentPhase; }
     public void setTpCurrentPhase(String tpCurrentPhase) { this.tpCurrentPhase = tpCurrentPhase; }

@@ -136,8 +136,8 @@ class TpPlanningAndMeetingUseCaseTest {
     }
 
     @Test
-    @DisplayName("Should record meeting decision APPROVED and transition case phase to FIELD_WORK")
-    void shouldRecordMeetingDecisionAndTransitionToFieldwork() {
+    @DisplayName("Should record meeting decision APPROVED and transition case phase to PLANNING")
+    void shouldRecordMeetingDecisionAndTransitionToPlanning() {
         TpPlanningMeetingEntity meeting = TpPlanningMeetingEntity.builder()
                 .auditCase(auditCase)
                 .recordedBy("AUDITOR_007")
@@ -157,7 +157,7 @@ class TpPlanningAndMeetingUseCaseTest {
         verify(auditCaseRepository, times(1)).save(captor.capture());
 
         ApAuditCaseEntity savedCase = captor.getValue();
-        assertThat(savedCase.getTpCurrentPhase()).isEqualTo("FIELD_WORK");
+        assertThat(savedCase.getTpCurrentPhase()).isEqualTo("PLANNING");
         assertThat(savedCase.getTpPlanningMeeting().getDecision()).isEqualTo("APPROVED");
     }
 

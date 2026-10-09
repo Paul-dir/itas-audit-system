@@ -73,8 +73,11 @@ export default function PhaseReviewBanner({
     );
   }
 
-  // If Submitted for Review: show under review banner with supervisor review controls
+  // If Submitted for Review: show under review banner (supervisor controls shown ONLY for authorized non-auditor roles)
   if (status === 'SUBMITTED_FOR_REVIEW') {
+    const isAuditor = user?.role === 'auditor' || !user?.role || user?.role === 'AUDITOR';
+    const canReview = !isAuditor && typeof onReview === 'function';
+
     return (
       <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-300/80 dark:border-amber-700/60 rounded-2xl space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -93,21 +96,26 @@ export default function PhaseReviewBanner({
                 Submitted to <strong>{gate.reviewerRole || phaseConfig?.authority || 'Reviewing Authority'}</strong> by {gate.submittedBy || 'Auditor'}
                 {gate.submittedAt && ` on ${new Date(gate.submittedAt).toLocaleString()}`}.
               </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 italic">
+                Editing is locked. Formal supervisory review must be completed by the assigned authority in their supervisory workspace.
+              </p>
             </div>
           </div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowReviewControls(!showReviewControls)}
-            className="border-amber-400/60 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-semibold"
-          >
-            <ShieldCheck size={14} className="mr-1.5" />
-            {showReviewControls ? 'Hide Review Console' : 'Approving Official Action'}
-          </Button>
+          {canReview && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowReviewControls(!showReviewControls)}
+              className="border-amber-400/60 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-semibold"
+            >
+              <ShieldCheck size={14} className="mr-1.5" />
+              {showReviewControls ? 'Hide Review Console' : 'Approving Official Action'}
+            </Button>
+          )}
         </div>
 
-        {showReviewControls && (
+        {canReview && showReviewControls && (
           <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800 bg-white/70 dark:bg-slate-900/70 p-4 rounded-xl space-y-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
               Approving Authority Action ({phaseConfig?.authority})

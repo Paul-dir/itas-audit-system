@@ -339,37 +339,6 @@ export default function TpAuditorWorkspace({
     }
   };
 
-  const handleReviewPhase = async (phaseId, decision, comments) => {
-    setSaving(true);
-    try {
-      const res = await fetch(`${BASE_API}/${caseId}/phases/${phaseId}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Actor-Id': user?.id || user?.username || 'tp-supervisor',
-          'X-Actor-Role': user?.role || 'TEAM_LEADER'
-        },
-        body: JSON.stringify({ decision, comments })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Review action failed');
-      }
-      setMsg({
-        type: 'success',
-        text: decision === 'APPROVED' 
-          ? 'Phase approved successfully! Subsequent gate unlocked.' 
-          : 'Revision requested from auditor.'
-      });
-      await loadPhaseGates();
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      setMsg({ type: 'error', text: err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Phase 3: Create IDR
   const handleCreateIdr = async () => {
     if (!newIdrSubject) return;
@@ -488,7 +457,6 @@ export default function TpAuditorWorkspace({
           <PhaseReviewBanner
             gate={currentGate}
             phaseConfig={currentPhaseConfig}
-            onReview={(decision, comments) => handleReviewPhase(activeTab, decision, comments)}
             saving={saving}
             user={user}
           />
