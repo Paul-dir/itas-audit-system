@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useApp } from './context/AppContext.jsx';
 import Layout from './components/layout/Layout.jsx';
@@ -11,347 +11,154 @@ import RegionalDashboard from './features/ap/pages/regional/RegionalDashboard.js
 import SeniorDashboard from './features/ap/pages/senior/SeniorDashboard.jsx';
 import TaxCenterDashboard from './features/ap/pages/taxcenter/TaxCenterDashboard.jsx';
 import CaseManagement from './features/ap/pages/taxcenter/CaseManagement.jsx';
-import TeamLeaderDashboard from './features/ap/pages/teamleader/TeamLeaderDashboard.jsx';
+import TeamLeaderDashboard from './features/teamleader/pages/TeamLeaderDashboard.jsx';
+import TeamLeaderCases from './features/teamleader/pages/TeamLeaderCases.jsx';
+import { WorkflowProvider } from './features/teamleader/context/WorkflowContext.jsx';
 import AuditorDashboard from './features/ap/pages/auditor/AuditorDashboard.jsx';
-import CommitteeDashboard from './features/ap/pages/committee/CommitteeDashboard.jsx';
-import CommitteeCaseAssignment from './features/ap/pages/committee/CommitteeCaseAssignment.jsx';
 import RiskAnalysisDashboard from './features/ap/pages/planning/RiskAnalysisDashboard.jsx';
 import RiskEngineDashboard from './features/ap/pages/riskengine/RiskEngineDashboard.jsx';
-import AuditRequesterDashboard from './features/ap/pages/requester/AuditRequesterDashboard.jsx';
-import SystemAdminDashboard from './features/ap/pages/admin/SystemAdminDashboard.jsx';
-import ChangePasswordModal from './components/security/ChangePasswordModal.jsx';
-import TaxpayerPortalDashboard from './features/portal/pages/TaxpayerPortalDashboard.jsx';
-import { QAWorkspaceManager } from './features/qa/pages/QAWorkspaceManager';
+
+// Committee pages
 import {
-  CommitteeDashboard as JaCommitteeDashboard,
-  CommitteeCases as JaCommitteeCases,
-  CaseDetail as JaCaseDetail,
-  ResearchWorkspace as JaResearchWorkspace,
-  AuditorNomination as JaAuditorNomination,
-  SessionManager as JaSessionManager,
-  AuditTrail as JaAuditTrail,
-  CommitteeProvider
-} from './features/ja/index.js';
-import {
-  TeamLeaderDashboard as JaTeamLeaderDashboard,
-  TeamLeaderCases as JaTeamLeaderCases,
-  WorkflowProvider,
-} from './features/teamleader/index.js';
-import JaAuditorWorkspace from './features/ja/pages/AuditorWorkspace.jsx';
-import { isJointAuditUser } from './components/layout/Sidebar.jsx';
-import AuditTrail from './features/committee/pages/AuditTrail.jsx';
+  CommitteeDashboard,
+  CommitteeCases,
+  ResearchWorkspace,
+  AuditorNomination as TeamFormation,
+  SessionManager,
+  AuditTrail,
+} from './features/committee/index.js';
+
 import { Spinner } from './components/ui/index.jsx';
-import DeskAuditWorkspace from './features/da/components/workspace/DeskAuditWorkspace';
-import { ComprehensiveAuditWorkspace } from './features/ca/components/comprehensive/ComprehensiveAuditWorkspace';
-
-const TP_PHASE_TITLES = {
-  'phase-1':          { title: '1. Risk Assessment & Evidence',         subtitle: 'Detailed TP risk scoring, BEPS indicators, and baseline evidence' },
-  'phase-2':          { title: '2. Audit Planning & Programming',       subtitle: 'Audit scope definition, materiality thresholds, and Entry Conference' },
-  'phase-3':          { title: '3. Field Work & Facts',                 subtitle: 'FAR functional analysis, IDR log, and Statement of Facts' },
-  'phase-4':          { title: '4. Economic Analysis & IQR',            subtitle: 'Method selection, comparable screening, and interquartile range' },
-  'phase-5':          { title: '5. TP Audit Report & Exit Conference',  subtitle: 'Comprehensive TP audit report, Exit Conference, and rebuttal' },
-  'phase-6':          { title: '6. Assessment & Notice Draft',          subtitle: 'Arm’s length tax adjustments, penalty calculations, and notice draft' },
-  'phase-assessment': { title: '6. Assessment & Notice Draft',          subtitle: 'Arm’s length tax adjustments, penalty calculations, and notice draft' },
-  'phase-7':          { title: '7. Notice & Objection',                 subtitle: 'Statutory 30-day objection window and auditor defense rejoinder' },
-  'phase-8':          { title: '8. Audit Closure',                      subtitle: 'Statutory clearance certification, digital dossier archival, and case closure' },
-};
-
-const JA_PHASE_TITLES = {
-  workspace:             { title: 'Joint Audit Workspace',          subtitle: '10-step statutory audit execution workflow' },
-  'ja-aud-viability':    { title: 'Viability Assessment',           subtitle: 'Pre-audit viability check and risk profile' },
-  'ja-aud-fieldwork':    { title: 'On-Site Inspection',             subtitle: 'Field investigation, questionnaires & interviews' },
-  'ja-aud-customs':      { title: 'Customs Discrepancy Matching',   subtitle: 'ASYCUDA import/export data matching vs tax filings' },
-  'ja-aud-findings':     { title: 'Findings & Working Papers',      subtitle: 'Audit observations, adjustments and supporting evidence' },
-  'ja-aud-report':       { title: 'Joint Audit Report',             subtitle: 'Draft and final joint audit assessment report' },
-};
-
-const COMP_PHASE_TITLES = {
-  'comp-phase-planning':   { title: 'Comprehensive Audit Planning', subtitle: 'Multi-year multi-tax audit plan & materiality scope' },
-  'comp-phase-fieldwork':  { title: 'Books & Records Examination',  subtitle: 'Comprehensive on-site books and accounting records audit' },
-  'comp-phase-findings':   { title: 'Comprehensive Audit Findings', subtitle: 'Draft assessment across VAT, income tax and withholding' },
-  'comp-phase-response':   { title: 'Taxpayer Objection Review',   subtitle: 'Taxpayer response evaluation and rebuttal hearing' },
-  'comp-phase-conclusion': { title: 'Final Assessment & Sign-Off', subtitle: 'Statutory assessment notice and case closure' },
-};
-
-const DESK_PHASE_TITLES = {
-  'desk-phase-screening':  { title: 'Return Cross-Matching',       subtitle: 'Automated return discrepancy screening & third-party data match' },
-  'desk-phase-inquiry':    { title: 'Clarification Requests',      subtitle: 'Statutory 15-day information query notices and replies' },
-  'desk-phase-findings':   { title: 'Desk Adjustment Findings',    subtitle: 'Disallowed deductions and mathematical error corrections' },
-  'desk-phase-conclusion': { title: 'Summary Assessment Order',    subtitle: 'Automated summary tax assessment and closure' },
-};
-
-const ISSUE_PHASE_TITLES = {
-  'issue-phase-scope':       { title: 'Single Issue Scoping',          subtitle: 'Targeted verification of specific flagged transactions or refunds' },
-  'issue-phase-verification':{ title: 'Voucher & Invoice Verification',subtitle: 'Direct supplier/customer verification and banking trails' },
-  'issue-phase-findings':    { title: 'Issue Determination',          subtitle: 'Tax adjustment determination on targeted items' },
-  'issue-phase-conclusion':  { title: 'Targeted Assessment Notice',   subtitle: 'Issue audit closure and assessment notice generation' },
-};
-
-const ALL_AUDIT_PHASE_TITLES = {
-  ...TP_PHASE_TITLES,
-  ...JA_PHASE_TITLES,
-  ...COMP_PHASE_TITLES,
-  ...DESK_PHASE_TITLES,
-  ...ISSUE_PHASE_TITLES,
-};
 
 const PAGE_TITLES = {
   planning_team: {
-    dashboard:           { title: 'Planning Dashboard',          subtitle: 'Manage and track national audit plans' },
-    plans:               { title: 'Audit Plans',                 subtitle: 'All audit plans overview' },
-    regional_allocation: { title: 'Regional Allocation',         subtitle: 'National quota and case distribution across regions' },
-    deployment:          { title: 'Plan Deployment',             subtitle: 'National audit plan deployment lifecycle & regional tracking' },
-    risk_analysis:       { title: 'Risk Engine Analysis',        subtitle: 'Live taxpayer risk data from the MOR Risk Engine' },
-    risk_distribution:   { title: 'Risk Distribution',           subtitle: 'Taxpayer risk tier distributions and profiling' },
-    config:              { title: 'Planning Configuration',      subtitle: 'Dynamic statutory audit types, regions, and effort multipliers' },
-    'plan-configuration':{ title: 'Planning Configuration',      subtitle: 'Dynamic statutory audit types, regions, and effort multipliers' },
-    audit_trail:         { title: 'Governance Audit Trail',      subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail':       { title: 'Governance Audit Trail',      subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard:     { title: 'Planning Dashboard',    subtitle: 'Manage and track national audit plans'         },
+    plans:         { title: 'Audit Plans',            subtitle: 'All audit plans overview'                      },
+    risk_analysis: { title: 'Risk Engine Analysis',   subtitle: 'Live taxpayer risk data from the MOR Risk Engine' },
+    risk_engine:   { title: 'Risk Engine',            subtitle: 'AI-powered risk assessment and taxpayer mapping'  },
   },
   audit_director: {
-    dashboard:   { title: 'Director Dashboard',     subtitle: 'Review and approve audit plans' },
-    review:      { title: 'Plan Review',            subtitle: 'Plans awaiting your decision' },
-    deploy:      { title: 'Deploy Plans',           subtitle: 'Send approved plans to regions' },
-    approvals:   { title: 'Plan Approvals',         subtitle: 'All active and approved national plans' },
-    risk_engine: { title: 'Risk Engine',            subtitle: 'AI-powered risk assessment and taxpayer mapping' },
-    audit_trail: { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard:   { title: 'Director Dashboard',     subtitle: 'Review and approve audit plans'         },
+    review:      { title: 'Plan Review',            subtitle: 'Plans awaiting your decision'           },
+    deploy:      { title: 'Deploy Plans',           subtitle: 'Send approved plans to regions'         },
+    risk_engine: { title: 'Risk Engine',            subtitle: 'AI-powered risk assessment and taxpayer mapping'  },
   },
   regional_director: {
-    dashboard:   { title: 'Regional Dashboard',     subtitle: 'Manage your regional allocation' },
-    plans:       { title: 'Regional Plans',         subtitle: 'Plans assigned to your region' },
-    feedback:    { title: 'Capacity Feedback',      subtitle: 'Provide regional feedback and tax center allocations' },
-    audit_trail: { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard: { title: 'Regional Dashboard',  subtitle: 'Manage your regional allocation'                     },
+    plans:     { title: 'Regional Plans',      subtitle: 'Plans assigned to your region'                       },
+    feedback:  { title: 'Submit Feedback',     subtitle: 'Provide regional feedback and tax center allocations' },
   },
   tax_center_manager: {
-    dashboard:   { title: 'Tax Center Dashboard',   subtitle: 'Manage and assign audit cases for your tax center' },
-    cases:       { title: 'Case Management',        subtitle: 'Assign and track audit cases' },
-    risk_engine: { title: 'Risk Classifier',        subtitle: 'Map taxpayers to plans and generate cases' },
-    audit_trail: { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard:   { title: 'Tax Center Dashboard', subtitle: 'Manage and assign audit cases for your tax center' },
+    cases:       { title: 'Case Management',      subtitle: 'Assign and track audit cases'                      },
+    risk_engine: { title: 'Risk Engine',          subtitle: 'Map taxpayers to plans and generate cases'         },
   },
   team_leader: {
-    dashboard:   { title: 'Team Leader Dashboard',  subtitle: 'Assign cases and supervise audit team' },
-    cases:       { title: 'Assigned Cases',         subtitle: 'Cases under your supervisory team' },
-    'tp-tasks':  { title: 'TP Workflow Tasks',      subtitle: 'Review gates and pending supervisory actions' },
-    'qa-portal': { title: 'Audit Team QA Compliance Portal', subtitle: 'Respond to Quality Assurance deficiency notices and submit remediation working papers' },
-    audit_trail: { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    ...ALL_AUDIT_PHASE_TITLES,
+    dashboard:  { title: 'Team Leader Dashboard',  subtitle: 'Cases from Committee & your audit team portfolio' },
+    cases:      { title: 'My Cases',                subtitle: 'Cases from Committee & assigned cases'            },
   },
   auditor: {
-    dashboard:   { title: 'Auditor Dashboard',      subtitle: 'Your active audit cases' },
-    cases:       { title: 'My Cases',               subtitle: 'Cases assigned to you' },
-    'ja-workspace': { title: 'Joint Audit Workspace', subtitle: 'Execute 10-step statutory joint audit workflow and inter-agency verification' },
-    'da-workspace': { title: 'Desk Audit Workspace', subtitle: 'Execute desk audit procedures and evidence' },
-    'ca-workspace': { title: 'Comprehensive Audit Workspace', subtitle: 'Execute comprehensive audit procedures and multi-tax examination' },
-    'qa-portal': { title: 'Audit Team QA Compliance Portal', subtitle: 'Respond to Quality Assurance deficiency notices and submit remediation working papers' },
-    audit_trail: { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
-    ...ALL_AUDIT_PHASE_TITLES,
-  },
-  qa_officer: {
-    dashboard:      { title: 'Quality Assurance Inspection Workspace', subtitle: 'ISO 19011 7-Dimension Audit Quality Verification & Scoring (SOR FR-04.5)' },
-    DIMENSIONS:     { title: 'ISO 19011 Quality Matrix',               subtitle: 'Evaluate and score 7 mandatory audit quality dimensions' },
-    DEFICIENCIES:   { title: 'Quality Deficiency Register',            subtitle: 'Log substantive defects, statutory breaches, and corrective action mandates' },
-    AUDIT_CONTEXT:  { title: 'Underlying Audit File Dossier',          subtitle: 'Inspect underlying audit working papers, 3-way reconciliations, and findings' },
-    WORKING_PAPERS: { title: 'QA Independent Recalculation & WPs',     subtitle: 'Statistical sample size verification and independent tax recalculation' },
-    COMMUNICATION:  { title: 'Inter-Role Remediation Dialogue',        subtitle: 'Official exchange between QA Directorate and Field Audit Team' },
-    REPORT:         { title: 'Formal QA Review Report',                subtitle: 'ISO 19011 Quality Assurance Inspection Report & Certification' },
-    audit_trail:    { title: 'Governance Audit Trail',                 subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail':  { title: 'Governance Audit Trail',                 subtitle: 'Immutable compliance & statutory governance audit log' },
-  },
-  qa_team_leader: {
-    dashboard:      { title: 'QA Supervisory & Technical Review Portal', subtitle: 'Level 4 Technical Review, Deficiency Notice Issuance & Director Escalation' },
-    audit_trail:    { title: 'Governance Audit Trail',                   subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail':  { title: 'Governance Audit Trail',                   subtitle: 'Immutable compliance & statutory governance audit log' },
-  },
-  qa_director: {
-    dashboard:      { title: 'Executive Quality Assurance Governance', subtitle: 'Level 5 National Quality Index, Statutory Certification & Re-Audit Mandates' },
-    audit_trail:    { title: 'Governance Audit Trail',                 subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail':  { title: 'Governance Audit Trail',                 subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard:  { title: 'Auditor Dashboard', subtitle: 'Your audit workspace and active cases' },
+    cases:      { title: 'My Cases',           subtitle: 'Cases assigned to you'   },
   },
   committee: {
-    dashboard:      { title: 'Committee Dashboard',       subtitle: 'Review and approve audit committee matters' },
-    cases:          { title: 'Committee Cases',           subtitle: 'Manage and review all cases' },
-    research:       { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
-    sessions:       { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
-    audit_trail:    { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    'audit-trail':  { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    reviews:        { title: 'Pending Reviews',           subtitle: 'Cases awaiting your committee review' },
-    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    assign:         { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    intake:         { title: 'Intake & Hypotheses',       subtitle: 'Pre-audit case intake & risk hypotheses' },
-    planning:       { title: 'Planning & Mandates',       subtitle: 'Audit scope definition & mandates' },
-    approvals:      { title: 'Plan & Report Approvals',   subtitle: 'Committee approvals & sign-offs' },
-    deliberations:  { title: 'Committee Deliberations',   subtitle: 'Formal session records and statutory voting resolutions' },
-    ...ALL_AUDIT_PHASE_TITLES,
-  },
-  committee_member: {
-    dashboard:      { title: 'Committee Dashboard',       subtitle: 'Review and approve audit committee matters' },
-    cases:          { title: 'Committee Cases',           subtitle: 'Manage and review all cases' },
-    research:       { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
-    sessions:       { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
-    audit_trail:    { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    'audit-trail':  { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    reviews:        { title: 'Pending Reviews',           subtitle: 'Cases awaiting your committee review' },
-    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    assign:         { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    intake:         { title: 'Intake & Hypotheses',       subtitle: 'Pre-audit case intake & risk hypotheses' },
-    planning:       { title: 'Planning & Mandates',       subtitle: 'Audit scope definition & mandates' },
-    approvals:      { title: 'Plan & Report Approvals',   subtitle: 'Committee approvals & sign-offs' },
-    deliberations:  { title: 'Committee Deliberations',   subtitle: 'Formal session records and statutory voting resolutions' },
-    ...ALL_AUDIT_PHASE_TITLES,
+    dashboard:   { title: 'Committee Dashboard',      subtitle: 'Executive Control Center' },
+    cases:       { title: 'Committee Cases',          subtitle: 'Manage and review all cases' },
+    research:    { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
+    sessions:    { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
+    'audit-trail':{ title: 'Audit Trail',              subtitle: 'Immutable compliance & activity log' },
   },
   committee_chair: {
-    dashboard:      { title: 'Joint Committee Chair Dashboard', subtitle: 'Executive Control Center & Team Formation' },
-    cases:          { title: 'Committee Cases',           subtitle: 'Manage and review all cases' },
-    research:       { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
-    auditors:       { title: 'Team Formation',            subtitle: 'Select auditors and team leaders for audit cases' },
-    sessions:       { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
-    audit_trail:    { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    'audit-trail':  { title: 'Audit Trail',               subtitle: 'Immutable compliance & activity log' },
-    reviews:        { title: 'Pending Reviews',           subtitle: 'Cases awaiting your committee review' },
-    'assign-cases': { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    assign:         { title: 'Assign Cases to Team Leaders', subtitle: 'Distribute cases from committee to team leaders' },
-    intake:         { title: 'Intake & Hypotheses',       subtitle: 'Pre-audit case intake & risk hypotheses' },
-    planning:       { title: 'Planning & Mandates',       subtitle: 'Audit scope definition & mandates' },
-    approvals:      { title: 'Plan & Report Approvals',   subtitle: 'Committee approvals & sign-offs' },
-    deliberations:  { title: 'Committee Deliberations',   subtitle: 'Formal session records and statutory voting resolutions' },
-    ...ALL_AUDIT_PHASE_TITLES,
+    dashboard:   { title: 'Committee Dashboard',      subtitle: 'Executive Control Center' },
+    cases:       { title: 'Committee Cases',          subtitle: 'Manage and review all cases' },
+    research:    { title: 'Research Workspace',        subtitle: 'Collaborative analysis & research notes' },
+    auditors:    { title: 'Team Formation',            subtitle: 'Select auditors and team leaders for audit cases' },
+    sessions:    { title: 'Session Management',        subtitle: 'Create and manage committee sessions' },
+    'audit-trail':{ title: 'Audit Trail',              subtitle: 'Immutable compliance & activity log' },
   },
   senior_management: {
-    dashboard:   { title: 'Senior Management',       subtitle: 'Final approval of national audit plans' },
-    approval:    { title: 'National Plan Approval',  subtitle: 'Plans awaiting senior management approval' },
-    audit_trail: { title: 'Governance Audit Trail',  subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail', subtitle: 'Immutable compliance & statutory governance audit log' },
+    dashboard: { title: 'Senior Management',  subtitle: 'Final approval of national audit plans' },
+    approval:  { title: 'Plan Approval',      subtitle: 'Plans awaiting senior management approval' },
   },
-  audit_requester: {
-    dashboard:    { title: 'Directorate Referral Dashboard', subtitle: 'Submit & track statutory audit case referrals' },
-    referrals:    { title: 'My Referrals & Flags',             subtitle: 'Cases flagged for tax clearance, closure & fraud audit' },
-    new_referral: { title: 'Submit Audit Referral',            subtitle: 'Flag taxpayer for desk, comprehensive or TP audit' },
-    audit_trail:  { title: 'Governance Audit Trail',          subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail':{ title: 'Governance Audit Trail',          subtitle: 'Immutable compliance & statutory governance audit log' },
-  },
-  taxpayer: {
-    dashboard: { title: 'Taxpayer Compliance Portal', subtitle: 'View audit cases, statutory notices, and upload requested documents' }
-  },
-  system_admin: {
-    dashboard:     { title: 'Security & Identity Control Center', subtitle: 'BCrypt password administration, brute-force lockout recovery, and JWT security posture' },
-    users:         { title: 'User & Credential Directory',        subtitle: 'Manage all MOR staff accounts, reset passwords, unlock accounts, and update tax center scopes' },
-    provision:     { title: 'Provision MOR Staff Account',        subtitle: 'Create new staff accounts with organizational scope and temporary BCrypt password' },
-    security_logs: { title: 'Authentication & Security Audit Log',subtitle: 'Immutable log of logins, failed password attempts, lockouts, and admin actions' },
-    audit_trail:   { title: 'Governance Audit Trail',             subtitle: 'Immutable compliance & statutory governance audit log' },
-    'audit-trail': { title: 'Governance Audit Trail',             subtitle: 'Immutable compliance & statutory governance audit log' },
-  }
 };
 
-function RoleRouter({ user, view, onNavigate }) {
+// Active demo roles across full audit lifecycle
+const ALLOWED_DEMO_ROLES = [
+  'planning_team',
+  'audit_director',
+  'regional_director',
+  'senior_management',
+  'tax_center_manager',
+  'committee',
+  'committee_chair',
+  'team_leader',
+  'auditor'
+];
+
+function EmptyDemoState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full py-24 px-8">
+      <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-5">
+        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
+        Demo Access Restricted
+      </h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-md">
+        This role is not enabled in the current demo environment.
+        Only <strong>Committee Chair</strong>, <strong>Committee Member</strong>, <strong>Team Leader</strong>, and <strong>Auditor</strong> roles are available.
+      </p>
+    </div>
+  );
+}
+
+function RoleRouter({ user, view }) {
   const role = user.role;
 
-  // Taxpayer Portal route or role
-  if (window.location.pathname.startsWith('/portal') || role === 'taxpayer' || role === 'TAXPAYER') {
-    return <TaxpayerPortalDashboard />;
+  // Block roles outside the allowed demo set
+  if (!ALLOWED_DEMO_ROLES.includes(role)) {
+    return <EmptyDemoState />;
   }
 
-  // System Administrator Portal (Identity, Credentials, Lockouts & Security Audit Trail)
-  if (role === 'system_admin' || role === 'SYSTEM_ADMIN') {
-    if (view === 'audit_trail' || view === 'audit-trail') {
-      return <AuditTrail />;
-    }
-    return <SystemAdminDashboard view={view} onNavigate={onNavigate} />;
-  }
-
-  // Global Governance Audit Trail (accessible across all roles/dashboards except Joint Audit Committee)
-  if (view === 'audit_trail' || view === 'audit-trail') {
-    const isCommittee = ['committee', 'committee_member', 'committee_chair'].includes(role);
-    const isTp = (user?.auditType || '').toUpperCase().includes('TP') ||
-                 (user?.auditType || '').toUpperCase().includes('TRANSFER') ||
-                 (user?.username || '').toLowerCase().includes('tp') ||
-                 (user?.name || '').toLowerCase().includes('tp');
-    if (!isCommittee || isTp) {
-      return <AuditTrail />;
-    }
-  }
-
-  // Risk Engine page (accessible to tax center managers, directors, planning team)
+  // Risk Engine page (accessible to tax center managers)
   if (view === 'risk_engine') {
-    if (['tax_center_manager', 'audit_director', 'planning_team'].includes(role)) {
+    if (['tax_center_manager'].includes(role)) {
       return <RiskEngineDashboard />;
     }
   }
 
-  // Standalone risk analysis / distribution page (accessible to planning team via sidebar)
-  if ((view === 'risk_analysis' || view === 'risk_distribution') && role === 'planning_team') {
+  // Standalone risk analysis page (accessible to planning team via sidebar)
+  if (view === 'risk_analysis' && role === 'planning_team') {
     return <RiskAnalysisDashboard />;
   }
 
-  if (role === 'planning_team')    return <PlanningDashboard view={view} onNavigate={onNavigate} />;
-  if (role === 'audit_director')   return <DirectorDashboard view={view} onNavigate={onNavigate} />;
-  if (role === 'regional_director') return <RegionalDashboard view={view} onNavigate={onNavigate} />;
-  if (role === 'senior_management') return <SeniorDashboard view={view} onNavigate={onNavigate} />;
+  if (role === 'planning_team')    return <PlanningDashboard view={view} />;
+  if (role === 'audit_director')   return <DirectorDashboard view={view} />;
+  if (role === 'regional_director') return <RegionalDashboard view={view} />;
+  if (role === 'senior_management') return <SeniorDashboard view={view} />;
   if (role === 'tax_center_manager') {
-    if (view === 'cases') return <CaseManagement onNavigate={onNavigate} />;
-    return <TaxCenterDashboard view={view} onNavigate={onNavigate} />;
+    if (view === 'cases') return <CaseManagement />;
+    return <TaxCenterDashboard view={view} />;
   }
-  
-  if (view === 'qa-portal' || role === 'qa_officer' || role === 'qa_team_leader' || role === 'qa_director' || role === 'QA_OFFICER' || role === 'QA_TEAM_LEADER' || role === 'QA_DIRECTOR') {
-    return <QAWorkspaceManager view={view} onNavigate={onNavigate} />;
-  }
-
   if (role === 'team_leader') {
-    // Single shared heuristic — must agree with the sidebar's nav selection.
-    if (isJointAuditUser(user)) {
-      // Only 'cases' routes to the case list; every other view is the dashboard
-      // (execution workspace & ja-phase-* supervisory views were removed from the sidebar).
-      return (
-        <WorkflowProvider>
-          {view === 'cases' ? (
-            <JaTeamLeaderCases view={view} onNavigate={onNavigate} />
-          ) : (
-            <JaTeamLeaderDashboard onNavigate={onNavigate} />
-          )}
-        </WorkflowProvider>
-      );
-    }
-    return <TeamLeaderDashboard view={view} onNavigate={onNavigate} />;
+    if (view === 'cases') return <TeamLeaderCases />;
+    return <TeamLeaderDashboard />;
   }
   if (role === 'auditor') {
-    const activeView = (isJointAuditUser(user) && view && view.startsWith('phase-')) ? 'dashboard' : view;
-    return (
-      <WorkflowProvider>
-        <AuditorDashboard view={activeView} onNavigate={onNavigate} />
-      </WorkflowProvider>
-    );
+    if (view === 'cases') return <AuditorDashboard view={view} />;
+    return <AuditorDashboard view={view} />;
   }
-  if (role === 'committee' || role === 'committee_member' || role === 'committee_chair') {
-    const isTp = (user?.auditType || '').toUpperCase().includes('TP') ||
-                 (user?.auditType || '').toUpperCase().includes('TRANSFER') ||
-                 (user?.username || '').toLowerCase().includes('tp') ||
-                 (user?.name || '').toLowerCase().includes('tp');
-
-    if (isTp) {
-      if (view === 'assign-cases' || view === 'assign') return <CommitteeDashboard view="assign" />;
-      return <CommitteeDashboard view={view} />;
-    }
-
-    // Joint Audit Committee (JAC)
-    const isChair = role === 'committee_chair';
-    return (
-      <CommitteeProvider>
-        {view === 'cases' && <JaCommitteeCases />}
-        {view === 'research' && <JaResearchWorkspace />}
-        {view === 'auditors' && (isChair ? <JaAuditorNomination /> : <JaCommitteeDashboard />)}
-        {view === 'sessions' && <JaSessionManager />}
-        {(view === 'audit-trail' || view === 'audit_trail') && <JaAuditTrail />}
-        {(!['cases', 'research', 'auditors', 'sessions', 'audit-trail', 'audit_trail'].includes(view)) && (
-          <JaCommitteeDashboard />
-        )}
-      </CommitteeProvider>
-    );
+  if (role === 'committee' || role === 'committee_chair') {
+    if (view === 'cases')       return <CommitteeCases />;
+    if (view === 'research')    return <ResearchWorkspace />;
+    if (view === 'auditors' && role === 'committee_chair') return <TeamFormation />;
+    if (view === 'sessions')    return <SessionManager />;
+    if (view === 'audit-trail') return <AuditTrail />;
+    return <CommitteeDashboard />;
   }
-  if (role === 'audit_requester')  return <AuditRequesterDashboard view={view} />;
 
   return (
     <div className="flex items-center justify-center h-64">
@@ -361,23 +168,9 @@ function RoleRouter({ user, view, onNavigate }) {
 }
 
 export default function App() {
-  const { user, mustChangePassword, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { ready } = useApp();
   const [view, setView] = useState('dashboard');
-
-  // Reset active view and stored auditor case whenever user switches or logs in
-  useEffect(() => {
-    setView('dashboard');
-    sessionStorage.removeItem('auditor_active_case_id');
-    sessionStorage.removeItem('auditor_active_case_data');
-  }, [user?.id, user?.username, user?.role, user?.auditType]);
-
-  // For Joint Audit users, TP phases are not valid views
-  useEffect(() => {
-    if (isJointAuditUser(user) && view && view.startsWith('phase-')) {
-      setView('dashboard');
-    }
-  }, [user, view]);
 
   if (authLoading || !ready) {
     return (
@@ -392,32 +185,21 @@ export default function App() {
 
   if (!user) return <Login />;
 
-  // Direct URL prefix check for /portal
-  if (window.location.pathname.startsWith('/portal')) {
-    return <TaxpayerPortalDashboard />;
-  }
-
   const pageInfo =
     PAGE_TITLES[user.role]?.[view] ||
     PAGE_TITLES[user.role]?.['dashboard'] ||
     { title: 'Dashboard', subtitle: '' };
 
   return (
-    <>
+    <WorkflowProvider>
       <Layout
         activeView={view}
         onNavigate={(v) => setView(v)}
         title={pageInfo.title}
         subtitle={pageInfo.subtitle}
       >
-        <RoleRouter user={user} view={view} onNavigate={(v) => setView(v)} />
+        <RoleRouter user={user} view={view} />
       </Layout>
-
-      {/* Mandatory First-Login / Admin-Reset Password Change Modal */}
-      <ChangePasswordModal
-        isOpen={Boolean(mustChangePassword)}
-        isForced={true}
-      />
-    </>
+    </WorkflowProvider>
   );
 }
