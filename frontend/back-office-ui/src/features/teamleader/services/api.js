@@ -13,10 +13,10 @@ const CASE_API_BASE = '/api/v1/backoffice/ap/cases';
 
 // Map frontend user IDs to backend UUIDs
 const ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
   'u-cc-aa1': '10000000-0000-0000-0000-000000000005',
   'u-cc-aa2': '10000000-0000-0000-0000-000000000006',
   'u-cc-aa3': '10000000-0000-0000-0000-000000000008',
@@ -25,6 +25,35 @@ const ID_MAP = {
   'u-cm-aa2': '20000000-0000-0000-0000-000000000002',
   'u-cm-aa3': '20000000-0000-0000-0000-000000000003',
   'u-cm-or1': '20000000-0000-0000-0000-000000000004',
+  'aa1.chair': '20000000-0000-0001-0000-000000000001',
+  'aa1.member': '20000000-0000-0001-0000-000000000002',
+  'aa1.tl': '10000000-0000-0000-0001-000000000001',
+  'aa1.tl2': '10000000-0000-0000-0001-000000000002',
+  'fed.ja.chair': '20000000-0000-0000-0099-000000000001',
+  'fed.ja.member': '20000000-0000-0000-0099-000000000002',
+  'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
+  'fed.ja.tl2': '10000000-0000-0000-0099-000000000002',
+  'u-tl-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'u-tl-federal-lto1-joint-1': '10000000-0000-0000-0099-000000000001',
+  'teamleader-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'teamleader-federal-lto1-ja-2': '10000000-0000-0000-0099-000000000002',
+  'fed2.ja.chair': '20000000-0000-0000-0098-000000000001',
+  'fed2.ja.member': '20000000-0000-0000-0098-000000000002',
+  'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
+  'fed2.ja.tl2': '10000000-0000-0000-0098-000000000002',
+  'u-tl-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'u-tl-federal-lto2-joint-1': '10000000-0000-0000-0098-000000000001',
+  'teamleader-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'teamleader-federal-lto2-ja-2': '10000000-0000-0000-0098-000000000002',
+  'or1.chair': '20000000-0000-0002-0000-000000000001',
+  'or1.member': '20000000-0000-0002-0000-000000000002',
+  'or1.tl': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-joint-1': '10000000-0000-0000-0004-000000000001',
+  'teamleader-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'teamleader-aa1-ja-1': '10000000-0000-0000-0001-000000000001',
+  'teamleader-aa2-ja-1': '10000000-0000-0000-0002-000000000001',
+  'teamleader-aa3-ja-1': '10000000-0000-0000-0003-000000000001',
 };
 
 const AUDITOR_ID_MAP = {
@@ -34,10 +63,28 @@ const AUDITOR_ID_MAP = {
   'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
   'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
   'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+  'fed.ja.auditor1': 'a0000001-0000-0000-0099-000000000001',
+  'fed.ja.auditor2': 'a0000001-0000-0000-0099-000000000002',
+  'fed.ja.auditor3': 'a0000001-0000-0000-0099-000000000003',
+  'fed.ja.auditor4': 'a0000001-0000-0000-0099-000000000004',
+  'fed.ja.auditor5': 'a0000001-0000-0000-0099-000000000005',
+  'fed2.ja.auditor1': 'a0000001-0000-0000-0098-000000000001',
+  'fed2.ja.auditor2': 'a0000001-0000-0000-0098-000000000002',
+  'fed2.ja.auditor3': 'a0000001-0000-0000-0098-000000000003',
+  'fed2.ja.auditor4': 'a0000001-0000-0000-0098-000000000004',
+  'fed2.ja.auditor5': 'a0000001-0000-0000-0098-000000000005',
 };
 
 function resolveId(frontendId) {
-  return ID_MAP[frontendId] || frontendId;
+  if (!frontendId) return frontendId;
+  if (ID_MAP[frontendId]) return ID_MAP[frontendId];
+  try {
+    const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
+    if (frontendId === session?.id || frontendId === session?.username || frontendId === session?.legacyUsername) {
+      return ID_MAP[session?.legacyUsername] || session?.userId || frontendId;
+    }
+  } catch {}
+  return frontendId;
 }
 
 function resolveUserId(frontendId) {
@@ -48,7 +95,7 @@ function getHeaders() {
   const token = localStorage.getItem('authToken');
   const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
   const userId = session?.id || '';
-  const actorId = resolveId(userId);
+  const actorId = resolveId(userId) || session?.userId || userId;
   
   return {
     'Content-Type': 'application/json',
@@ -120,15 +167,33 @@ export const teamLeaderAPI = {
    * Get all cases assigned to this team leader
    */
   getAssignedCases: async (teamLeaderId, filters = {}) => {
-    // Resolve frontend ID to backend UUID for DB query
-    const params = new URLSearchParams({ assignedTeamLeader: resolveId(teamLeaderId) });
-    if (filters.status) params.append('status', filters.status);
-    
-    const response = await fetch(`${CASE_API_BASE}?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch assigned cases');
-    return response.json();
+    const resolved = resolveId(teamLeaderId);
+    const idsToQuery = Array.from(new Set([teamLeaderId, resolved].filter(Boolean)));
+    const byId = new Map();
+
+    for (const id of idsToQuery) {
+      const params = new URLSearchParams({ assignedTeamLeader: id });
+      if (filters.status) params.append('status', filters.status);
+      try {
+        const response = await fetch(`${CASE_API_BASE}?${params}`, {
+          headers: getHeaders(),
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          const list = payload?.data || payload?.content || (Array.isArray(payload) ? payload : []);
+          if (Array.isArray(list)) {
+            list.forEach(c => {
+              const key = c.id || c.caseId || c.committeeCaseId || c.caseNumber;
+              if (key && !byId.has(key)) byId.set(key, c);
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore network error for one variant
+      }
+    }
+
+    return { data: Array.from(byId.values()) };
   },
 
   /**
@@ -144,19 +209,32 @@ export const teamLeaderAPI = {
 
   /**
    * Assign a case to an auditor (Team Leader action)
-   * Status: ASSIGNED → IN_PROGRESS
+   * Goes through the C2/C3-validated CaseHandoffController:
+   * - creates a case_auditor_assignment record (partial unique index: one ACTIVE per case)
+   * - validates auditor is in the leader's team (403 AUDITOR_NOT_IN_TEAM on violation)
+   * - rejects empty teams early (400 NO_TEAM_MEMBERS)
+   * - requires the requesting user to be the assigned team leader (401)
+   * Status: HANDED_OFF/ASSIGNED_TO_TEAM_LEADER/TEAM_ASSIGNED → AUDITOR_ASSIGNED
    */
   assignCaseToAuditor: async (caseId, auditorId) => {
-    const response = await fetch(`${CASE_API_BASE}/${caseId}/assign-auditor`, {
+    const response = await fetch(`/api/v1/backoffice/cases/${caseId}/assign-auditor`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ auditorId: resolveUserId(auditorId) }),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'Failed to assign case to auditor');
+      const codeMessages = {
+        NO_TEAM_MEMBERS: 'Your team has no active members. Ask the Chairperson to form your team first.',
+        AUDITOR_NOT_IN_TEAM: 'Selected auditor is not a member of your team.',
+        UNAUTHORIZED: 'Only the assigned team leader can assign auditors to this case.',
+        CASE_NOT_FOUND: 'Case not found.',
+        AUDITOR_NOT_FOUND: 'Selected auditor does not exist.',
+      };
+      throw new Error(codeMessages[error.error] || error.message || 'Failed to assign case to auditor');
     }
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
   },
 
   /**
@@ -239,12 +317,27 @@ export const teamLeaderAPI = {
    * Status: ASSIGNED → HANDED_OFF
    */
   handoffCase: async (caseId, teamLeaderId, comment) => {
-    const importedCase = await teamLeaderAPI.importCaseFromCommittee(caseId, teamLeaderId);
-    const executionCaseId = importedCase.id || caseId;
+    const resolvedTlId = resolveId(teamLeaderId);
+    let executionCaseId = caseId;
+    try {
+      const importedCase = await teamLeaderAPI.importCaseFromCommittee(caseId, teamLeaderId);
+      if (importedCase && (importedCase.id || importedCase.caseId)) {
+        executionCaseId = importedCase.id || importedCase.caseId;
+      }
+    } catch (e) {
+      console.warn('Auto-import from committee before handoff notice:', e);
+    }
+    const headers = getHeaders();
+    if (resolvedTlId) {
+      headers['X-Actor-Id'] = resolvedTlId;
+    }
     const response = await fetch(`${CASE_API_BASE}/${executionCaseId}/handoff`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ comment: comment || 'Accepted by Team Leader' }),
+      headers,
+      body: JSON.stringify({
+        comment: comment || 'Accepted by Team Leader',
+        teamLeaderId: resolvedTlId,
+      }),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -276,11 +369,15 @@ export const teamLeaderAPI = {
    * Returns team info with auditor details
    */
   getMyTeam: async (teamLeaderId) => {
-    // Use X-Actor-Id header to identify the user (backend resolves from auth context)
-    // Do NOT pass frontend user IDs as query params — the backend expects UUIDs
-    const response = await fetch(`${COMMITTEE_API_BASE}/teams/my-team`, {
-      headers: getHeaders(),
-    });
+    const actorId = ID_MAP[teamLeaderId] || teamLeaderId;
+    const url = actorId
+      ? `${COMMITTEE_API_BASE}/teams/my-team?teamLeaderId=${encodeURIComponent(actorId)}`
+      : `${COMMITTEE_API_BASE}/teams/my-team`;
+    const headers = getHeaders();
+    if (actorId) {
+      headers['X-Actor-Id'] = actorId;
+    }
+    const response = await fetch(url, { headers });
     if (!response.ok) throw new Error('Failed to fetch team');
     return response.json();
   },

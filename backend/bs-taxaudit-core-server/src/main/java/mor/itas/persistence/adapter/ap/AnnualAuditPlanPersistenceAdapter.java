@@ -59,4 +59,11 @@ public class AnnualAuditPlanPersistenceAdapter implements AnnualAuditPlanReposit
             mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.valueOf(status);
         return jpaRepository.findByStatusAndYear(statusEnum, year).stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList());
     }
+
+    @Override
+    public void updateStatusDirect(UUID planId, String status) {
+        mor.itas.persistence.jpa.entity.ap.PlanStatusEnum statusEnum = 
+            mor.itas.persistence.jpa.entity.ap.PlanStatusEnum.valueOf(status);
+        jpaRepository.updateStatus(planId, statusEnum);
+    }
 }

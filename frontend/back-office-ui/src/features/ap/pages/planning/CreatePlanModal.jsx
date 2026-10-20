@@ -5,20 +5,29 @@
  * Step 2: Plan Basic Info (name, year, description, strategy)
  * Step 3: Case Distribution (editable table, pre-filled from risk data)
  */
-import { useState, useCallback } from 'react';
-import { Activity, ArrowRight, BarChart2, CheckCircle } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Activity, ArrowRight, BarChart2, CheckCircle, Shield, Clock, RefreshCw } from 'lucide-react';
 import { useApp } from '../../../../context/AppContext.jsx';
 import { useAuth } from '../../../../context/AuthContext.jsx';
-import { Modal, Input, Textarea, Button, Alert, Select } from '../../../../components/ui/index.jsx';
+import { Modal, Input, Textarea, Button, Alert, Select, Badge } from '../../../../components/ui/index.jsx';
 import { EditableDistributionTable } from '../shared/DistributionTable.jsx';
 import { REGIONS, AUDIT_TYPES } from '../../data/constants.js';
 import RiskAnalysisDashboard from './RiskAnalysisDashboard.jsx';
 import { useRiskEngine } from '../../hooks/useRiskEngine.js';
 import { auditConfig } from '../../config/auditConfig.js';
+import { 
+  getPlanningConfig, 
+  calculateCapacityMetrics, 
+  calculatePlanEffort, 
+  DEFAULT_PLANNING_CONFIG 
+} from '../../services/planningConfigService.js';
 
-const emptyDistribution = () => {
+const buildEmptyDistribution = (regions = REGIONS, types = AUDIT_TYPES) => {
   const dist = {};
-  REGIONS.forEach(r => { dist[r.id] = {}; AUDIT_TYPES.forEach(a => { dist[r.id][a.id] = 0; }); });
+  (regions || REGIONS).forEach(r => { 
+    dist[r.id] = {}; 
+    (types || AUDIT_TYPES).forEach(a => { dist[r.id][a.id] = 0; }); 
+  });
   return dist;
 };
 
@@ -27,36 +36,165 @@ export default function CreatePlanModal({ open, onClose }) {
   const { user } = useAuth();
   const { planDefaults, source } = useRiskEngine();
 
+  const [planningConfig, setPlanningConfig] = useState(DEFAULT_PLANNING_CONFIG);
+  const rawDefaultsRef = useRef(null);
+
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const cfg = await getPlanningConfig();
+        if (cfg) setPlanningConfig(cfg);
+      } catch (e) {
+        console.warn('Failed to load planning config in CreatePlanModal:', e);
+      }
+    }
+    if (open) {
+      loadConfig();
+    }
+  }, [open]);
+
+  const activeAuditTypes = useMemo(() => {
+    return (planningConfig?.auditTypes || AUDIT_TYPES).filter(t => t.active !== false);
+  }, [planningConfig]);
+
+  const activeRegions = useMemo(() => {
+    return (planningConfig?.regions || REGIONS).filter(r => r.active !== false);
+  }, [planningConfig]);
+
   const [step, setStep] = useState(1);
+  // Find next available year (skip years that already have plans)
+  const getNextAvailableYear = () => {
+    const currentYear = new Date().getFullYear();
+    const existingYears = new Set((state.plans || []).map(p => p.planYear));
+    let year = currentYear;
+    while (existingYears.has(year)) {
+      year++;
+    }
+    return year;
+  };
+
   const [form, setForm] = useState({
     name: '',
-    year: new Date().getFullYear(),
+    year: getNextAvailableYear(),
+    targetPlanCases: 1000,
     description: '',
     strategy: '',
     riskBased: false,
+    estimatedRevenue: 10000000,
   });
-  const [distribution, setDistribution] = useState(emptyDistribution);
+  const [distribution, setDistribution] = useState(() => buildEmptyDistribution(activeRegions, activeAuditTypes));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [usedDefaults, setUsedDefaults] = useState(false);
+
+  // Sync distribution with active audit types and regions when config loads
+  useEffect(() => {
+    setDistribution(prev => {
+      const updated = { ...prev };
+      activeRegions.forEach(r => {
+        if (!updated[r.id]) updated[r.id] = {};
+        activeAuditTypes.forEach(a => {
+          if (updated[r.id][a.id] === undefined) {
+            updated[r.id][a.id] = 0;
+          }
+        });
+      });
+      return updated;
+    });
+  }, [activeAuditTypes, activeRegions]);
 
   const totalCases = Object.values(distribution).reduce(
     (sum, regionDist) => sum + Object.values(regionDist).reduce((s, v) => s + v, 0), 0
   );
 
-  const applyDefaults = useCallback((defaults) => {
-    if (!defaults) return;
-    // Merge defaults into current distribution (override zeros)
-    const merged = emptyDistribution();
-    REGIONS.forEach(r => {
-      AUDIT_TYPES.forEach(a => {
-        merged[r.id][a.id] = defaults[r.id]?.[a.id] ?? 0;
+  const effortMetrics = useMemo(() => {
+    return calculatePlanEffort(distribution, planningConfig);
+  }, [distribution, planningConfig]);
+
+  const capacityMetrics = useMemo(() => {
+    return calculateCapacityMetrics(planningConfig);
+  }, [planningConfig]);
+
+  const scaleDistributionToTarget = useCallback((targetSize) => {
+    const baseSource = rawDefaultsRef.current || distribution;
+    let baseSum = 0;
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        baseSum += (baseSource[r.id]?.[a.id] || 0);
       });
     });
+
+    if (baseSum === 0) return;
+
+    const scaleFactor = targetSize / baseSum;
+    const scaled = buildEmptyDistribution(activeRegions, activeAuditTypes);
+    let scaledTotal = 0;
+    let maxCell = { regionId: activeRegions[0]?.id, auditTypeId: activeAuditTypes[0]?.id, val: -1 };
+
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        const rawVal = baseSource[r.id]?.[a.id] || 0;
+        const computed = Math.round(rawVal * scaleFactor);
+        scaled[r.id][a.id] = computed;
+        scaledTotal += computed;
+        if (computed > maxCell.val) {
+          maxCell = { regionId: r.id, auditTypeId: a.id, val: computed };
+        }
+      });
+    });
+
+    // Adjust any rounding diff on the largest cell so grand total matches EXACTLY targetSize
+    const diff = targetSize - scaledTotal;
+    if (diff !== 0 && maxCell.regionId && maxCell.auditTypeId) {
+      scaled[maxCell.regionId][maxCell.auditTypeId] = Math.max(0, scaled[maxCell.regionId][maxCell.auditTypeId] + diff);
+    }
+
+    setDistribution(scaled);
+    setUsedDefaults(true);
+  }, [activeRegions, activeAuditTypes, distribution]);
+
+  const applyDefaults = useCallback((defaults, targetSize) => {
+    if (!defaults) return;
+    rawDefaultsRef.current = defaults;
+    const target = targetSize || form.targetPlanCases || 1000;
+    
+    // Calculate sum of raw defaults
+    let rawSum = 0;
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        rawSum += defaults[r.id]?.[a.id] ?? 0;
+      });
+    });
+
+    const scaleFactor = rawSum > 0 ? (target / rawSum) : 1;
+
+    // Merge defaults into current distribution with scaling factor
+    const merged = buildEmptyDistribution(activeRegions, activeAuditTypes);
+    let mergedTotal = 0;
+    let maxCell = { regionId: activeRegions[0]?.id, auditTypeId: activeAuditTypes[0]?.id, val: -1 };
+
+    activeRegions.forEach(r => {
+      activeAuditTypes.forEach(a => {
+        const rawVal = defaults[r.id]?.[a.id] ?? 0;
+        const computed = Math.round(rawVal * scaleFactor);
+        merged[r.id][a.id] = computed;
+        mergedTotal += computed;
+        if (computed > maxCell.val) {
+          maxCell = { regionId: r.id, auditTypeId: a.id, val: computed };
+        }
+      });
+    });
+
+    // Exact adjustment
+    const diff = target - mergedTotal;
+    if (diff !== 0 && maxCell.regionId && maxCell.auditTypeId) {
+      merged[maxCell.regionId][maxCell.auditTypeId] = Math.max(0, merged[maxCell.regionId][maxCell.auditTypeId] + diff);
+    }
+
     setDistribution(merged);
     setUsedDefaults(true);
     setStep(2);
-  }, []);
+  }, [activeRegions, activeAuditTypes, form.targetPlanCases]);
 
   const handleCreate = async () => {
     console.log('📝 Handling plan creation...');
@@ -77,10 +215,11 @@ export default function CreatePlanModal({ open, onClose }) {
     }
     
     // Check if a plan already exists for this year (year must be unique)
-    const yearExists = state.plans.some(p => p.planYear === form.year);
+    const yearExists = state.plans.some(p => p.planYear === parseInt(form.year));
     if (yearExists) {
-      setError(`A plan for fiscal year ${form.year} already exists. Each fiscal year can have only one national audit plan.`);
-      console.error('❌ Plan already exists for year:', form.year);
+      const nextYear = getNextAvailableYear();
+      setError(`FY ${form.year} already has a plan. Next available year: FY ${nextYear} — update the year field and try again.`);
+      console.error('❌ Plan already exists for year:', form.year, '| Next available:', nextYear);
       return;
     }
     
@@ -118,8 +257,8 @@ export default function CreatePlanModal({ open, onClose }) {
     setStep(1);
     setError('');
     setUsedDefaults(false);
-    setForm({ name: '', year: new Date().getFullYear(), description: '', strategy: '', riskBased: false });
-    setDistribution(emptyDistribution());
+    setForm({ name: '', year: getNextAvailableYear(), description: '', strategy: '', riskBased: false, estimatedRevenue: 10000000 });
+    setDistribution(buildEmptyDistribution(activeRegions, activeAuditTypes));
   };
 
   const stepTitles = {
@@ -157,6 +296,9 @@ export default function CreatePlanModal({ open, onClose }) {
                 <Button onClick={() => {
                   if (!form.name.trim()) { setError('Plan name is required'); return; }
                   setError('');
+                  if (form.targetPlanCases > 0) {
+                    scaleDistributionToTarget(form.targetPlanCases);
+                  }
                   setStep(3);
                 }}>Next: Distribution →</Button>
               </>
@@ -201,11 +343,31 @@ export default function CreatePlanModal({ open, onClose }) {
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           />
+          <div>
+            <Input
+              label="Fiscal Year"
+              type="number"
+              value={form.year}
+              onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+            />
+            {state.plans.some(p => p.planYear === parseInt(form.year)) ? (
+              <p className="text-xs text-red-500 mt-1">⚠️ FY {form.year} already has a plan. Next available: FY {getNextAvailableYear()}</p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">✅ FY {form.year} is available (next free: FY {getNextAvailableYear()})</p>
+            )}
+          </div>
           <Input
-            label="Fiscal Year"
+            label="Target Plan Case Size (Cases) *"
             type="number"
-            value={form.year}
-            onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+            placeholder="e.g. 3500 (3,000 - 5,000 for testing)"
+            value={form.targetPlanCases}
+            onChange={e => setForm(f => ({ ...f, targetPlanCases: parseInt(e.target.value) || 3500 }))}
+          />
+          <Input
+            label="Estimated Revenue (ETB) *"
+            type="number"
+            value={form.estimatedRevenue}
+            onChange={e => setForm(f => ({ ...f, estimatedRevenue: e.target.value }))}
           />
           <Select
             label="Audit Strategy"
@@ -257,36 +419,53 @@ export default function CreatePlanModal({ open, onClose }) {
               {usedDefaults && (
                 <Badge color="green" dot>Risk-based defaults</Badge>
               )}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={RefreshCw}
+                onClick={() => scaleDistributionToTarget(form.targetPlanCases)}
+              >
+                Scale to Target ({form.targetPlanCases})
+              </Button>
               <div className="text-sm font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-900">
                 Total: {totalCases.toLocaleString()} cases
               </div>
             </div>
           </div>
-          <EditableDistributionTable distribution={distribution} onChange={setDistribution} />
-          <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-slate-400">
-            <CheckCircle size={13} className="text-green-500 flex-shrink-0 mt-0.5" />
-            <span>
-              Effort estimate: ~{Math.round(totalCases * 40 / 2000)} auditor-years at 40 hrs/case.
-              You can refine effort guidelines in Configuration.
-            </span>
+          <EditableDistributionTable 
+            distribution={distribution} 
+            onChange={setDistribution} 
+            regions={activeRegions}
+            auditTypes={activeAuditTypes} 
+          />
+
+          {/* Live Capacity and Feasibility Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-900 text-white rounded-xl border border-slate-700 text-xs">
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Estimated Effort</p>
+              <p className="text-base font-bold text-blue-400 mt-0.5">{effortMetrics.totalRequiredHours.toLocaleString()} hrs</p>
+              <p className="text-[10px] text-slate-400">Includes complexity multipliers & buffer</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">National Productive Capacity</p>
+              <p className="text-base font-bold text-purple-400 mt-0.5">{capacityMetrics.totalProductiveHours.toLocaleString()} hrs</p>
+              <p className="text-[10px] text-slate-400">{capacityMetrics.totalAuditors.toLocaleString()} active auditors pool</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">Capacity Feasibility</p>
+              {effortMetrics.totalRequiredHours <= capacityMetrics.totalProductiveHours ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 mt-1">
+                  <CheckCircle size={13} /> Feasible ({((effortMetrics.totalRequiredHours / (capacityMetrics.totalProductiveHours || 1)) * 100).toFixed(1)}% capacity)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 mt-1">
+                  ⚠️ High Load ({((effortMetrics.totalRequiredHours / (capacityMetrics.totalProductiveHours || 1)) * 100).toFixed(1)}% capacity)
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
     </Modal>
-  );
-}
-
-// Re-export Badge since we use it inline
-function Badge({ color = 'gray', dot, children }) {
-  const colors = {
-    green: 'bg-green-100 text-green-700',
-    blue: 'bg-blue-100 text-blue-700',
-    gray: 'bg-gray-100 text-gray-600',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[color] || colors.gray}`}>
-      {dot && <span className={`w-1.5 h-1.5 rounded-full ${color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />}
-      {children}
-    </span>
   );
 }

@@ -4,10 +4,14 @@ import mor.itas.application.port.inboundport.ap.GetAmendmentFeedbackPort;
 import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
 import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.PlanStatus;
+import mor.itas.persistence.jpa.entity.ap.RegionalFeedbackEntity;
+import mor.itas.persistence.jpa.repository.ap.RegionalFeedbackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,7 +25,7 @@ import java.util.UUID;
  * Flow:
  * 1. Validate plan exists
  * 2. Validate plan is in proper state
- * 3. Retrieve amendment request with regional feedback
+ * 3. Retrieve amendment request with regional feedback from database
  * 4. Return to Planning Team
  */
 @Service
@@ -29,6 +33,8 @@ import java.util.UUID;
 public class GetAmendmentFeedbackUseCase implements GetAmendmentFeedbackPort {
     
     private final AnnualAuditPlanRepository repository;
+    private final RegionalFeedbackRepository regionalFeedbackRepository;
+    private final ObjectMapper objectMapper;
     
     @Override
     public Map<String, Object> getAmendmentFeedback(UUID planId) {
@@ -45,7 +51,7 @@ public class GetAmendmentFeedbackUseCase implements GetAmendmentFeedbackPort {
             );
         }
         
-        // Retrieve amendment feedback from Phase D storage
+        // Retrieve amendment feedback from database
         Map<String, Object> amendmentFeedback = retrieveAmendmentFeedback(planId);
         
         return amendmentFeedback;
@@ -55,20 +61,21 @@ public class GetAmendmentFeedbackUseCase implements GetAmendmentFeedbackPort {
      * Check if plan is in valid status for amendment
      */
     private boolean isValidStatusForAmendment(String status) {
-        return "AMENDMENT_REQUIRED".equals(status);
+        return "AMENDMENT_REQUIRED".equals(status) ||
+               "FEEDBACK_COLLECTED".equals(status);
     }
     
     /**
-     * Retrieve amendment feedback from Phase D storage
+     * Retrieve amendment feedback from database
      * 
      * Gets all regional feedback that triggered amendment request
      */
     private Map<String, Object> retrieveAmendmentFeedback(UUID planId) {
         Map<String, Object> feedback = new HashMap<>();
         
-        // Get all regional feedback from Phase D storage
-        Map<String, Map<String, Map<String, Object>>> allRegionalFeedback = 
-            SubmitRegionalFeedbackUseCase.getAllRegionalFeedback(planId);
+        // Get all regional feedback from database for this plan
+        List<RegionalFeedbackEntity> allRegionalFeedback = 
+            regionalFeedbackRepository.findByPlanId(planId);
         
         // Build amendment request with all regional feedback
         feedback.put("planId", planId.toString());
@@ -78,14 +85,25 @@ public class GetAmendmentFeedbackUseCase implements GetAmendmentFeedbackPort {
         
         // Include all regional feedback
         Map<String, Object> regionalFeedbackSummary = new HashMap<>();
-        for (Map.Entry<String, Map<String, Map<String, Object>>> entry : allRegionalFeedback.entrySet()) {
-            String regionId = entry.getKey();
-            Map<String, Map<String, Object>> regionFeedback = entry.getValue();
+        for (RegionalFeedbackEntity entity : allRegionalFeedback) {
+            String regionId = entity.getRegionId();
+            
+            // Parse feedback JSON
+            Map<String, Map<String, Object>> regionFeedback = new HashMap<>();
+            try {
+                regionFeedback = objectMapper.readValue(entity.getFeedbackText(), 
+                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Map.class));
+            } catch (Exception e) {
+                // Handle parsing error
+                regionFeedback = new HashMap<>();
+            }
             
             // Create summary for this region
             Map<String, Object> regionSummary = new HashMap<>();
             regionSummary.put("regionName", getRegionName(regionId));
             regionSummary.put("feedback", regionFeedback);
+            regionSummary.put("submittedBy", entity.getSubmittedBy());
+            regionSummary.put("submittedAt", entity.getSubmittedAt());
             
             // Calculate totals
             long totalRequested = 0L;
@@ -93,10 +111,16 @@ public class GetAmendmentFeedbackUseCase implements GetAmendmentFeedbackPort {
             
             for (Map<String, Object> auditTypeFeedback : regionFeedback.values()) {
                 if (auditTypeFeedback.containsKey("totalRequested")) {
-                    totalRequested += (Long) auditTypeFeedback.get("totalRequested");
+                    Object tr = auditTypeFeedback.get("totalRequested");
+                    if (tr instanceof Number) {
+                        totalRequested += ((Number) tr).longValue();
+                    }
                 }
                 if (auditTypeFeedback.containsKey("totalCapacity")) {
-                    totalCapacity += (Long) auditTypeFeedback.get("totalCapacity");
+                    Object tc = auditTypeFeedback.get("totalCapacity");
+                    if (tc instanceof Number) {
+                        totalCapacity += ((Number) tc).longValue();
+                    }
                 }
             }
             

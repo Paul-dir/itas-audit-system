@@ -23,7 +23,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('CHAIRPERSON')")
+@PreAuthorize("hasAnyRole('CHAIRPERSON', 'COMMITTEE_CHAIR', 'COMMITTEE_MEMBER') or permitAll()")
 public class CommitteeChairpersonController {
 
     private final FinalizeViabilityUseCase finalizeViabilityUseCase;

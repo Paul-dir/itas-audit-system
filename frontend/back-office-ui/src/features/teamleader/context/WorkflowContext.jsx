@@ -33,7 +33,6 @@ function createInitialCaseWorkflow(caseId) {
       PLANNING:            { status: 'pending', completedAt: null, data: null },
       ENTRY_CONFERENCE:    { status: 'pending', completedAt: null, data: null },
       INFO_REQUEST:        { status: 'pending', completedAt: null, data: null },
-      DOCUMENT_COLLECTION: { status: 'pending', completedAt: null, data: null },
       CAAT_ANALYSIS:       { status: 'pending', completedAt: null, data: null },
       AUDIT_TESTING:       { status: 'pending', completedAt: null, data: null },
       FINDINGS:            { status: 'pending', completedAt: null, data: null },
@@ -201,6 +200,38 @@ function workflowReducer(state, action) {
         },
       };
 
+    case 'SKIP_CONFERENCE':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          conference: { status: 'SKIPPED', minutes: action.payload.reason, skippedAt: new Date().toISOString() },
+          steps: {
+            ...state[action.payload.caseId]?.steps,
+            ENTRY_CONFERENCE: { status: 'completed', completedAt: new Date().toISOString(), data: { status: 'SKIPPED', reason: action.payload.reason } },
+          },
+          status: 'INFO_GATHERING',
+          currentStep: 'INFO_REQUEST',
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'ENTRY_CONFERENCE', action: `Conference waived: ${action.payload.reason}`, timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
+    case 'APPROVE_CONFERENCE':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          conference: { ...state[action.payload.caseId]?.conference, status: 'APPROVED' },
+          steps: {
+            ...state[action.payload.caseId]?.steps,
+            ENTRY_CONFERENCE: { status: 'completed', completedAt: new Date().toISOString() },
+          },
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'ENTRY_CONFERENCE', action: 'Conference approved by Team Leader', timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
     case 'CREATE_DOC_REQUEST':
       return {
         ...state,
@@ -224,13 +255,25 @@ function workflowReducer(state, action) {
         [action.payload.caseId]: {
           ...state[action.payload.caseId],
           documents: [...(state[action.payload.caseId]?.documents || []), action.payload.document],
-          status: 'DOCUMENT_COLLECTION',
-          currentStep: 'DOCUMENT_COLLECTION',
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'INFO_REQUEST', action: `Document recorded: ${action.payload.document.fileName || action.payload.document.title || 'Attachment'}`, timestamp: new Date().toISOString(), actor: action.payload.actorId }],
+        },
+      };
+
+    case 'COMPLETE_INFO_REQUEST':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          status: 'CAAT_ANALYSIS',
+          currentStep: 'CAAT_ANALYSIS',
           steps: {
             ...state[action.payload.caseId]?.steps,
-            DOCUMENT_COLLECTION: { status: 'in_progress', completedAt: null },
-            INFO_REQUEST: { ...state[action.payload.caseId]?.steps?.INFO_REQUEST, status: 'completed', completedAt: new Date().toISOString() },
+            INFO_REQUEST: { status: 'completed', completedAt: new Date().toISOString() },
+            CAAT_ANALYSIS: { status: 'in_progress', completedAt: null },
           },
+          timeline: [...(state[action.payload.caseId]?.timeline || []),
+            { step: 'INFO_REQUEST', action: 'Information gathering completed — moving to CAAT analysis', timestamp: new Date().toISOString(), actor: action.payload.actorId }],
         },
       };
 
@@ -256,7 +299,7 @@ function workflowReducer(state, action) {
           currentStep: 'CAAT_ANALYSIS',
           steps: {
             ...state[action.payload.caseId]?.steps,
-            DOCUMENT_COLLECTION: { ...state[action.payload.caseId]?.steps?.DOCUMENT_COLLECTION, status: 'completed', completedAt: new Date().toISOString() },
+            INFO_REQUEST: { ...state[action.payload.caseId]?.steps?.INFO_REQUEST, status: 'completed', completedAt: state[action.payload.caseId]?.steps?.INFO_REQUEST?.completedAt || new Date().toISOString() },
             CAAT_ANALYSIS: { status: 'in_progress', completedAt: null },
           },
           timeline: [...(state[action.payload.caseId]?.timeline || []),
@@ -270,8 +313,29 @@ function workflowReducer(state, action) {
         [action.payload.caseId]: {
           ...state[action.payload.caseId],
           anomalies: (state[action.payload.caseId]?.anomalies || []).map(a =>
-            a.id === action.payload.anomalyId ? { ...a, decision: action.payload.decision, notes: action.payload.notes } : a
+            a.id === action.payload.anomalyId
+              ? {
+                  ...a,
+                  decision: action.payload.decision,
+                  validationStatus: action.payload.decision,
+                  notes: action.payload.notes,
+                  validationNotes: action.payload.notes,
+                  amendedAmount: action.payload.amendedAmount !== undefined && action.payload.amendedAmount !== null
+                    ? Number(action.payload.amendedAmount)
+                    : (action.payload.decision === 'REJECTED' ? 0 : (a.originalAmount ?? a.amount ?? 0)),
+                  validatedAt: new Date().toISOString(),
+                }
+              : a
           ),
+        },
+      };
+
+    case 'SET_FINDINGS':
+      return {
+        ...state,
+        [action.payload.caseId]: {
+          ...state[action.payload.caseId],
+          findings: action.payload.findings || [],
         },
       };
 
@@ -437,7 +501,9 @@ export function WorkflowProvider({ children }) {
     // ─── Hydrate from backend ────────────────────────────────────────────
     loadWorkflow: useCallback(async (caseId) => {
       try {
-        const data = await workflowAPI.getCaseWorkflow(caseId);
+        const raw = await workflowAPI.getCaseWorkflow(caseId);
+        // Backend wraps response in { data: {...}, status: 'SUCCESS' } — unwrap
+        const data = raw?.data || raw;
         // Backend returns a different step-key scheme; map to local keys
         const backendSteps = data.steps || {};
         const mapBackendStep = (backendKey, frontendKey) => {
@@ -451,13 +517,12 @@ export function WorkflowProvider({ children }) {
         };
 
         // Derive currentStep from which steps are completed
-        const stepOrder = ['CASE_DETAIL', 'PLANNING', 'ENTRY_CONFERENCE', 'INFO_REQUEST', 'DOCUMENT_COLLECTION', 'CAAT_ANALYSIS', 'AUDIT_TESTING', 'FINDINGS', 'TAXPAYER_RESPONSE', 'CONCLUSION'];
+        const stepOrder = ['CASE_DETAIL', 'PLANNING', 'ENTRY_CONFERENCE', 'INFO_REQUEST', 'CAAT_ANALYSIS', 'AUDIT_TESTING', 'FINDINGS', 'TAXPAYER_RESPONSE', 'CONCLUSION'];
         const backendKeyMap = {
           CASE_DETAIL: 'HANDOFF',
           PLANNING: 'PLANNING',
           ENTRY_CONFERENCE: 'CONFERENCE',
           INFO_REQUEST: 'INFO_REQUEST',
-          DOCUMENT_COLLECTION: 'DOC_COLLECTION',
           CAAT_ANALYSIS: 'CAAT',
           AUDIT_TESTING: 'TESTING',
           FINDINGS: 'FINDINGS',
@@ -478,6 +543,15 @@ export function WorkflowProvider({ children }) {
           }
         }
 
+        const hydratedAnomalies = (data.anomalies || []).map(a => ({
+          ...a,
+          decision: a.validationStatus && a.validationStatus !== 'PENDING' ? a.validationStatus : (a.decision || null),
+          notes: a.validationNotes || a.notes || '',
+          amount: Number(a.originalAmount ?? a.expectedAmount ?? a.amount ?? 0),
+          originalAmount: Number(a.originalAmount ?? a.expectedAmount ?? a.amount ?? 0),
+          amendedAmount: a.amendedAmount !== null && a.amendedAmount !== undefined ? Number(a.amendedAmount) : Number(a.originalAmount ?? a.amount ?? 0),
+        }));
+
         const serverData = {
           caseId,
           currentStep: currentStep,
@@ -488,7 +562,11 @@ export function WorkflowProvider({ children }) {
           conference: data.conference || null,
           documentRequests: data.documentRequests || [],
           documents: data.documents || [],
-          anomalies: data.anomalies || [],
+          anomalies: hydratedAnomalies,
+          caatResults: hydratedAnomalies.length > 0 ? {
+            anomalies: hydratedAnomalies,
+            completedAt: hydratedAnomalies[0]?.runAt || new Date().toISOString(),
+          } : null,
           workingPapers: data.workingPapers || [],
           findings: data.findings || [],
           conclusions: data.conclusions || [],
@@ -550,6 +628,16 @@ export function WorkflowProvider({ children }) {
       fireAPI('recordMinutes', workflowAPI.recordConferenceMinutes(caseId, minutesPayload));
     }, []),
 
+    skipConference: useCallback((caseId, actorId, reason) => {
+      dispatch({ type: 'SKIP_CONFERENCE', payload: { caseId, actorId, reason } });
+      fireAPI('skipConference', workflowAPI.skipConference(caseId, reason));
+    }, []),
+
+    approveConference: useCallback((caseId, actorId) => {
+      dispatch({ type: 'APPROVE_CONFERENCE', payload: { caseId, actorId } });
+      fireAPI('approveConference', workflowAPI.approveConference(caseId));
+    }, []),
+
     // ─── Step 5: Information Request ─────────────────────────────────────
     createDocRequest: useCallback((caseId, actorId, request) => {
       dispatch({ type: 'CREATE_DOC_REQUEST', payload: { caseId, actorId, request } });
@@ -562,7 +650,11 @@ export function WorkflowProvider({ children }) {
       fireAPI('createDocRequest', workflowAPI.createDocumentRequest(caseId, requestData));
     }, []),
 
-    // ─── Step 6: Document Collection ─────────────────────────────────────
+    completeInfoRequest: useCallback((caseId, actorId) => {
+      dispatch({ type: 'COMPLETE_INFO_REQUEST', payload: { caseId, actorId } });
+    }, []),
+
+    // ─── Document Uploads ─────────────────────────────────────────────
     uploadDocument: useCallback((caseId, document) => {
       dispatch({ type: 'UPLOAD_DOCUMENT', payload: { caseId, document } });
       // Backend uploadDocument expects (caseId, requestId, file, metadata)
@@ -589,21 +681,71 @@ export function WorkflowProvider({ children }) {
     }, []),
 
     // ─── Step 7: CAAT Analysis ───────────────────────────────────────────
-    runCAAT: useCallback((caseId, actorId, results) => {
+    runCAAT: useCallback(async (caseId, actorId, results) => {
+      const analysisTypes = results?.analysisTypes || [
+        'RATIO_ANALYSIS', 'THIRD_PARTY_MATCHING', 'TRANSACTION_ANALYSIS',
+        'REVENUE_ANALYSIS', 'EXPENSE_ANALYSIS', 'FRAUD_INDICATORS'
+      ];
+      try {
+        const res = await workflowAPI.runCAATAnalysis(caseId, analysisTypes);
+        const backendAnomalies = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        if (backendAnomalies.length > 0) {
+          const normalized = backendAnomalies.map(a => ({
+            ...a,
+            decision: a.validationStatus && a.validationStatus !== 'PENDING' ? a.validationStatus : null,
+            notes: a.validationNotes || '',
+            amount: Number(a.originalAmount ?? a.expectedAmount ?? 0),
+            originalAmount: Number(a.originalAmount ?? a.expectedAmount ?? 0),
+            amendedAmount: a.amendedAmount !== null && a.amendedAmount !== undefined ? Number(a.amendedAmount) : Number(a.originalAmount ?? 0),
+          }));
+          dispatch({
+            type: 'RUN_CAAT',
+            payload: {
+              caseId,
+              actorId,
+              results: {
+                ...(results || {}),
+                analysisTypes,
+                anomalies: normalized,
+                completedAt: new Date().toISOString(),
+              },
+            },
+          });
+          return normalized;
+        }
+      } catch (err) {
+        console.warn('[WorkflowAPI] runCAAT failed, using fallback results:', err.message);
+      }
       dispatch({ type: 'RUN_CAAT', payload: { caseId, actorId, results } });
-      // Backend expects { analysisTypes: [...] } — extract from results
-      const analysisTypes = results.analysisTypes || ['REVENUE_VS_BANK', 'EXPENSE_RATIO', 'PATTERN_DETECTION'];
-      fireAPI('runCAAT', workflowAPI.runCAATAnalysis(caseId, analysisTypes));
+      return results?.anomalies || [];
     }, []),
 
-    validateAnomaly: useCallback((caseId, anomalyId, decision, notes) => {
-      dispatch({ type: 'VALIDATE_ANOMALY', payload: { caseId, anomalyId, decision, notes } });
-      fireAPI('validateAnomaly', workflowAPI.validateAnomaly(caseId, anomalyId, decision, notes));
+    validateAnomaly: useCallback(async (caseId, anomalyId, decision, notes, amendedAmount = null) => {
+      const normDecision = decision === 'ACCEPT' ? 'ACCEPTED' : decision === 'AMEND' ? 'AMENDED' : decision === 'REJECT' ? 'REJECTED' : decision;
+      dispatch({ type: 'VALIDATE_ANOMALY', payload: { caseId, anomalyId, decision: normDecision, notes, amendedAmount } });
+      try {
+        await workflowAPI.validateAnomaly(caseId, anomalyId, normDecision, notes, amendedAmount);
+      } catch (err) {
+        console.warn('[WorkflowAPI] validateAnomaly failed:', err.message);
+      }
+    }, []),
+
+    promoteCaatToFindings: useCallback(async (caseId, actorId) => {
+      try {
+        const res = await workflowAPI.promoteCaatToFindings(caseId);
+        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        if (list.length > 0) {
+          dispatch({ type: 'SET_FINDINGS', payload: { caseId, findings: list } });
+          return list;
+        }
+      } catch (err) {
+        console.warn('[WorkflowAPI] promoteCaatToFindings failed:', err.message);
+      }
+      return [];
     }, []),
 
     completeCAAT: useCallback((caseId, actorId) => {
       dispatch({ type: 'COMPLETE_CAAT', payload: { caseId, actorId } });
-      // No dedicated backend endpoint — status is tracked via individual anomaly validations
     }, []),
 
     // ─── Step 8: Audit Testing ───────────────────────────────────────────

@@ -40,6 +40,23 @@ public class AuditTrailService {
     }
 
     /**
+     * Overloaded logAction with entity details
+     */
+    public AuditLogEntry logAction(UUID caseId, UUID actorId, String actionType,
+                                    String entityType, String beforeState, String afterState, String comment) {
+        Map<String, Object> before = new LinkedHashMap<>();
+        if (beforeState != null) before.put("state", beforeState);
+        if (entityType != null) before.put("entityType", entityType);
+
+        Map<String, Object> after = new LinkedHashMap<>();
+        if (afterState != null) after.put("state", afterState);
+        if (comment != null) after.put("comment", comment);
+
+        return logAction(caseId, actorId, actionType, before, after);
+    }
+
+
+    /**
      * Generate hash for audit log entry (for integrity verification)
      */
     public String generateHash(UUID caseId, UUID actorId, String actionType, Map<String, Object> state) {

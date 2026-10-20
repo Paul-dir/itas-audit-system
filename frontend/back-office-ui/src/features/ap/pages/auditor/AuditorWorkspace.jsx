@@ -24,18 +24,22 @@ import WorkflowProgress from '../../../teamleader/components/WorkflowProgress.js
 import StatusBadge from '../../../teamleader/components/StatusBadge.jsx';
 import { Card, Button, Badge, Modal, Textarea, Input } from '../../../../components/ui/index.jsx';
 import { auditorAPI } from './services/api.js';
+import EntryConferencePanel from '../../../teamleader/components/EntryConferencePanel.jsx';
+import DocumentRequestPanel from '../../../teamleader/components/DocumentRequestPanel.jsx';
+import FindingsPanel from '../../../teamleader/components/FindingsPanel.jsx';
+import JointCaatAnalysisPanel from '../../../teamleader/components/JointCaatAnalysisPanel.jsx';
 
 // ── Step Icons Map ───────────────────────────────────────────────────────────
 const STEP_ICONS = {
   CASE_DETAIL: FileText, PLANNING: ClipboardList,
-  ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch, DOCUMENT_COLLECTION: FolderOpen,
+  ENTRY_CONFERENCE: Calendar, INFO_REQUEST: FileSearch,
   CAAT_ANALYSIS: Cpu, AUDIT_TESTING: TestTube, FINDINGS: AlertTriangle,
   TAXPAYER_RESPONSE: MessageSquare, CONCLUSION: CheckCircle,
 };
 
 
 // ── Planning Step Panel ──────────────────────────────────────────────────────
-function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
+function PlanningStepPanel({ caseData, existingPlan, onSubmit, onProceed }) {
   const [scope, setScope] = useState(existingPlan?.scope || '');
   const [objectives, setObjectives] = useState(existingPlan?.objectives || '');
   const [methodology, setMethodology] = useState(existingPlan?.methodology || '');
@@ -156,7 +160,29 @@ function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
             />
           </div>
 
-          {!isApproved && (
+          {isApproved && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-800">
+              <span className="text-xs text-green-700 dark:text-green-300 font-medium flex items-center gap-1.5">
+                <CheckCircle size={15} className="text-green-600" />
+                Audit Plan approved by Team Leader. Ready for Entry Conference.
+              </span>
+              <Button variant="primary" icon={ArrowRight} onClick={onProceed}>
+                Proceed to Entry Conference
+              </Button>
+            </div>
+          )}
+
+          {isSubmitted && !isApproved && (
+            <div className="p-3.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between">
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-medium flex items-center gap-1.5">
+                <Clock size={15} className="text-blue-600" />
+                Plan submitted — Awaiting Team Leader approval before proceeding.
+              </span>
+              <Badge color="blue">Pending TL Approval</Badge>
+            </div>
+          )}
+
+          {!isApproved && !isSubmitted && (
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="secondary">Save Draft</Button>
               <Button variant="primary" icon={Send} onClick={handleSubmit}>
@@ -170,109 +196,19 @@ function PlanningStepPanel({ caseData, existingPlan, onSubmit }) {
   );
 }
 
-// ── Document Request Panel ───────────────────────────────────────────────────
-function DocumentRequestPanel({ caseData, onSubmit }) {
-  const [docType, setDocType] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDays, setDueDays] = useState('15');
-
-  const handleSubmit = () => {
-    onSubmit({
-      documentType: docType,
-      description,
-      dueDate: new Date(Date.now() + parseInt(dueDays) * 86400000).toISOString(),
-    });
-  };
-
-  const requestTypes = [
-    { id: 'financial_statements', label: 'Financial Statements', icon: FileText },
-    { id: 'tax_returns', label: 'Tax Returns', icon: FileCheck },
-    { id: 'bank_statements', label: 'Bank Statements', icon: FolderOpen },
-    { id: 'invoices', label: 'Invoices & Receipts', icon: FileText },
-    { id: 'contracts', label: 'Contracts', icon: FileText },
-    { id: 'payroll', label: 'Payroll Records', icon: Users },
-  ];
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <FileSearch size={20} className="text-blue-500" />
-        Document Request
-      </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Request documents from the taxpayer for audit examination.
-      </p>
-
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {requestTypes.map(type => {
-          const Icon = type.icon;
-          return (
-            <button
-              key={type.id}
-              onClick={() => setDocType(type.id)}
-              className={`p-3 rounded-xl border-2 text-center transition-all ${
-                docType === type.id
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <Icon size={20} className={`mx-auto mb-2 ${
-                docType === type.id ? 'text-blue-500' : 'text-gray-400'
-              }`} />
-              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{type.label}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Description / Instructions
-          </label>
-          <Textarea
-            placeholder="Specific items required, format preferences, etc..."
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-        <div className="w-1/3">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Due in (days)
-          </label>
-          <Input
-            type="number"
-            value={dueDays}
-            onChange={e => setDueDays(e.target.value)}
-            min="1"
-            max="90"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="secondary">Cancel</Button>
-          <Button variant="primary" icon={Send} onClick={handleSubmit}>
-            Send Request
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 // ── CAAT Analysis Panel ──────────────────────────────────────────────────────
 function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
-  const [selectedTypes, setSelectedTypes] = useState([]);
+  const [selectedTypes, setSelectedTypes] = useState(['ASYCUDA_CUSTOMS_MATCH', 'REVENUE_VS_BANK']);
   const [results, setResults] = useState(null);
   const [running, setRunning] = useState(false);
 
   const analysisTypes = [
-    { id: 'REVENUE_VS_BANK', label: 'Revenue vs Bank Deposits', description: 'Compare reported revenue with bank deposits' },
-    { id: 'EXPENSE_RATIO', label: 'Expense Ratio Analysis', description: 'Analyze expense-to-revenue ratios' },
-    { id: 'PATTERN_DETECTION', label: 'Pattern Detection', description: 'Detect anomalies and unusual patterns' },
-    { id: 'INDUSTRY_BENCHMARK', label: 'Industry Benchmark', description: 'Compare against industry averages' },
+    { id: 'ASYCUDA_CUSTOMS_MATCH', label: 'ASYCUDA Customs vs Tax Filings', description: 'Cross-match customs import/export CIF declarations against VAT & CIT returns' },
+    { id: 'VAT_WITHHOLDING_RECON', label: 'Inter-Agency Withholding & VAT Recon', description: 'Reconcile third-party withholding certificates with declared turnover' },
+    { id: 'REVENUE_VS_BANK', label: 'Revenue vs Bank Deposits', description: 'Compare reported revenue with commercial bank deposit records' },
+    { id: 'EXPENSE_RATIO', label: 'Expense Ratio & Deduction Analysis', description: 'Analyze expense-to-revenue ratios and disallowed cost items' },
+    { id: 'PATTERN_DETECTION', label: 'Journal Entry Pattern Detection', description: 'Detect round-sum anomalies and unusual ledger adjustments' },
+    { id: 'INDUSTRY_BENCHMARK', label: 'Sector Margin Benchmark', description: 'Compare gross & net profit margins against sector averages' },
   ];
 
   const toggleType = (typeId) => {
@@ -285,11 +221,11 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
     setRunning(true);
     try {
       await onRun(selectedTypes);
-      // Simulate results for demo
       setResults({
         anomalies: [
-          { id: 'anom-1', type: 'REVENUE_VS_BANK', severity: 'HIGH', description: 'Revenue underreporting detected', amount: 2300000 },
-          { id: 'anom-2', type: 'EXPENSE_RATIO', severity: 'MEDIUM', description: 'Unusually high entertainment expenses', amount: 450000 },
+          { id: 'anom-1', type: 'ASYCUDA_CUSTOMS_MATCH', severity: 'HIGH', description: 'Unreconciled variance between ASYCUDA CIF import valuation and declared cost of goods sold', amount: 4850000, decision: null },
+          { id: 'anom-2', type: 'REVENUE_VS_BANK', severity: 'HIGH', description: 'Revenue underreporting detected against aggregated bank credit inflows', amount: 2300000, decision: null },
+          { id: 'anom-3', type: 'EXPENSE_RATIO', severity: 'MEDIUM', description: 'Unsupported inter-branch overhead & customs clearing expense claims', amount: 450000, decision: null },
         ]
       });
     } finally {
@@ -297,14 +233,26 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
     }
   };
 
+  const handleValidate = (anomalyId, decision) => {
+    setResults(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        anomalies: prev.anomalies.map(a =>
+          a.id === anomalyId ? { ...a, decision } : a
+        )
+      };
+    });
+  };
+
   return (
     <Card className="p-6">
       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <Cpu size={20} className="text-violet-500" />
-        CAAT / Automated Analysis
+        Joint CAAT &amp; Inter-Agency Cross-Matching
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Run computer-assisted audit techniques to detect anomalies.
+        Run computer-assisted audit techniques and customs-tax cross-matching to detect discrepancies.
       </p>
 
       {!results ? (
@@ -312,6 +260,7 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
           <div className="grid grid-cols-2 gap-3 mb-6">
             {analysisTypes.map(type => (
               <button
+                type="button"
                 key={type.id}
                 onClick={() => toggleType(type.id)}
                 className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -342,21 +291,26 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
         <div className="space-y-4">
           <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
             <p className="font-medium text-violet-800 dark:text-violet-200">
-              {results.anomalies.length} anomalies detected
+              {results.anomalies.length} anomalies detected across selected joint audit tests
             </p>
           </div>
 
           {results.anomalies.map(anomaly => (
             <div key={anomaly.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{anomaly.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Severity: <Badge color={anomaly.severity === 'HIGH' ? 'red' : 'yellow'}>{anomaly.severity}</Badge>
-                    {' · Amount: ETB '}{anomaly.amount?.toLocaleString()}
+                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                    <span>Severity: <Badge color={anomaly.severity === 'HIGH' ? 'red' : 'yellow'}>{anomaly.severity}</Badge></span>
+                    <span>· Amount: <strong>ETB {anomaly.amount?.toLocaleString()}</strong></span>
+                    {anomaly.decision && (
+                      <Badge color={anomaly.decision === 'ACCEPT' ? 'green' : 'gray'}>
+                        {anomaly.decision === 'ACCEPT' ? 'Accepted for Finding' : 'Dismissed'}
+                      </Badge>
+                    )}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button size="xs" variant="success" onClick={() => handleValidate(anomaly.id, 'ACCEPT')}>Accept</Button>
                   <Button size="xs" variant="danger" onClick={() => handleValidate(anomaly.id, 'REJECT')}>Reject</Button>
                 </div>
@@ -375,107 +329,6 @@ function CAATAnalysisPanel({ caseData, onRun, onComplete }) {
   );
 }
 
-// ── Findings Panel ───────────────────────────────────────────────────────────
-function FindingsPanel({ caseData, onSubmit, onApprove }) {
-  const [findings, setFindings] = useState([]);
-  const [newFinding, setNewFinding] = useState({ description: '', severity: 'MEDIUM', amount: '' });
-
-  const addFinding = () => {
-    if (!newFinding.description) return;
-    setFindings(prev => [...prev, { ...newFinding, id: `f-${Date.now()}` }]);
-    setNewFinding({ description: '', severity: 'MEDIUM', amount: '' });
-  };
-
-  const handleSubmitAll = () => {
-    onSubmit(findings);
-  };
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <AlertTriangle size={20} className="text-amber-500" />
-        Audit Findings
-      </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Document findings based on your audit testing and evidence gathered.
-      </p>
-
-      {/* Existing Findings */}
-      {findings.length > 0 && (
-        <div className="space-y-3 mb-6">
-          {findings.map(finding => (
-            <div key={finding.id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{finding.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Severity: <Badge color={finding.severity === 'HIGH' ? 'red' : finding.severity === 'MEDIUM' ? 'yellow' : 'blue'}>{finding.severity}</Badge>
-                    {finding.amount && <span className="ml-2">· Impact: ETB {parseInt(finding.amount).toLocaleString()}</span>}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setFindings(prev => prev.filter(f => f.id !== finding.id))}
-                  className="text-red-500 hover:text-red-700 text-xs"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add New Finding */}
-      <div className="p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Add Finding</h4>
-        <div className="space-y-3">
-          <Textarea
-            placeholder="Describe the finding..."
-            value={newFinding.description}
-            onChange={e => setNewFinding(prev => ({ ...prev, description: e.target.value }))}
-            rows={2}
-          />
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Severity</label>
-              <select
-                value={newFinding.severity}
-                onChange={e => setNewFinding(prev => ({ ...prev, severity: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Financial Impact (ETB)</label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={newFinding.amount}
-                onChange={e => setNewFinding(prev => ({ ...prev, amount: e.target.value }))}
-              />
-            </div>
-          </div>
-          <Button size="sm" variant="secondary" icon={FileText} onClick={addFinding}>
-            Add Finding
-          </Button>
-        </div>
-      </div>
-
-      {/* Submit */}
-      {findings.length > 0 && (
-        <div className="flex justify-end gap-3 pt-6">
-          <Button variant="secondary">Save Draft</Button>
-          <Button variant="primary" icon={Send} onClick={handleSubmitAll}>
-            Submit Findings for Approval
-          </Button>
-        </div>
-      )}
-    </Card>
-  );
-}
 
 // ── Conclusion Panel ─────────────────────────────────────────────────────────
 function ConclusionPanel({ caseData, onFinalize }) {
@@ -493,9 +346,9 @@ function ConclusionPanel({ caseData, onFinalize }) {
         <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle size={40} className="text-green-500" />
         </div>
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Audit Concluded</h3>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Joint Audit Concluded</h3>
         <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-          The audit has been finalized and the report is ready for digital signature and submission.
+          The joint audit has been finalized and the report is ready for digital signature and committee/supervisory endorsement.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Button variant="secondary" icon={Download}>Download Report</Button>
@@ -509,23 +362,23 @@ function ConclusionPanel({ caseData, onFinalize }) {
     <Card className="p-6">
       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <CheckCircle size={20} className="text-green-500" />
-        Audit Conclusion
+        Joint Audit Conclusion
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Make final determinations for each finding and conclude the audit.
+        Make final determinations for each finding and conclude the joint audit engagement.
       </p>
 
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
         <p className="text-sm text-amber-800 dark:text-amber-200">
           <strong>Important:</strong> Review all findings, taxpayer responses, and evidence before concluding.
-          Once finalized, the case will be locked for review.
+          Once finalized, the case will be locked for supervisory &amp; committee sign-off.
         </p>
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
         <Button variant="secondary">Save Progress</Button>
         <Button variant="primary" icon={CheckCircle} onClick={handleFinalize}>
-          Finalize & Conclude Audit
+          Finalize &amp; Conclude Joint Audit
         </Button>
       </div>
     </Card>
@@ -533,10 +386,15 @@ function ConclusionPanel({ caseData, onFinalize }) {
 }
 
 // ── Main Workspace Component ─────────────────────────────────────────────────
-export default function AuditorWorkspace({ caseData, onBack }) {
+export default function AuditorWorkspace({ caseData, onBack, initialStep }) {
   const { user } = useAuth();
   const { getWorkflow, getStepProgress, actions } = useWorkflow();
-  const [activeStep, setActiveStep] = useState('CASE_DETAIL');
+  const [activeStep, setActiveStep] = useState(initialStep || 'CASE_DETAIL');
+  const [wpTitle, setWpTitle] = useState('');
+  const [wpNotes, setWpNotes] = useState('');
+  const [localWorkingPapers, setLocalWorkingPapers] = useState([
+    { id: 'WP-JA-01', title: 'ASYCUDA Import Declaration vs VAT Input Credit Schedule', reference: 'WP-101', notes: 'Verified 18 customs declarations against monthly VAT returns.' }
+  ]);
 
   const caseId = caseData?.id || caseData?.caseId;
   const workflow = getWorkflow(caseId);
@@ -549,12 +407,14 @@ export default function AuditorWorkspace({ caseData, onBack }) {
     }
   }, [caseId, actions.loadWorkflow]);
 
-  // Set active step to current workflow step
+  // Set active step to initialStep or current workflow step
   useEffect(() => {
-    if (workflow.currentStep) {
+    if (initialStep) {
+      setActiveStep(initialStep);
+    } else if (workflow.currentStep && WORKFLOW_STEP_IDS.includes(workflow.currentStep)) {
       setActiveStep(workflow.currentStep);
     }
-  }, [workflow.currentStep]);
+  }, [initialStep, workflow.currentStep]);
 
   // Get existing plan from workflow context
   const existingPlan = workflow.plan || null;
@@ -602,22 +462,49 @@ export default function AuditorWorkspace({ caseData, onBack }) {
     });
   };
 
-  const handleSubmitFindings = (findings) => {
-    findings.forEach(f => {
-      actions.addFinding(caseId, {
-        id: f.id,
-        description: f.description,
-        severity: f.severity,
-        financialImpact: parseInt(f.amount) || 0,
-        status: 'DRAFT',
-      });
-    });
+  const handleSubmitFindings = async (findingsList) => {
+    for (const f of findingsList) {
+      if (!f.id || String(f.id).startsWith('f-')) {
+        await actions.addFinding(caseId, {
+          title: f.title || `${f.taxType || f.category || 'Tax'} Adjustment`,
+          description: f.description,
+          severity: f.severity,
+          category: f.taxType || f.category || 'VAT',
+          principalAmount: f.principalAmount || 0,
+          penaltyAmount: f.penaltyAmount || 0,
+          interestAmount: f.interestAmount || 0,
+          finalAmount: f.finalAmount || f.amount || 0,
+          amount: f.finalAmount || f.amount || 0,
+          financialImpact: f.finalAmount || f.amount || 0,
+          status: 'DRAFT',
+        });
+      }
+    }
     actions.submitFindings(caseId, user.id);
   };
 
   const handleFinalize = () => {
     actions.concludeCase(caseId, user.id);
   };
+
+  if (!caseData) {
+    return (
+      <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
+        <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+          <FileText size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Joint Audit Execution Workspace</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          Please select an assigned Joint Audit case from your dashboard or My Cases list to launch the 9-step statutory joint audit workspace.
+        </p>
+        {onBack && (
+          <Button variant="primary" onClick={onBack}>
+            Go to Assigned Cases
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   // Render current step content
   const renderStepContent = () => {
@@ -956,53 +843,128 @@ export default function AuditorWorkspace({ caseData, onBack }) {
             caseData={caseData}
             existingPlan={existingPlan}
             onSubmit={handleSubmitPlan}
+            onProceed={() => setActiveStep('ENTRY_CONFERENCE')}
           />
         );
 
       case 'ENTRY_CONFERENCE':
         return (
-          <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Calendar size={20} className="text-blue-500" />
-              Entry Conference
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Schedule and conduct the entry conference with the taxpayer.
-            </p>
-            <Button variant="primary" icon={Calendar} onClick={handleRecordMinutes}>
-              Record Conference Minutes
-            </Button>
-          </Card>
+          <EntryConferencePanel
+            caseId={caseId}
+            caseData={caseData}
+            conference={workflow.conference}
+            onSchedule={(conf) => actions.scheduleConference(caseId, user.id, conf)}
+            onRecordMinutes={(mins) => {
+              actions.recordMinutes(caseId, user.id, mins);
+              setActiveStep('INFO_REQUEST');
+            }}
+            onSkip={(reason) => {
+              actions.skipConference(caseId, user.id, reason);
+              setActiveStep('INFO_REQUEST');
+            }}
+            isAuditor={true}
+          />
         );
 
       case 'INFO_REQUEST':
-      case 'DOCUMENT_COLLECTION':
-        return <DocumentRequestPanel caseData={caseData} onSubmit={handleCreateDocRequest} />;
+        return (
+          <DocumentRequestPanel
+            caseData={caseData}
+            requests={workflow.documentRequests || []}
+            documents={workflow.documents || []}
+            onSubmitRequest={handleCreateDocRequest}
+            onUploadDoc={(doc) => actions.uploadDocument?.(caseId, doc)}
+            onProceed={() => {
+              actions.completeInfoRequest?.(caseId, user.id);
+              setActiveStep('CAAT_ANALYSIS');
+            }}
+          />
+        );
 
       case 'CAAT_ANALYSIS':
         return (
-          <CAATAnalysisPanel
+          <JointCaatAnalysisPanel
+            caseId={caseId}
             caseData={caseData}
-            onRun={handleRunCAAT}
-            onComplete={() => setActiveStep('AUDIT_TESTING')}
+            workflow={workflow}
+            actions={actions}
+            actorId={user?.id || 'system'}
+            mode="AUDITOR"
+            onCompleteStep={() => {
+              actions.completeCAAT?.(caseId, user?.id);
+              setActiveStep('AUDIT_TESTING');
+            }}
+            onNavigateToFindings={() => setActiveStep('FINDINGS')}
           />
         );
 
       case 'AUDIT_TESTING':
         return (
-          <Card className="p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <TestTube size={20} className="text-yellow-500" />
-              Audit Testing
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Perform manual testing beyond CAAT analysis. Upload working papers and link evidence.
-            </p>
-            <div className="flex gap-3">
-              <Button variant="secondary" icon={FileText}>Add Working Paper</Button>
-              <Button variant="primary" icon={ArrowRight} onClick={() => setActiveStep('FINDINGS')}>
-                Complete Testing — Draft Findings
-              </Button>
+          <Card className="p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <TestTube size={20} className="text-yellow-500" />
+                Joint Audit Substantive Testing &amp; Working Papers
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Perform manual substantive testing across tax and customs records, record working papers, and link supporting evidence.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {localWorkingPapers.map((wp) => (
+                <div key={wp.id} className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-800/60 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge color="blue">{wp.reference}</Badge>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{wp.title}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{wp.notes}</p>
+                  </div>
+                  <Badge color="green">Indexed</Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Add Working Paper</p>
+              <Input
+                placeholder="Working paper title (e.g., Physical Inventory & Bonded Warehouse Inspection)"
+                value={wpTitle}
+                onChange={e => setWpTitle(e.target.value)}
+              />
+              <Textarea
+                placeholder="Testing procedure performed, sample size, and audit observations..."
+                rows={2}
+                value={wpNotes}
+                onChange={e => setWpNotes(e.target.value)}
+              />
+              <div className="flex justify-between items-center pt-2">
+                <Button
+                  variant="secondary"
+                  icon={FileText}
+                  disabled={!wpTitle.trim()}
+                  onClick={() => {
+                    if (!wpTitle.trim()) return;
+                    setLocalWorkingPapers(prev => [
+                      ...prev,
+                      {
+                        id: `WP-JA-0${prev.length + 1}`,
+                        reference: `WP-10${prev.length + 1}`,
+                        title: wpTitle.trim(),
+                        notes: wpNotes.trim() || 'Substantive testing working paper recorded.',
+                      }
+                    ]);
+                    setWpTitle('');
+                    setWpNotes('');
+                  }}
+                >
+                  Add Working Paper
+                </Button>
+                <Button variant="primary" icon={ArrowRight} onClick={() => setActiveStep('FINDINGS')}>
+                  Complete Testing — Draft Findings
+                </Button>
+              </div>
             </div>
           </Card>
         );
@@ -1011,8 +973,12 @@ export default function AuditorWorkspace({ caseData, onBack }) {
         return (
           <FindingsPanel
             caseData={caseData}
+            findings={workflow?.findings || []}
             onSubmit={handleSubmitFindings}
-            onApprove={() => setActiveStep('TAXPAYER_RESPONSE')}
+            onApprove={() => actions.approveFindings(caseId, user.id)}
+            onProceed={() => setActiveStep('TAXPAYER_RESPONSE')}
+            isTeamLeader={user?.role === 'TEAM_LEADER' || user?.role === 'SUPERVISOR'}
+            isAuditor={true}
           />
         );
 
@@ -1029,7 +995,7 @@ export default function AuditorWorkspace({ caseData, onBack }) {
               </p>
             </div>
             <Button variant="primary" icon={MessageSquare} onClick={() => setActiveStep('CONCLUSION')}>
-              Simulate Taxpayer Response
+              Record Taxpayer Response &amp; Proceed
             </Button>
           </Card>
         );
@@ -1040,7 +1006,7 @@ export default function AuditorWorkspace({ caseData, onBack }) {
       default:
         return (
           <Card className="p-6 text-center">
-            <p className="text-gray-500">Select a step from the sidebar to begin</p>
+            <p className="text-gray-500">Select a step from the workflow tracker above to begin</p>
           </Card>
         );
     }
@@ -1052,25 +1018,32 @@ export default function AuditorWorkspace({ caseData, onBack }) {
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
         >
           <ArrowLeft size={20} />
-          Back to Dashboard
+          Back to Cases
         </button>
         <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider mb-1">
+            Joint Audit Execution Workspace
+          </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {caseData?.taxpayerName || 'Case Execution'}
+            {caseData?.taxpayerName || 'Joint Audit Execution'}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Audit Execution Workflow — {progress.current} of {progress.total} steps complete ({progress.percent}%)
+            Statutory Joint Audit Workflow — {progress.current} of {progress.total} steps complete ({progress.percent}%)
           </p>
         </div>
-        <div className="w-20"></div>
+        <div className="w-28"></div>
       </div>
 
-      {/* Workflow Progress */}
+      {/* Workflow Progress (clickable steps) */}
       <Card className="p-6 overflow-x-auto">
-        <WorkflowProgress currentStep={workflow.currentStep} stepStatuses={stepStatuses} />
+        <WorkflowProgress
+          currentStep={activeStep}
+          stepStatuses={stepStatuses}
+          onStepClick={(stepId) => setActiveStep(stepId)}
+        />
       </Card>
 
       {/* Progress Bar */}

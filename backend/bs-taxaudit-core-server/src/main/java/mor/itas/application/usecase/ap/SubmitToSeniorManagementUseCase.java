@@ -1,14 +1,16 @@
 package mor.itas.application.usecase.ap;
 
 import mor.itas.application.port.inboundport.ap.SubmitToSeniorManagementPort;
-import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanRepository;
-import mor.itas.domain.model.ap.AnnualAuditPlan;
-import mor.itas.domain.model.ap.PlanStatus;
+import mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity;
+import mor.itas.persistence.jpa.entity.ap.PlanStatusEnum;
+import mor.itas.persistence.jpa.entity.ap.PlanAuditLogEntity;
+import mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository;
+import mor.itas.persistence.jpa.repository.ap.PlanAuditLogJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -20,60 +22,61 @@ import java.util.UUID;
  * 
  * Flow:
  * 1. Validate plan exists and is in proper state
- * 2. Store submission to management
- * 3. Update plan status to AWAITING_MANAGEMENT_APPROVAL
+ * 2. Update plan status to SUBMITTED_TO_SENIOR_MGMT
+ * 3. Record submission metadata
+ * 4. Create audit log entry
  */
 @Service
 @RequiredArgsConstructor
 public class SubmitToSeniorManagementUseCase implements SubmitToSeniorManagementPort {
     
-    private final AnnualAuditPlanRepository repository;
-    
-    // Mock storage for management submissions
-    private static final Map<String, Map<String, Object>> managementSubmissions = new HashMap<>();
+    private final AnnualAuditPlanJpaRepository planRepository;
+    private final PlanAuditLogJpaRepository auditLogRepository;
     
     @Override
+    @Transactional
     public void submitToSeniorManagement(
             UUID planId,
             String directorId,
             String directorComment) {
         
-        // Validate plan exists
-        AnnualAuditPlan plan = repository.findById(planId)
+        // 1. Fetch the plan
+        AnnualAuditPlanEntity plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
         
-        // Validate plan status - should be SUBMITTED_TO_DIRECTOR (after amendment)
-        PlanStatus status = plan.getStatus();
-        if (!isValidStatusForManagementSubmission(status.name())) {
+        // 2. Validate plan status - should be DIRECTOR_APPROVED or FEEDBACK_COLLECTED
+        // (Director has reviewed regional feedback, made amendments, and is now submitting)
+        PlanStatusEnum status = plan.getStatus();
+        if (!isValidStatusForManagementSubmission(status)) {
             throw new IllegalStateException(
                 "Cannot submit to management. Plan status: " + status + ". " +
-                "Plan must be SUBMITTED_TO_DIRECTOR (after amendment) or DIRECTOR_APPROVED"
+                "Plan must be DIRECTOR_APPROVED or FEEDBACK_COLLECTED."
             );
         }
         
-        // Store management submission
-        Map<String, Object> submission = new HashMap<>();
-        submission.put("planId", planId.toString());
-        submission.put("submittedBy", directorId);
-        submission.put("submittedAt", java.time.LocalDateTime.now().toString());
-        submission.put("directorComment", directorComment != null ? directorComment : "");
-        submission.put("status", "AWAITING_MANAGEMENT_APPROVAL");
+        // 3. Update plan status to SUBMITTED_TO_SENIOR_MGMT
+        plan.setStatus(PlanStatusEnum.SUBMITTED_TO_SENIOR_MGMT);
+        plan.setUpdatedAt(OffsetDateTime.now());
+        planRepository.save(plan);
         
-        managementSubmissions.put(planId.toString(), submission);
+        // 4. Create audit log entry
+        PlanAuditLogEntity auditLog = new PlanAuditLogEntity(
+            UUID.randomUUID(),
+            plan,
+            "SUBMITTED_TO_SENIOR_MGMT",
+            directorId,
+            "DIRECTOR",
+            directorComment != null ? directorComment : "Plan submitted to Senior Management for final approval"
+        );
+        auditLogRepository.save(auditLog);
     }
     
     /**
      * Check if plan is in valid status for management submission
      */
-    private boolean isValidStatusForManagementSubmission(String status) {
-        return "SUBMITTED_TO_DIRECTOR".equals(status) ||
-               "DIRECTOR_APPROVED".equals(status);
-    }
-    
-    /**
-     * Retrieve management submission details
-     */
-    public static Map<String, Object> getManagementSubmission(UUID planId) {
-        return managementSubmissions.getOrDefault(planId.toString(), new HashMap<>());
+    private boolean isValidStatusForManagementSubmission(PlanStatusEnum status) {
+        return status == PlanStatusEnum.DIRECTOR_APPROVED 
+            || status == PlanStatusEnum.FEEDBACK_COLLECTED
+            || status == PlanStatusEnum.SUBMITTED_TO_DIRECTOR;   // After amendment resubmission
     }
 }

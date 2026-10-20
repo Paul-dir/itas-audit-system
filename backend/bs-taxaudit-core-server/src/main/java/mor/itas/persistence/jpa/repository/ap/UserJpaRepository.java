@@ -31,7 +31,7 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
      * Find team leaders filtered by audit type and/or tax center.
      * Used by the committee auditor nomination endpoint.
      */
-    @Query("SELECT u FROM UserEntity u WHERE u.userType = 'TEAM_LEADER' " +
+    @Query("SELECT u FROM ApUserEntity u WHERE u.userType = 'TEAM_LEADER' " +
            "AND (:auditType IS NULL OR u.auditType = :auditType) " +
            "AND (:taxCenter IS NULL OR u.assignedLocation = :taxCenter) " +
            "AND u.status = 'ACTIVE'")
@@ -42,7 +42,7 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
     /**
      * Find auditors filtered by audit type and/or tax center.
      */
-    @Query("SELECT u FROM UserEntity u WHERE u.userType = 'AUDITOR' " +
+    @Query("SELECT u FROM ApUserEntity u WHERE u.userType = 'AUDITOR' " +
            "AND (:auditType IS NULL OR u.auditType = :auditType) " +
            "AND (:taxCenter IS NULL OR u.assignedLocation = :taxCenter) " +
            "AND u.status = 'ACTIVE'")

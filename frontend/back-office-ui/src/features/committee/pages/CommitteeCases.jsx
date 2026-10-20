@@ -65,6 +65,7 @@ export default function CommitteeCases() {
     const statusMap = {
       'All Statuses': null,
       'PENDING_VOTES': 'PENDING_VOTES',
+      'WAITING_ASSIGNMENT': 'WAITING_ASSIGNMENT',
       'PENDING_VIABILITY': 'PENDING_VIABILITY',
       'APPROVED': 'APPROVED',
       'REJECTED': 'REJECTED',
@@ -181,6 +182,8 @@ export default function CommitteeCases() {
       case 'PENDING_VOTES':
       case 'PENDING_VIABILITY':
         return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200';
+      case 'WAITING_ASSIGNMENT':
+        return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200';
       case 'APPROVED':
       case 'TEAM_ASSIGNED':
         return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200';

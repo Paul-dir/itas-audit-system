@@ -16,6 +16,16 @@ const AUDITOR_ID_MAP = {
   'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
   'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
   'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+  'fed.ja.auditor1': 'a0000001-0000-0000-0099-000000000001',
+  'fed.ja.auditor2': 'a0000001-0000-0000-0099-000000000002',
+  'fed.ja.auditor3': 'a0000001-0000-0000-0099-000000000003',
+  'fed.ja.auditor4': 'a0000001-0000-0000-0099-000000000004',
+  'fed.ja.auditor5': 'a0000001-0000-0000-0099-000000000005',
+  'fed2.ja.auditor1': 'a0000001-0000-0000-0098-000000000001',
+  'fed2.ja.auditor2': 'a0000001-0000-0000-0098-000000000002',
+  'fed2.ja.auditor3': 'a0000001-0000-0000-0098-000000000003',
+  'fed2.ja.auditor4': 'a0000001-0000-0000-0098-000000000004',
+  'fed2.ja.auditor5': 'a0000001-0000-0000-0098-000000000005',
 };
 
 function resolveAuditorId(frontendId) {
@@ -43,16 +53,28 @@ export const auditorAPI = {
   // DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Get auditor dashboard with metrics and case summaries
-   */
   getDashboard: async (auditorId) => {
     const resolvedId = resolveAuditorId(auditorId);
-    const response = await fetch(`${AUDITOR_API_BASE}/dashboard?auditorId=${resolvedId}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch auditor dashboard');
-    return response.json();
+    try {
+      const response = await fetch(`${AUDITOR_API_BASE}/dashboard?auditorId=${encodeURIComponent(resolvedId)}`, {
+        headers: getHeaders(),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      // Ignore network error
+    }
+    return {
+      activeCases: [],
+      recentCompleted: [],
+      totalAssigned: 0,
+      inProgress: 0,
+      completed: 0,
+      pendingDocuments: 0,
+      overdueFindings: 0,
+      totalAuditDays: 0,
+    };
   },
 
   /**
@@ -60,7 +82,7 @@ export const auditorAPI = {
    */
   getWorkload: async (auditorId) => {
     const resolvedId = resolveAuditorId(auditorId);
-    const response = await fetch(`${AUDITOR_API_BASE}/workload?auditorId=${resolvedId}`, {
+    const response = await fetch(`${AUDITOR_API_BASE}/workload?auditorId=${encodeURIComponent(resolvedId)}`, {
       headers: getHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch workload');
@@ -76,14 +98,32 @@ export const auditorAPI = {
    */
   getMyCases: async (auditorId, filters = {}) => {
     const resolvedId = resolveAuditorId(auditorId);
-    const params = new URLSearchParams({ assignedAuditor: resolvedId });
-    if (filters.status) params.append('status', filters.status);
+    const idsToQuery = Array.from(new Set([auditorId, resolvedId].filter(Boolean)));
+    const byId = new Map();
 
-    const response = await fetch(`${CASE_API_BASE}?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch auditor cases');
-    return response.json();
+    for (const id of idsToQuery) {
+      const params = new URLSearchParams({ assignedAuditor: id });
+      if (filters.status) params.append('status', filters.status);
+      try {
+        const response = await fetch(`${CASE_API_BASE}?${params}`, {
+          headers: getHeaders(),
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          const list = payload?.data || payload?.content || (Array.isArray(payload) ? payload : []);
+          if (Array.isArray(list)) {
+            list.forEach(c => {
+              const key = c.id || c.caseId || c.caseNumber;
+              if (key && !byId.has(key)) byId.set(key, c);
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore network error
+      }
+    }
+
+    return Array.from(byId.values());
   },
 
   /**

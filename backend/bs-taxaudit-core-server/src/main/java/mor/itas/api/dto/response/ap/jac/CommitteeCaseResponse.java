@@ -50,6 +50,14 @@ public class CommitteeCaseResponse {
     private UUID teamLeadId;
     private String teamLeadName;
     private Boolean userOwnsCase;
+
+    // Assigned Team
+    private UUID teamId;
+    private String teamName;
+    private String teamDescription;
+    private List<String> teamAuditors;
+    private Integer teamCapacity;
+    private Integer teamCurrentCases;
     
     // Decision
     private String decision;

@@ -43,13 +43,21 @@ public class SessionManagementUseCase {
             chairpersonId = UUID.nameUUIDFromBytes("CHAIRPERSON".getBytes());
         }
 
+        String agenda = request.getAgenda() != null && !request.getAgenda().trim().isEmpty()
+            ? request.getAgenda().trim()
+            : "General committee review and deliberation session";
+
+        String location = request.getLocation() != null && !request.getLocation().trim().isEmpty()
+            ? request.getLocation().trim()
+            : "Committee Conference Room / Virtual";
+
         CommitteeSessionEntity session = CommitteeSessionEntity.builder()
-            .sessionName(request.getSessionName())
-            .agenda(request.getAgenda())
+            .sessionName(request.getSessionName().trim())
+            .agenda(agenda)
             .scheduledDate(request.getScheduledDate() != null
                 ? request.getScheduledDate().atOffset(java.time.ZoneOffset.UTC)
                 : OffsetDateTime.now().plusDays(7))
-            .location(request.getLocation())
+            .location(location)
             .status("SCHEDULED")
             .chairpersonId(chairpersonId)
             .attendees(new ArrayList<>())

@@ -2,6 +2,8 @@ package mor.itas.domain.model.ap;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.math.BigDecimal;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * AnnualAuditPlan Domain Model - Represents an annual audit plan through 4-level approval workflow
@@ -49,10 +51,17 @@ public class AnnualAuditPlan {
     private OffsetDateTime sentToRegionsAt;
     private List<PlanAllocation> allocations;
     
+    // Amendment
+    private String amendmentComment;
+    
     // Metadata
     private OffsetDateTime updatedAt;
     private Long version;
-    
+
+    // Revenue
+    private BigDecimal estimatedRevenue;
+    private JsonNode estimatedRevenueDistribution;
+
     // Constructors
     public AnnualAuditPlan() {
         this.allocations = new ArrayList<>();
@@ -162,7 +171,9 @@ public class AnnualAuditPlan {
     // Authorization Checks
     
     public boolean canBeSubmittedByPlanningTeam() {
-        return status == PlanStatus.DRAFT;
+        return status == PlanStatus.DRAFT
+            || status == PlanStatus.AMENDMENT_REQUIRED
+            || status == PlanStatus.SENIOR_MGMT_REJECTED;
     }
     
     public boolean canBeApprovedByDirector() {
@@ -170,7 +181,13 @@ public class AnnualAuditPlan {
     }
     
     public boolean canBeSubmittedToRegionalByDirector() {
-        return status == PlanStatus.DIRECTOR_APPROVED;
+        return status == PlanStatus.DIRECTOR_APPROVED
+            || status == PlanStatus.SUBMITTED_TO_DIRECTOR
+            || status == PlanStatus.SUBMITTED_TO_REGIONAL
+            || status == PlanStatus.REGIONAL_APPROVED
+            || status == PlanStatus.SENT_TO_TAX_CENTERS
+            || status == PlanStatus.TC_FEEDBACK_SUBMITTED
+            || status == PlanStatus.FINALIZED;
     }
     
     public boolean canBeApprovedByRegionalDirector() {
@@ -385,6 +402,30 @@ public class AnnualAuditPlan {
         this.version = version;
     }
     
+    public String getAmendmentComment() {
+        return amendmentComment;
+    }
+    
+    public void setAmendmentComment(String amendmentComment) {
+        this.amendmentComment = amendmentComment;
+    }
+
+    public BigDecimal getEstimatedRevenue() {
+        return estimatedRevenue;
+    }
+
+    public void setEstimatedRevenue(BigDecimal estimatedRevenue) {
+        this.estimatedRevenue = estimatedRevenue;
+    }
+
+    public JsonNode getEstimatedRevenueDistribution() {
+        return estimatedRevenueDistribution;
+    }
+
+    public void setEstimatedRevenueDistribution(JsonNode estimatedRevenueDistribution) {
+        this.estimatedRevenueDistribution = estimatedRevenueDistribution;
+    }
+
     @Override
     public String toString() {
         return "AnnualAuditPlan{" +

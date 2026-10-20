@@ -107,6 +107,11 @@ public class RegionalFeedbackAggregationController {
      *     },
      *     ...
      *   },
+     *   "capacityOverrides": {
+     *     "desk_audit": 30050,
+     *     "joint_audit": 12900,
+     *     ...
+     *   },
      *   "regionalAnalysis": "Limited budgets, training gaps, seasonal constraints"
      * }
      * 
@@ -122,7 +127,7 @@ public class RegionalFeedbackAggregationController {
      * }
      * 
      * @param regionId the region ID
-     * @param body contains planId, aggregatedFeedback, regionalAnalysis
+     * @param body contains planId, aggregatedFeedback, capacityOverrides, regionalAnalysis
      * @return GenericResponse with submission result
      */
     @PostMapping("/regions/{regionId}/submit-feedback")
@@ -150,6 +155,23 @@ public class RegionalFeedbackAggregationController {
                 ));
             }
             
+            // NEW: Get capacity overrides from regional director
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> capacityOverrides = 
+                (Map<String, Integer>) body.get("capacityOverrides");
+            
+            // If overrides provided, merge them into aggregatedFeedback
+            if (capacityOverrides != null && !capacityOverrides.isEmpty()) {
+                capacityOverrides.forEach((auditType, overrideValue) -> {
+                    if (aggregatedFeedback.containsKey(auditType)) {
+                        Map<String, Object> feedback = aggregatedFeedback.get(auditType);
+                        feedback.put("regionalOverride", overrideValue);
+                        feedback.put("isRegionallyAdjusted", true);
+                        System.out.println("✅ Capacity override for " + auditType + ": " + overrideValue);
+                    }
+                });
+            }
+            
             String regionalAnalysis = (String) body.get("regionalAnalysis");
             if (regionalAnalysis == null || regionalAnalysis.trim().isEmpty()) {
                 return ResponseEntity.ok(GenericResponse.error(
@@ -161,7 +183,7 @@ public class RegionalFeedbackAggregationController {
             UUID planUUID = UUID.fromString(planIdStr);
             String regionalDirectorId = "REGIONAL_DIRECTOR_" + regionId; // TODO: Get from security context
             
-            // Submit aggregated feedback
+            // Submit aggregated feedback with overrides
             submitRegionalFeedbackPort.submitAggregatedFeedback(
                 planUUID,
                 regionId,

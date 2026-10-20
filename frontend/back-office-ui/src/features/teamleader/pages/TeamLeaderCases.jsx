@@ -22,17 +22,43 @@ import Card from '../../../components/Card';
 import {
   Search, AlertCircle, ChevronLeft, ChevronRight, Download,
   FileText, Send, ArrowRight, Filter, PlayCircle, ClipboardCheck,
-  UserCheck,
+  UserCheck, Clock,
 } from 'lucide-react';
 
 const TEAM_LEADER_ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
+  'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
+  'fed.ja.tl2': '10000000-0000-0000-0099-000000000002',
+  'fed.ja.chair': '20000000-0000-0000-0099-000000000001',
+  'fed.ja.member': '20000000-0000-0000-0099-000000000002',
+  'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
+  'fed2.ja.tl2': '10000000-0000-0000-0098-000000000002',
+  'fed2.ja.chair': '20000000-0000-0000-0098-000000000001',
+  'fed2.ja.member': '20000000-0000-0000-0098-000000000002',
+  'aa1.tl': '10000000-0000-0000-0001-000000000001',
+  'or1.tl': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-or1-joint-1': '10000000-0000-0000-0004-000000000001',
+  'teamleader-or1-ja-1': '10000000-0000-0000-0004-000000000001',
+  'u-tl-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'u-tl-federal-lto1-joint-1': '10000000-0000-0000-0099-000000000001',
+  'teamleader-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'teamleader-federal-lto1-ja-2': '10000000-0000-0000-0099-000000000002',
+  'u-tl-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'u-tl-federal-lto2-joint-1': '10000000-0000-0000-0098-000000000001',
+  'teamleader-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'teamleader-federal-lto2-ja-2': '10000000-0000-0000-0098-000000000002',
+  'teamleader-aa1-ja-1': '10000000-0000-0000-0001-000000000001',
+  'teamleader-aa2-ja-1': '10000000-0000-0000-0002-000000000001',
+  'teamleader-aa3-ja-1': '10000000-0000-0000-0003-000000000001',
 };
 
-export default function TeamLeaderCases() {
+const JA_PHASE_CONFIG = {};
+
+export default function TeamLeaderCases({ view = 'cases', onNavigate }) {
   const { user } = useAuth();
   const { state, selectors } = useApp();
   const { actions: workflowActions, getWorkflow } = useWorkflow();
@@ -100,6 +126,7 @@ export default function TeamLeaderCases() {
     return [
       'ASSIGNED',
       'PENDING_ASSIGNMENT',
+      'WAITING_ASSIGNMENT',
       'TEAM_ASSIGNED',
       'ASSIGNED_TO_TEAM_LEADER',
       'PENDING_HANDOFF',
@@ -116,6 +143,11 @@ export default function TeamLeaderCases() {
     }
     if (isConcluded || isAssignedToAuditor(caseItem)) {
       return { type: 'EXECUTE', label: isExecuting ? 'Continue' : 'Execute' };
+    }
+    // Awaiting assignment by a Tax Center Manager — the TL cannot hand off yet.
+    const status = caseItem.status?.toUpperCase();
+    if (!caseItem.assignedTeamLeaderId && status === 'PENDING_ASSIGNMENT') {
+      return { type: 'AWAITING_ASSIGNMENT', label: 'Awaiting Assignment' };
     }
     if (isHandoffable(caseItem) || !isHandedOff(caseItem)) {
       return { type: 'HANDOFF', label: 'Handoff' };
@@ -199,16 +231,35 @@ export default function TeamLeaderCases() {
   };
 
   /**
-   * Execute: opens the 11-step workflow for a case.
+   * Execute: opens the 10-step workflow for a case.
    * If the case hasn't been imported yet, auto-imports it first.
    */
-  const handleExecuteCase = (caseItem) => {
+  const handleExecuteCase = (caseItem, forcedStep = null) => {
     const caseId = caseItem.committeeCaseId || caseItem.caseId || caseItem.id;
-    const userIds = [user?.id, TEAM_LEADER_ID_MAP[user?.id]].filter(Boolean);
-    const assignedTeamLeaderId = caseItem.assignedTeamLeaderId || caseItem.teamLeadId;
+    const userIds = [
+      user?.id,
+      user?.userId,
+      user?.username,
+      user?.legacyUsername,
+      user?.email,
+      TEAM_LEADER_ID_MAP[user?.id],
+      TEAM_LEADER_ID_MAP[user?.username],
+      TEAM_LEADER_ID_MAP[user?.legacyUsername],
+    ].filter(Boolean);
+    const assignedTeamLeaderId = caseItem.assignedTeamLeaderId || caseItem.teamLeadId || caseItem.assignedTeamLeader;
+    const nameMatch = Boolean(
+      user?.name &&
+      caseItem.assignedTeamLeaderName &&
+      user.name.trim().toLowerCase() === caseItem.assignedTeamLeaderName.trim().toLowerCase()
+    );
 
-    if (!assignedTeamLeaderId || !userIds.includes(assignedTeamLeaderId)) {
-      setHandoffError(`Case ${caseItem.caseNumber || caseId} is not assigned to you. A committee chairperson or manager must assign it before execution.`);
+    if (
+      assignedTeamLeaderId &&
+      !nameMatch &&
+      !userIds.includes(assignedTeamLeaderId) &&
+      !userIds.some(id => String(id).toLowerCase() === String(assignedTeamLeaderId).toLowerCase())
+    ) {
+      setHandoffError(`Case ${caseItem.caseNumber || caseId} is assigned to ${caseItem.assignedTeamLeaderName || assignedTeamLeaderId}. You can only execute cases assigned to your team.`);
       return;
     }
 
@@ -225,12 +276,15 @@ export default function TeamLeaderCases() {
       });
     }
 
+    const targetStep = forcedStep || null;
+
     setExecutingCase({
       id: caseId,
       taxpayerName: caseItem.taxpayerName,
       riskPriority: caseItem.riskPriority || caseItem.riskLevel,
       riskLevel: caseItem.riskLevel,
       source: caseItem.source,
+      initialStep: targetStep,
       ...caseItem,
     });
   };
@@ -272,6 +326,7 @@ export default function TeamLeaderCases() {
       <CaseExecution
         caseId={executingCase.id}
         caseData={executingCase}
+        initialStep={executingCase.initialStep}
         onBack={() => setExecutingCase(null)}
       />
     );
@@ -314,15 +369,21 @@ export default function TeamLeaderCases() {
     );
   }
 
+  const activePhaseConfig = JA_PHASE_CONFIG[view];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Cases</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {activePhaseConfig ? activePhaseConfig.title : 'My Cases'}
+            </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Cases from the Joint Audit Committee and your assigned audit portfolio. Click <strong>Execute</strong> to start the 11-step audit workflow.
+              {activePhaseConfig
+                ? 'Review assigned joint audit cases at this milestone. Click Execute on any case to manage this workflow phase.'
+                : 'Cases from the Joint Audit Committee and your assigned audit portfolio. Click Execute to start the 10-step audit workflow.'}
             </p>
           </div>
           <div className="flex gap-2">
@@ -461,6 +522,19 @@ export default function TeamLeaderCases() {
                             }
                             const isHandoffAction = nextAction.type === 'HANDOFF';
                             const isAssignAction = nextAction.type === 'ASSIGN';
+                            const isAwaitingAssignment = nextAction.type === 'AWAITING_ASSIGNMENT';
+                            if (isAwaitingAssignment) {
+                              return (
+                                <button
+                                  disabled
+                                  className="inline-flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed"
+                                  title="Waiting for a Tax Center Manager to assign this case to a team leader"
+                                >
+                                  <Clock size={14} />
+                                  Awaiting Assignment
+                                </button>
+                              );
+                            }
                             return (
                               <button
                                 onClick={() => isHandoffAction ? handleHandoff(caseItem) : isAssignAction ? handleAssign(caseItem) : handleExecuteCase(caseItem)}

@@ -1,31 +1,22 @@
 package mor.itas.domain.exception;
 
+import lombok.Getter;
+
 /**
- * Exception thrown when case is not in valid state for requested operation
+ * Exception thrown when case is in an invalid state for the requested operation
  */
-public class InvalidCaseStateException extends CommitteeCaseException {
+@Getter
+public class InvalidCaseStateException extends RuntimeException {
 
-    private final String currentState;
-    private final String requiredState;
-    private final String operation;
+    private final String currentStatus;
 
-    public InvalidCaseStateException(String currentState, String requiredState, String operation) {
-        super(String.format("Cannot %s case in state '%s'. Required state: '%s'", 
-                operation, currentState, requiredState));
-        this.currentState = currentState;
-        this.requiredState = requiredState;
-        this.operation = operation;
+    public InvalidCaseStateException(String message, String currentStatus) {
+        super(message);
+        this.currentStatus = currentStatus;
     }
 
-    public String getCurrentState() {
-        return currentState;
-    }
-
-    public String getRequiredState() {
-        return requiredState;
-    }
-
-    public String getOperation() {
-        return operation;
+    public InvalidCaseStateException(String message, String currentStatus, Throwable cause) {
+        super(message, cause);
+        this.currentStatus = currentStatus;
     }
 }

@@ -14,7 +14,7 @@ import java.util.Map;
  * Phase 2 will replace with real Registration Service integration.
  */
 @Component
-@Profile({"mock", "test"})
+@Profile("mock")
 public class MockTaxpayerRegistrationAdapter implements TaxpayerRegistrationPort {
 
     @Override

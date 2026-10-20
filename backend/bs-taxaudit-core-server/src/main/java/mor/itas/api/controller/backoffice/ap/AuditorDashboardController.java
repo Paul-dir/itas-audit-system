@@ -30,6 +30,7 @@ public class AuditorDashboardController {
     private final AuditFindingRepository findingRepository;
     private final AuditPlanRecordRepository planRepository;
     private final DocumentRequestRecordRepository docRequestRepository;
+    private final mor.itas.persistence.jpa.repository.ap.UserJpaRepository userJpaRepository;
 
     /**
      * Get auditor dashboard with metrics and case summaries
@@ -40,21 +41,32 @@ public class AuditorDashboardController {
             @RequestParam String auditorId) {
 
         // Fetch all cases assigned to this auditor
-        List<ApAuditCaseEntity> allCases = caseRepository.findByAssignedAuditorId(auditorId);
+        List<ApAuditCaseEntity> allCases = new ArrayList<>(caseRepository.findByAssignedAuditorId(auditorId));
+        if (allCases.isEmpty() && auditorId != null && !auditorId.isBlank()) {
+            String altId = resolveAltAuditorId(auditorId);
+            if (altId != null && !altId.equalsIgnoreCase(auditorId)) {
+                allCases.addAll(caseRepository.findByAssignedAuditorId(altId));
+            }
+        }
 
         // Compute metrics
         long totalAssigned = allCases.size();
-        long inProgress = allCases.stream()
-                .filter(c -> "IN_PROGRESS".equals(c.getStatus()))
-                .count();
         long completed = allCases.stream()
-                .filter(c -> "COMPLETED".equals(c.getStatus()) || "CONCLUDED".equals(c.getStatus()))
+                .filter(c -> "COMPLETED".equals(c.getStatus()) || "CONCLUDED".equals(c.getStatus()) || "CLOSED".equals(c.getStatus()))
+                .count();
+        long inProgress = allCases.stream()
+                .filter(c -> !"COMPLETED".equals(c.getStatus()) && !"CONCLUDED".equals(c.getStatus()) && !"CLOSED".equals(c.getStatus()))
                 .count();
 
         // Build case summaries for active cases
         List<ApAuditCaseEntity> activeCases = allCases.stream()
-                .filter(c -> "IN_PROGRESS".equals(c.getStatus()) || "ASSIGNED".equals(c.getStatus()))
-                .sorted(Comparator.comparing(ApAuditCaseEntity::getCreatedAt).reversed())
+                .filter(c -> !"COMPLETED".equals(c.getStatus()) && !"CONCLUDED".equals(c.getStatus()) && !"CLOSED".equals(c.getStatus()))
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
                 .collect(Collectors.toList());
 
         List<AuditorDashboardResponse.AuditorCaseSummary> activeSummaries = activeCases.stream()
@@ -64,7 +76,12 @@ public class AuditorDashboardController {
         // Build case summaries for recent completed
         List<ApAuditCaseEntity> completedCases = allCases.stream()
                 .filter(c -> "COMPLETED".equals(c.getStatus()) || "CONCLUDED".equals(c.getStatus()))
-                .sorted(Comparator.comparing(ApAuditCaseEntity::getCompletedAt).reversed())
+                .sorted((a, b) -> {
+                    if (a.getCompletedAt() == null && b.getCompletedAt() == null) return 0;
+                    if (a.getCompletedAt() == null) return 1;
+                    if (b.getCompletedAt() == null) return -1;
+                    return b.getCompletedAt().compareTo(a.getCompletedAt());
+                })
                 .limit(5)
                 .collect(Collectors.toList());
 
@@ -181,5 +198,22 @@ public class AuditorDashboardController {
         OffsetDateTime dueDate = entity.getStartedAt().plusDays(30);
         long days = java.time.temporal.ChronoUnit.DAYS.between(OffsetDateTime.now(), dueDate);
         return (int) Math.max(0, days);
+    }
+
+    private String resolveAltAuditorId(String id) {
+        if (id == null || id.isBlank()) return null;
+        try {
+            if (userJpaRepository != null) {
+                try {
+                    UUID uId = UUID.fromString(id.trim());
+                    Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> opt = userJpaRepository.findById(uId);
+                    if (opt.isPresent()) return opt.get().getUsername();
+                } catch (IllegalArgumentException ignored) {}
+
+                Optional<mor.itas.persistence.jpa.entity.ap.UserEntity> opt = userJpaRepository.findByUsername(id.trim());
+                if (opt.isPresent()) return opt.get().getUserId().toString();
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

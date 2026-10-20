@@ -43,6 +43,20 @@ public class CommitteeCaseAggregate {
     // Ownership
     private UUID currentOwnerId;
     private OffsetDateTime ownershipAcquiredAt;
+    
+    private UUID handoffRecordId;
+    private OffsetDateTime handoffDate;
+
+    // Explicit getters/setters for failing methods
+    public CommitteeCaseStatus getStatus() { return this.status; }
+    public UUID getTeamLeadId() { return this.teamLeadId; }
+    public UUID getChairpersonId() { return this.chairpersonId; }
+    public void setHandoffRecordId(UUID id) { this.handoffRecordId = id; }
+    public void setHandoffDate(OffsetDateTime date) { this.handoffDate = date; }
+    public UUID getCaseId() { return this.caseId; }
+    public OffsetDateTime getExtendedDeadline() { return this.extendedDeadline; }
+    public OffsetDateTime getCommitteeDeadline() { return this.committeeDeadline; }
+
 
     // Decision
     private CommitteeCaseDecision decision;
@@ -50,9 +64,7 @@ public class CommitteeCaseAggregate {
     private String decisionReason;
     private UUID chairpersonId;
 
-    // Handoff
-    private UUID handoffRecordId;
-    private OffsetDateTime handoffDate;
+    // Removed duplicates
 
     // Events
     @Builder.Default
@@ -111,8 +123,9 @@ public class CommitteeCaseAggregate {
      * Finalize viability (approve or reject)
      */
     public void finalizeViability(CommitteeCaseDecision decision, String reason, UUID chairpersonId) {
-        if (!status.equals(CommitteeCaseStatus.PENDING_VIABILITY)) {
-            throw new IllegalStateException("Case must be in PENDING_VIABILITY state");
+        if (!status.equals(CommitteeCaseStatus.PENDING_VIABILITY)
+                && !status.equals(CommitteeCaseStatus.WAITING_ASSIGNMENT)) {
+            throw new IllegalStateException("Case must be in PENDING_VIABILITY or WAITING_ASSIGNMENT state");
         }
         if (decision == null) {
             throw new IllegalArgumentException("Decision cannot be null");
@@ -198,7 +211,8 @@ public class CommitteeCaseAggregate {
         PENDING_VIABILITY,
         APPROVED,
         REJECTED,
-        TEAM_ASSIGNED
+        TEAM_ASSIGNED,
+        WAITING_ASSIGNMENT
     }
 
     public enum CommitteeCaseDecision {

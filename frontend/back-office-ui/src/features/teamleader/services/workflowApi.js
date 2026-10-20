@@ -7,30 +7,57 @@ const API_BASE = '/api/v1/backoffice/ap/cases';
 const COMMITTEE_API_BASE = '/api/v1/backoffice/ap/committee';
 
 const ID_MAP = {
-  'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-  'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-  'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-  'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
+  'u-tl-aa1a': '10000000-0000-0000-0001-000000000001',
+  'u-tl-aa2a': '10000000-0000-0000-0002-000000000001',
+  'u-tl-aa3a': '10000000-0000-0000-0003-000000000001',
+  'u-tl-or1a': '10000000-0000-0000-0004-000000000001',
   'u-aud-aa1a': 'a0000001-0000-0000-0000-000000000001',
   'u-aud-db02': 'a0000001-0000-0000-0000-000000000002',
   'u-aud-db03': 'a0000001-0000-0000-0000-000000000003',
   'u-aud-db04': 'a0000001-0000-0000-0000-000000000004',
   'u-aud-db05': 'a0000001-0000-0000-0000-000000000005',
   'u-aud-db06': 'a0000001-0000-0000-0000-000000000006',
+  'fed.ja.chair': '20000000-0000-0000-0099-000000000001',
+  'fed.ja.member': '20000000-0000-0000-0099-000000000002',
+  'fed.ja.tl': '10000000-0000-0000-0099-000000000001',
+  'u-tl-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'u-tl-federal-lto1-joint-1': '10000000-0000-0000-0099-000000000001',
+  'teamleader-federal-lto1-ja-1': '10000000-0000-0000-0099-000000000001',
+  'fed.ja.auditor1': 'a0000001-0000-0000-0099-000000000001',
+  'fed.ja.auditor2': 'a0000001-0000-0000-0099-000000000002',
+  'fed.ja.auditor3': 'a0000001-0000-0000-0099-000000000003',
+  'fed.ja.auditor4': 'a0000001-0000-0000-0099-000000000004',
+  'fed.ja.auditor5': 'a0000001-0000-0000-0099-000000000005',
+  'fed2.ja.chair': '20000000-0000-0000-0098-000000000001',
+  'fed2.ja.member': '20000000-0000-0000-0098-000000000002',
+  'fed2.ja.tl': '10000000-0000-0000-0098-000000000001',
+  'u-tl-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'u-tl-federal-lto2-joint-1': '10000000-0000-0000-0098-000000000001',
+  'teamleader-federal-lto2-ja-1': '10000000-0000-0000-0098-000000000001',
+  'fed2.ja.auditor1': 'a0000001-0000-0000-0098-000000000001',
+  'fed2.ja.auditor2': 'a0000001-0000-0000-0098-000000000002',
+  'fed2.ja.auditor3': 'a0000001-0000-0000-0098-000000000003',
+  'fed2.ja.auditor4': 'a0000001-0000-0000-0098-000000000004',
+  'fed2.ja.auditor5': 'a0000001-0000-0000-0098-000000000005',
 };
+
+function resolveActorId(id) {
+  if (!id) return id;
+  if (ID_MAP[id]) return ID_MAP[id];
+  try {
+    const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
+    if (id === session?.id || id === session?.username || id === session?.legacyUsername) {
+      return ID_MAP[session?.legacyUsername] || session?.userId || id;
+    }
+  } catch {}
+  return id;
+}
 
 function getHeaders() {
   const token = localStorage.getItem('authToken');
   const session = JSON.parse(localStorage.getItem('mor_aps_session') || '{}');
   const userId = session?.id || '';
-  // Map frontend IDs to backend UUIDs
-  const ID_MAP = {
-    'u-tl-aa1a': '10000000-0000-0000-0000-000000000001',
-    'u-tl-aa3a': '10000000-0000-0000-0000-000000000002',
-    'u-tl-aa2a': '10000000-0000-0000-0000-000000000007',
-    'u-tl-or1a': '10000000-0000-0000-0000-000000000017',
-  };
-  const actorId = ID_MAP[userId] || userId;
+  const actorId = resolveActorId(userId) || session?.userId || userId;
   return {
     'Content-Type': 'application/json',
     'X-Actor-Id': actorId,
@@ -66,12 +93,19 @@ export const workflowAPI = {
     return response.json();
   },
 
-  /** Handoff a case (Team Leader takes responsibility) */
   handoffCase: async (caseId, teamLeaderId, comment) => {
+    const resolvedTlId = ID_MAP[teamLeaderId] || teamLeaderId;
+    const headers = getHeaders();
+    if (resolvedTlId) {
+      headers['X-Actor-Id'] = resolvedTlId;
+    }
     const response = await fetch(`${API_BASE}/${caseId}/handoff`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ comment: comment || 'Accepted by Team Leader after reviewing the case referral' }),
+      headers,
+      body: JSON.stringify({
+        comment: comment || 'Accepted by Team Leader after reviewing the case referral',
+        teamLeaderId: resolvedTlId,
+      }),
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -201,6 +235,28 @@ export const workflowAPI = {
     return response.json();
   },
 
+  /** Skip/waive entry conference */
+  skipConference: async (caseId, reason) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/skip`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) throw new Error('Failed to skip conference');
+    return response.json();
+  },
+
+  /** Send meeting notification to taxpayer (optional, non-fatal) */
+  sendConferenceNotification: async (caseId, { channels, conferenceId, message }) => {
+    const response = await fetch(`${API_BASE}/${caseId}/conference/notify`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ channels, conferenceId, message }),
+    });
+    if (!response.ok) console.warn('[Conference] Notification send failed (non-fatal)');
+    return response.ok ? response.json() : { status: 'NOTIFICATION_FAILED' };
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 5: INFORMATION REQUEST
   // ═══════════════════════════════════════════════════════════════════════════
@@ -297,13 +353,29 @@ export const workflowAPI = {
   },
 
   /** Validate anomaly (accept/amend/reject) */
-  validateAnomaly: async (caseId, anomalyId, decision, notes) => {
+  validateAnomaly: async (caseId, anomalyId, decision, notes, amendedAmount = null) => {
     const response = await fetch(`${API_BASE}/${caseId}/caat/anomalies/${anomalyId}/validate`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ decision, notes }),
+      body: JSON.stringify({ decision, notes, reason: notes, amendedAmount }),
     });
-    if (!response.ok) throw new Error('Failed to validate anomaly');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to validate anomaly');
+    }
+    return response.json();
+  },
+
+  /** Promote validated CAAT anomalies (ACCEPTED/AMENDED) to draft Findings */
+  promoteCaatToFindings: async (caseId) => {
+    const response = await fetch(`${API_BASE}/${caseId}/caat/promote-to-findings`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to promote CAAT anomalies to findings');
+    }
     return response.json();
   },
 

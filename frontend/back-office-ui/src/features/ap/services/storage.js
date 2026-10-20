@@ -31,5 +31,6 @@ export const STORE_KEYS = {
   USERS: 'users',
   PLANS: 'plans',
   CASES: 'cases',
+  PLANNING_CONFIG: 'planning_config',
   SEEDED: 'seeded_v5',
 };

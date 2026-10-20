@@ -59,4 +59,11 @@ public interface AnnualAuditPlanRepository {
      * @return list of plans matching both criteria
      */
     List<AnnualAuditPlan> findByStatusAndYear(String status, Integer year);
+
+    /**
+     * Directly update plan status without loading entity (avoids optimistic locking)
+     * @param planId the plan ID
+     * @param status the new status name (e.g. "FEEDBACK_COLLECTED")
+     */
+    void updateStatusDirect(UUID planId, String status);
 }

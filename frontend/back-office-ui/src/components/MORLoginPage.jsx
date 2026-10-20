@@ -106,14 +106,16 @@ function MORLoginPage() {
             <div style={{
               width: '48px',
               height: '48px',
-              background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 24px rgba(76, 175, 80, 0.3)'
+              borderRadius: '50%',
+              overflow: 'hidden',
+              border: '2px solid rgba(96, 165, 250, 0.5)',
+              boxShadow: '0 8px 24px rgba(96, 165, 250, 0.3)'
             }}>
-              <i className="fas fa-chart-line" style={{ fontSize: '24px', color: '#fff' }}></i>
+              <img
+                src="/mor-logo.jpeg"
+                alt="Ministry of Revenues"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '700' }}>

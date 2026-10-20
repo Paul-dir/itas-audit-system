@@ -69,6 +69,12 @@ public class AuditTeamEntity {
     @Column(length = 500)
     private String description;
 
+    /**
+     * Tax center where this team was formed / operates
+     */
+    @Column(name = "tax_center", length = 100)
+    private String taxCenter;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

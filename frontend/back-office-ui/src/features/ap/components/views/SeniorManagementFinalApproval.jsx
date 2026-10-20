@@ -9,10 +9,10 @@ import Badge from '../Badge';
  * Replaces: SeniorManagementApprovalView (old scattered logic)
  * 
  * WORKFLOW:
- * 1. Show all plans with status: SUBMITTED_TO_SENIOR_MANAGEMENT
+ * 1. Show all plans with status: SUBMITTED_TO_SENIOR_MGMT
  * 2. Allow Senior Management to:
- *    ✅ APPROVE → SENIOR_MANAGEMENT_APPROVED (plan locked)
- *    ❌ REJECT → SENIOR_MANAGEMENT_REJECTED (sent back for revision)
+ *    ✅ APPROVE → SENIOR_MGMT_APPROVED (plan locked)
+ *    ❌ REJECT → SENIOR_MGMT_REJECTED (sent back for revision)
  */
 
 function SeniorManagementFinalApproval() {
@@ -42,15 +42,15 @@ function SeniorManagementFinalApproval() {
 
     // Get all plans submitted to senior management
     const seniorMgmtPlans = (data?.plans || []).filter(plan => {
-      return plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' ||
-             plan.status === 'SENIOR_MANAGEMENT_APPROVED' ||
-             plan.status === 'SENIOR_MANAGEMENT_REJECTED';
+      return plan.status === 'SUBMITTED_TO_SENIOR_MGMT' ||
+             plan.status === 'SENIOR_MGMT_APPROVED' ||
+             plan.status === 'SENIOR_MGMT_REJECTED';
     });
 
     console.log(`✅ Senior Management: Found ${seniorMgmtPlans.length} plans`, {
-      pending: seniorMgmtPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT').length,
-      approved: seniorMgmtPlans.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length,
-      rejected: seniorMgmtPlans.filter(p => p.status === 'SENIOR_MANAGEMENT_REJECTED').length
+      pending: seniorMgmtPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length,
+      approved: seniorMgmtPlans.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length,
+      rejected: seniorMgmtPlans.filter(p => p.status === 'SENIOR_MGMT_REJECTED').length
     });
 
     setPlans(seniorMgmtPlans);
@@ -83,7 +83,7 @@ function SeniorManagementFinalApproval() {
     if (!plan) return;
 
     // ✅ DUPLICATE PREVENTION: Check if already decided
-    if (plan.status === 'SENIOR_MANAGEMENT_APPROVED' || plan.status === 'SENIOR_MANAGEMENT_REJECTED') {
+    if (plan.status === 'SENIOR_MGMT_APPROVED' || plan.status === 'SENIOR_MGMT_REJECTED') {
       alert('❌ Decision already made on this plan!\n\n' +
             `Status: ${plan.status}\n` +
             'Cannot change decision once submitted.');
@@ -91,8 +91,8 @@ function SeniorManagementFinalApproval() {
     }
 
     // ✅ STATUS CHECK: Only allow if in correct status
-    if (plan.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT') {
-      alert(`❌ Cannot process this plan!\n\nCurrent status: ${plan.status}\nRequired status: SUBMITTED_TO_SENIOR_MANAGEMENT`);
+    if (plan.status !== 'SUBMITTED_TO_SENIOR_MGMT') {
+      alert(`❌ Cannot process this plan!\n\nCurrent status: ${plan.status}\nRequired status: SUBMITTED_TO_SENIOR_MGMT`);
       return;
     }
 
@@ -108,11 +108,11 @@ function SeniorManagementFinalApproval() {
 
     // ✅ Update plan status
     if (decision === 'APPROVE') {
-      plan.status = 'SENIOR_MANAGEMENT_APPROVED';
+      plan.status = 'SENIOR_MGMT_APPROVED';
       plan.approvedDate = new Date().toISOString();
       plan.approvedBy = userInfo?.fullName || 'Senior Management';
     } else {
-      plan.status = 'SENIOR_MANAGEMENT_REJECTED';
+      plan.status = 'SENIOR_MGMT_REJECTED';
       plan.rejectionDate = new Date().toISOString();
       plan.rejectionReason = comments || 'Plan rejected by Senior Management';
     }
@@ -138,9 +138,9 @@ function SeniorManagementFinalApproval() {
     setShowDecisionForm(false);
   };
 
-  const getPendingPlans = () => plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT');
-  const getApprovedPlans = () => plans.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED');
-  const getRejectedPlans = () => plans.filter(p => p.status === 'SENIOR_MANAGEMENT_REJECTED');
+  const getPendingPlans = () => plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT');
+  const getApprovedPlans = () => plans.filter(p => p.status === 'SENIOR_MGMT_APPROVED');
+  const getRejectedPlans = () => plans.filter(p => p.status === 'SENIOR_MGMT_REJECTED');
 
   const planDetails = selectedPlan ? plans.find(p => p.id === selectedPlan) : null;
   const pendingPlans = getPendingPlans();
@@ -202,13 +202,13 @@ function SeniorManagementFinalApproval() {
                     <p className="font-bold text-text-hi dark:text-text-hi m-0">{plan.id}</p>
                     <p className="text-xs text-text-mid dark:text-text-mid m-0 mt-1">{plan.name}</p>
                     <div className="mt-2">
-                      {plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' && (
+                      {plan.status === 'SUBMITTED_TO_SENIOR_MGMT' && (
                         <Badge status="pending" text="Awaiting Decision" />
                       )}
-                      {plan.status === 'SENIOR_MANAGEMENT_APPROVED' && (
+                      {plan.status === 'SENIOR_MGMT_APPROVED' && (
                         <Badge status="approved" text="Approved" />
                       )}
-                      {plan.status === 'SENIOR_MANAGEMENT_REJECTED' && (
+                      {plan.status === 'SENIOR_MGMT_REJECTED' && (
                         <Badge status="rejected" text="Rejected" />
                       )}
                     </div>
@@ -353,7 +353,7 @@ function SeniorManagementFinalApproval() {
               ) : (
                 <button
                   onClick={() => setShowDecisionForm(true)}
-                  disabled={planDetails.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT'}
+                  disabled={planDetails.status !== 'SUBMITTED_TO_SENIOR_MGMT'}
                   className="w-full py-3 px-4 rounded font-bold bg-teal dark:bg-teal text-white hover:bg-teal/80 dark:hover:bg-teal/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   🎯 Make Final Decision

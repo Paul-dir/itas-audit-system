@@ -1,3 +1,5 @@
 #!/bin/bash
-cd /home/paul/itas-audit-system/frontend/back-office-ui
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cd "$DIR/frontend/back-office-ui"
 exec npm run dev

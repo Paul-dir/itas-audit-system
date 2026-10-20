@@ -37,6 +37,7 @@ public class FinalizeViabilityUseCase {
     private final CommitteeCaseRepository caseRepository;
     private final ApAuditCaseRepository apCaseRepository;
     private final CommitteeCaseJacMapper caseMapper;
+    private final mor.itas.persistence.jpa.repository.ap.AnnualAuditPlanJpaRepository annualAuditPlanRepository;
     
     /**
      * Overloaded execute method to match controller signature
@@ -160,8 +161,36 @@ public class FinalizeViabilityUseCase {
      *   3. Auditor executes the audit
      */
     private void createApAuditCase(CommitteeCaseEntity committeeCase) {
-        // Check if AP audit case already exists for this committee case
+        // Check if AP audit case already exists for this committee case (by originalCaseId or caseCode)
+        if (committeeCase.getOriginalCaseId() != null) {
+            java.util.Optional<ApAuditCaseEntity> orig = apCaseRepository.findById(committeeCase.getOriginalCaseId());
+            if (orig.isPresent()) {
+                ApAuditCaseEntity apCase = orig.get();
+                if (committeeCase.getTeamLeadId() != null) {
+                    apCase.setAssignedTeamLeaderId(committeeCase.getTeamLeadId().toString());
+                }
+                apCase.setStatus("WAITING_ASSIGNMENT");
+                apCase.setUpdatedAt(OffsetDateTime.now());
+                apCaseRepository.save(apCase);
+                log.info("Updated existing AP audit case {} upon viability approval (status=WAITING_ASSIGNMENT)",
+                         apCase.getCaseNumber());
+                return;
+            }
+        }
         if (committeeCase.getCaseCode() != null) {
+            java.util.Optional<ApAuditCaseEntity> byNum = apCaseRepository.findByCaseNumber(committeeCase.getCaseCode());
+            if (byNum.isPresent()) {
+                ApAuditCaseEntity apCase = byNum.get();
+                if (committeeCase.getTeamLeadId() != null) {
+                    apCase.setAssignedTeamLeaderId(committeeCase.getTeamLeadId().toString());
+                }
+                apCase.setStatus("WAITING_ASSIGNMENT");
+                apCase.setUpdatedAt(OffsetDateTime.now());
+                apCaseRepository.save(apCase);
+                log.info("Updated existing AP audit case by code {} upon viability approval (status=WAITING_ASSIGNMENT)",
+                         apCase.getCaseNumber());
+                return;
+            }
             log.info("AP audit case already exists for committee case {}, skipping", committeeCase.getCaseId());
             return;
         }
@@ -171,14 +200,29 @@ public class FinalizeViabilityUseCase {
         
         String auditType = mapAuditType(committeeCase.getSegment());
         
+        UUID planId = null;
+        if (committeeCase.getOriginalCaseId() != null) {
+            java.util.Optional<ApAuditCaseEntity> orig = apCaseRepository.findById(committeeCase.getOriginalCaseId());
+            if (orig.isPresent()) {
+                planId = orig.get().getPlanId();
+            }
+        }
+        if (planId == null) {
+            planId = annualAuditPlanRepository.findAll().stream()
+                .map(mor.itas.persistence.jpa.entity.ap.AnnualAuditPlanEntity::getId)
+                .findFirst()
+                .orElse(null);
+        }
+
         // Create AP audit case with PENDING_ASSIGNMENT status
         // This status means: case is ready for team leader to assign auditor
         ApAuditCaseEntity apCase = ApAuditCaseEntity.builder()
-            .planId(committeeCase.getCaseId()) // reference back to committee case
+            .planId(planId)
             .caseNumber(caseCode)
             .taxpayerId(committeeCase.getTaxIdNumber())
             .taxpayerName(committeeCase.getTaxpayerName())
-            .auditType(auditType)
+            .taxCenterCode(committeeCase.getTaxCenter())
+            .auditType("JOINT_AUDIT")
             .riskPriority(committeeCase.getRiskPriority())
             .riskScore(committeeCase.getRiskScore())
             .segment(committeeCase.getSegment())

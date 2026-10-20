@@ -2,102 +2,152 @@ package mor.itas.persistence.repository.ap;
 
 import mor.itas.application.port.outboundport.repositoryport.ap.UserRepository;
 import mor.itas.domain.model.ap.User;
-import mor.itas.persistence.jpa.entity.ap.UserEntity;
-import mor.itas.persistence.jpa.repository.ap.UserJpaRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * JPA-backed implementation of UserRepository (AP Cluster).
- * Reads/writes to t_user table via UserJpaRepository.
- * Replaces the previous in-memory ConcurrentHashMap implementation.
+ * Mock implementation of UserRepository (AP Cluster)
  */
 @Repository
-@RequiredArgsConstructor
 public class MockUserRepository implements UserRepository {
+    private final Map<UUID, User> userStore = new ConcurrentHashMap<>();
+    private final Map<String, UUID> usernameIndex = new ConcurrentHashMap<>();
+    private final Map<String, UUID> emailIndex = new ConcurrentHashMap<>();
+    private final Map<String, UUID> aliasIndex = new ConcurrentHashMap<>();
 
-    private final UserJpaRepository jpaRepo;
+    public void registerAlias(String alias, UUID userId) {
+        if (alias != null && userId != null) {
+            aliasIndex.put(alias.toLowerCase(), userId);
+        }
+    }
 
     @Override
     public User save(User user) {
         if (user == null) throw new IllegalArgumentException("User cannot be null");
-        UserEntity entity = UserEntity.fromDomain(user);
-        UserEntity saved = jpaRepo.save(entity);
-        return saved.toDomain();
+        userStore.put(user.getUserId(), user);
+        usernameIndex.put(user.getUsername(), user.getUserId());
+        usernameIndex.put(user.getUsername().toLowerCase(), user.getUserId());
+        emailIndex.put(user.getEmail(), user.getUserId());
+        emailIndex.put(user.getEmail().toLowerCase(), user.getUserId());
+        return user;
     }
 
     @Override
     public Optional<User> findById(UUID userId) {
-        return jpaRepo.findById(userId).map(UserEntity::toDomain);
+        return Optional.ofNullable(userStore.get(userId));
     }
 
     @Override
     public Optional<User> findByUsername(String username) {
-        return jpaRepo.findByUsername(username).map(UserEntity::toDomain);
+        if (username == null) return Optional.empty();
+        UUID userId = usernameIndex.get(username);
+        if (userId == null) {
+            userId = usernameIndex.get(username.toLowerCase());
+        }
+        if (userId == null) {
+            userId = aliasIndex.get(username.toLowerCase());
+        }
+        if (userId == null) {
+            userId = emailIndex.get(username.toLowerCase());
+        }
+        return userId != null ? Optional.ofNullable(userStore.get(userId)) : Optional.empty();
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
-        return jpaRepo.findByEmail(email).map(UserEntity::toDomain);
+        if (email == null) return Optional.empty();
+        UUID userId = emailIndex.get(email);
+        if (userId == null) {
+            userId = emailIndex.get(email.toLowerCase());
+        }
+        if (userId == null) {
+            userId = aliasIndex.get(email.toLowerCase());
+        }
+        return userId != null ? Optional.ofNullable(userStore.get(userId)) : Optional.empty();
     }
 
     @Override
     public List<User> findByUserType(String userType) {
-        return jpaRepo.findByUserType(userType).stream()
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getUserType().equals(userType))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByAssignedLevel(String assignedLevel) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> assignedLevel.equals(u.getAssignedLevel()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getAssignedLevel().equals(assignedLevel))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByAssignedLocation(String assignedLocation) {
-        return jpaRepo.findByAssignedLocation(assignedLocation).stream()
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getAssignedLocation() != null && u.getAssignedLocation().equals(assignedLocation))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByAuditType(String auditType) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> auditType.equals(u.getAuditType()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getAuditType() != null && u.getAuditType().equals(auditType))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByUserTypeAndAssignedLocation(String userType, String assignedLocation) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> u.getUserType().equals(userType))
-                .filter(u -> assignedLocation == null || assignedLocation.equals(u.getAssignedLocation()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getUserType().equals(userType) && 
+                   (assignedLocation == null || u.getAssignedLocation().equals(assignedLocation)))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByUserTypeAndAuditType(String userType, String auditType) {
-        return jpaRepo.findByUserTypeAndAuditType(userType, auditType).stream()
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getUserType().equals(userType) && 
+                   u.getAuditType() != null && u.getAuditType().equals(auditType))
+            .collect(Collectors.toList());
+    }
+
+    private String normalizeLoc(String loc) {
+        if (loc == null || loc.isBlank()) return "";
+        String s = loc.trim().toLowerCase();
+        if (s.startsWith("tc-aa-") || s.startsWith("aa-tc")) {
+            return "addis_ababa-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ba-") || s.startsWith("ba-tc") || s.startsWith("amhara-tc")) {
+            return "amhara-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-bb-") || s.startsWith("bb-tc") || s.startsWith("oromia-tc")) {
+            return "oromia-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ab-") || s.startsWith("ab-tc") || s.startsWith("tc-dd-") || s.startsWith("dire_dawa-tc")) {
+            return "dire_dawa-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-ca-") || s.startsWith("ca-tc") || s.startsWith("snnpr-tc")) {
+            return "snnpr-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("tc-so-") || s.startsWith("so-tc") || s.startsWith("tc-sm-") || s.startsWith("somali-tc")) {
+            return "somali-tc" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        if (s.startsWith("fed-lto") || s.startsWith("federal-lto")) {
+            return "federal-lto" + Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        }
+        return s;
     }
 
     @Override
     public List<User> findByUserTypeAuditTypeAndLocation(String userType, String auditType, String assignedLocation) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> u.getUserType().equals(userType))
-                .filter(u -> auditType == null || auditType.equals(u.getAuditType()))
-                .filter(u -> assignedLocation == null || assignedLocation.equals(u.getAssignedLocation()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        final String normTarget = normalizeLoc(assignedLocation);
+        return userStore.values().stream()
+            .filter(u -> (userType == null || userType.isBlank() || u.getUserType().equalsIgnoreCase(userType)))
+            .filter(u -> (auditType == null || auditType.isBlank() || (u.getAuditType() != null && (u.getAuditType().equalsIgnoreCase(auditType) || u.getAuditType().replace("_", "").equalsIgnoreCase(auditType.replace("_", ""))))))
+            .filter(u -> (normTarget.isEmpty() || normalizeLoc(u.getAssignedLocation()).equalsIgnoreCase(normTarget)))
+            .collect(Collectors.toList());
     }
 
     @Override
@@ -107,56 +157,60 @@ public class MockUserRepository implements UserRepository {
 
     @Override
     public List<User> findRegionalUsers(String regionCode) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> "REGIONAL".equals(u.getAssignedLevel()) && regionCode.equals(u.getAssignedLocation()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getAssignedLevel().equals("REGIONAL") && 
+                   u.getAssignedLocation().equals(regionCode))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findTaxCenterUsers(String taxCenterCode) {
-        return jpaRepo.findAll().stream()
-                .filter(u -> "TAX_CENTER".equals(u.getAssignedLevel()) && taxCenterCode.equals(u.getAssignedLocation()))
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getAssignedLevel().equals("TAX_CENTER") && 
+                   u.getAssignedLocation().equals(taxCenterCode))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findByStatus(String status) {
-        return jpaRepo.findByStatus(status).stream()
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return userStore.values().stream()
+            .filter(u -> u.getStatus().equals(status))
+            .collect(Collectors.toList());
     }
 
     @Override
     public List<User> findAll() {
-        return jpaRepo.findAll().stream()
-                .map(UserEntity::toDomain)
-                .collect(Collectors.toList());
+        return new ArrayList<>(userStore.values());
     }
 
     @Override
     public void delete(UUID userId) {
-        jpaRepo.deleteById(userId);
+        User user = userStore.remove(userId);
+        if (user != null) {
+            usernameIndex.remove(user.getUsername());
+            emailIndex.remove(user.getEmail());
+        }
     }
 
     @Override
     public User update(User user) {
-        if (!jpaRepo.existsById(user.getUserId())) {
-            throw new IllegalArgumentException("User not found: " + user.getUserId());
+        if (!userStore.containsKey(user.getUserId())) {
+            throw new IllegalArgumentException("User not found with id: " + user.getUserId());
         }
         return save(user);
     }
 
     @Override
     public long countByUserType(String userType) {
-        return jpaRepo.findByUserType(userType).size();
+        return userStore.values().stream()
+            .filter(u -> u.getUserType().equals(userType))
+            .count();
     }
 
     @Override
     public long countByAssignedLevel(String assignedLevel) {
-        return findAll().stream()
-                .filter(u -> assignedLevel.equals(u.getAssignedLevel()))
-                .count();
+        return userStore.values().stream()
+            .filter(u -> u.getAssignedLevel().equals(assignedLevel))
+            .count();
     }
 }

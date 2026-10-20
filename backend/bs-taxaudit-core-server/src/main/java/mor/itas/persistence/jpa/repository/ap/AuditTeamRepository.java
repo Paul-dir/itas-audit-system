@@ -22,6 +22,11 @@ public interface AuditTeamRepository extends JpaRepository<AuditTeamEntity, UUID
     List<AuditTeamEntity> findByActiveTrue();
 
     /**
+     * Find all active teams in a specific tax center.
+     */
+    List<AuditTeamEntity> findByActiveTrueAndTaxCenter(String taxCenter);
+
+    /**
      * Find teams that have capacity for new cases.
      * Returns teams where current_cases < capacity.
      */

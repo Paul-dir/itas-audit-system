@@ -1,4 +1,6 @@
-import { REGIONS, AUDIT_TYPES, getRegionById } from '../../data/constants.js';
+import { REGIONS, TAX_CENTERS, AUDIT_TYPES, getRegionById } from '../../data/constants.js';
+import { storage, STORE_KEYS } from '../../services/storage.js';
+import { DEFAULT_PLANNING_CONFIG } from '../../services/planningConfigService.js';
 
 const TYPE_COLORS = {
   desk_audit: 'bg-blue-50 text-blue-700',
@@ -19,71 +21,142 @@ const BACKEND_REGIONS = [
   { id: 'somali', name: 'Somalia', code: 'SO' },
 ];
 
+// Estimated Revenue multipliers per case by audit type (in ETB)
+const REVENUE_PER_CASE = {
+  desk_audit: 150000,        // 150k ETB per case
+  field_audit: 350000,       // 350k ETB per case
+  joint_audit: 750000,       // 750k ETB per case
+  transfer_pricing: 1500000, // 1.5M ETB per case
+  comprehensive: 1000000,    // 1M ETB per case
+  issue_audit: 250000,       // 250k ETB per case
+};
+
 // Read-only distribution table (region × audit type)
-export function DistributionTable({ distribution, regions = REGIONS }) {
+export function DistributionTable({ distribution, regions, auditTypes }) {
   console.log('📊 [DistributionTable] Received distribution:', distribution);
-  console.log('🔍 [DistributionTable] Distribution type:', typeof distribution);
-  console.log('🔍 [DistributionTable] Distribution keys:', Object.keys(distribution || {}));
   
   if (!distribution) {
-    console.warn('⚠️ [DistributionTable] No distribution provided, returning null');
     return null;
   }
 
+  const cachedConfig = storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const regionsToUse = (regions && regions.length > 0) ? regions : (cachedConfig?.regions || REGIONS);
+  const auditTypesToUse = (auditTypes && auditTypes.length > 0) ? auditTypes : (cachedConfig?.auditTypes || AUDIT_TYPES);
+  const activeRegions = (regionsToUse || []).filter(r => r && r.active !== false);
+  const activeAuditTypes = (auditTypesToUse || []).filter(a => a && a.active !== false);
+
   const totals = {};
-  AUDIT_TYPES.forEach(a => {
-    totals[a.id] = regions.reduce((sum, r) => sum + (distribution[r.id]?.[a.id] || 0), 0);
-  });
-  const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0);
+  const revenueTotals = {};
   
-  console.log('📈 [DistributionTable] Calculated totals:', totals);
-  console.log('📊 [DistributionTable] Grand total:', grandTotal);
+  activeAuditTypes.forEach(a => {
+    const caseCount = activeRegions.reduce((sum, r) => {
+      const dist = distribution[r.id] || distribution[r.code] || distribution[r.id?.toLowerCase()] || {};
+      return sum + (dist[a.id] || dist[a.shortName] || 0);
+    }, 0);
+    totals[a.id] = caseCount;
+    revenueTotals[a.id] = caseCount * (a.revenuePerCase || REVENUE_PER_CASE[a.id] || 250000);
+  });
+  
+  const grandTotalCases = Object.values(totals).reduce((s, v) => s + v, 0);
+  const grandTotalRevenue = Object.values(revenueTotals).reduce((s, v) => s + v, 0);
+
+  const formatCurrency = (val) => {
+    if (val >= 1000000000) return `${(val / 1000000000).toFixed(2)}B ETB`;
+    if (val >= 1000000) return `${(val / 1000000).toFixed(2)}M ETB`;
+    return `${(val / 1000).toFixed(0)}k ETB`;
+  };
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-600">
-      <table className="min-w-full text-xs">
-        <thead className="bg-gray-50 dark:bg-slate-700 dark:bg-slate-700">
-          <tr>
-            <th className="px-3 py-2.5 text-left font-semibold text-gray-600 dark:text-slate-300 sticky left-0 bg-gray-50 dark:bg-slate-700 dark:bg-slate-700">Region</th>
-            {AUDIT_TYPES.map(a => (
-              <th key={a.id} className="px-3 py-2.5 text-center font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">{a.shortName}</th>
-            ))}
-            <th className="px-3 py-2.5 text-center font-semibold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-600">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-slate-600 bg-white dark:bg-slate-700">
-          {regions.map(region => {
-            const dist = distribution[region.id] || {};
-            const rowTotal = AUDIT_TYPES.reduce((sum, a) => sum + (dist[a.id] || 0), 0);
-            return (
-              <tr key={region.id} className="hover:bg-gray-50 dark:hover:bg-slate-600 dark:bg-slate-700">
-                <td className="px-3 py-2.5 font-medium text-gray-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-slate-700 whitespace-nowrap">{region.name}</td>
-                {AUDIT_TYPES.map(a => (
-                  <td key={a.id} className="px-3 py-2.5 text-center text-gray-600 dark:text-slate-300">
-                    {dist[a.id] || 0}
-                  </td>
-                ))}
-                <td className="px-3 py-2.5 text-center font-bold text-gray-800 dark:text-slate-200 bg-gray-50 dark:bg-slate-600 dark:bg-slate-700">{rowTotal}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot className="bg-gray-100 dark:bg-slate-600">
-          <tr>
-            <td className="px-3 py-2.5 font-bold text-gray-700 dark:text-slate-200">Total</td>
-            {AUDIT_TYPES.map(a => (
-              <td key={a.id} className="px-3 py-2.5 text-center font-bold text-gray-700 dark:text-slate-200">{totals[a.id]}</td>
-            ))}
-            <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-400 text-sm">{grandTotal}</td>
-          </tr>
-        </tfoot>
-      </table>
+    <div className="space-y-4">
+      {/* Revenue Aggregate Summary Card */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-xl shadow-md border border-slate-700">
+        <div>
+          <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Total Planned Cases</p>
+          <p className="text-xl font-bold text-blue-400 mt-0.5">{grandTotalCases.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Est. Revenue Aggregate</p>
+          <p className="text-xl font-bold text-emerald-400 mt-0.5">{formatCurrency(grandTotalRevenue)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Configured Audit Types</p>
+          <p className="text-sm font-semibold text-orange-300 mt-1">{activeAuditTypes.length} Active Types</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Hierarchical Scoping</p>
+          <p className="text-xs font-medium text-emerald-300 mt-1">✓ Strict Isolated 1:1 Tax Center & Taxpayer Ownership</p>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-600">
+        <table className="min-w-full text-xs">
+          <thead className="bg-gray-50 dark:bg-slate-700">
+            <tr>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600 dark:text-slate-300 sticky left-0 bg-gray-50 dark:bg-slate-700">Region</th>
+              {activeAuditTypes.map(a => (
+                <th key={a.id} className="px-3 py-2.5 text-center font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">
+                  {a.shortName || a.name?.slice(0, 5) || a.id}
+                  <span className="block text-[10px] font-normal text-slate-400">({formatCurrency(a.revenuePerCase || REVENUE_PER_CASE[a.id] || 250000)}/case)</span>
+                </th>
+              ))}
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-600">Total Cases</th>
+              <th className="px-3 py-2.5 text-right font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950">Est. Revenue</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-600 bg-white dark:bg-slate-700">
+            {activeRegions.map(region => {
+              const dist = distribution[region.id] || distribution[region.code] || distribution[region.id?.toLowerCase()] || {};
+              const rowCases = activeAuditTypes.reduce((sum, a) => sum + (dist[a.id] || dist[a.shortName] || 0), 0);
+              const rowRevenue = activeAuditTypes.reduce((sum, a) => sum + ((dist[a.id] || dist[a.shortName] || 0) * (a.revenuePerCase || REVENUE_PER_CASE[a.id] || 250000)), 0);
+              return (
+                <tr key={region.id} className="hover:bg-gray-50 dark:hover:bg-slate-600">
+                  <td className="px-3 py-2.5 font-medium text-gray-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-slate-700 whitespace-nowrap">{region.name}</td>
+                  {activeAuditTypes.map(a => (
+                    <td key={a.id} className="px-3 py-2.5 text-center text-gray-600 dark:text-slate-300">
+                      {dist[a.id] || dist[a.shortName] || 0}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2.5 text-center font-bold text-gray-800 dark:text-slate-200 bg-gray-50 dark:bg-slate-600">{rowCases}</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/50">{formatCurrency(rowRevenue)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-gray-100 dark:bg-slate-600">
+            <tr>
+              <td className="px-3 py-2.5 font-bold text-gray-700 dark:text-slate-200">Total Cases</td>
+              {activeAuditTypes.map(a => (
+                <td key={a.id} className="px-3 py-2.5 text-center font-bold text-gray-700 dark:text-slate-200">{totals[a.id]}</td>
+              ))}
+              <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-400 text-sm">{grandTotalCases}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-emerald-700 dark:text-emerald-300 text-sm bg-emerald-100 dark:bg-emerald-900">{formatCurrency(grandTotalRevenue)}</td>
+            </tr>
+            <tr className="bg-emerald-50 dark:bg-emerald-950/80 border-t border-emerald-200 dark:border-emerald-800">
+              <td className="px-3 py-2 font-semibold text-emerald-900 dark:text-emerald-200">Revenue per Type</td>
+              {activeAuditTypes.map(a => (
+                <td key={a.id} className="px-3 py-2 text-center font-semibold text-emerald-800 dark:text-emerald-300 text-[11px] whitespace-nowrap">
+                  {formatCurrency(revenueTotals[a.id])}
+                </td>
+              ))}
+              <td colSpan={2} className="px-3 py-2 text-right font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                Total Est: {formatCurrency(grandTotalRevenue)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
 
 // Editable distribution table for plan creation
-export function EditableDistributionTable({ distribution, onChange, regions = REGIONS }) {
+export function EditableDistributionTable({ distribution, onChange, regions, auditTypes }) {
+  const cachedConfig = storage.get(STORE_KEYS.PLANNING_CONFIG, DEFAULT_PLANNING_CONFIG);
+  const regionsToDisplay = (regions && regions.length > 0) ? regions : (cachedConfig?.regions || REGIONS);
+  const auditTypesToDisplay = (auditTypes && auditTypes.length > 0) ? auditTypes : (cachedConfig?.auditTypes || AUDIT_TYPES);
+  const activeRegions = (regionsToDisplay || []).filter(r => r && r.active !== false);
+  const activeAuditTypes = (auditTypesToDisplay || []).filter(a => a && a.active !== false);
+
   const handleChange = (regionId, auditTypeId, rawValue) => {
     const value = Math.max(0, parseInt(rawValue) || 0);
     const newDist = {
@@ -93,79 +166,38 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
     onChange(newDist);
   };
 
-  // Show ALL regions (no filtering)
-  const regionsToDisplay = regions;
-
-  // Calculate Federal Level (for federal-licensed taxpayers only - smaller subset)
-  const federalTotals = {};
-  AUDIT_TYPES.forEach(a => {
-    federalTotals[a.id] = regionsToDisplay.reduce((sum, r) => sum + (distribution[r.id]?.[a.id] || 0), 0);
-  });
-  const federalGrandTotal = Object.values(federalTotals).reduce((s, v) => s + v, 0);
-
   // Regional totals
   const totals = {};
-  AUDIT_TYPES.forEach(a => {
-    totals[a.id] = regionsToDisplay.reduce((sum, r) => sum + (distribution[r.id]?.[a.id] || 0), 0);
+  activeAuditTypes.forEach(a => {
+    totals[a.id] = activeRegions.reduce((sum, r) => sum + (distribution?.[r.id]?.[a.id] || 0), 0);
   });
   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0);
 
   return (
     <div className="space-y-6">
-      {/* Federal Level Summary */}
+      {/* Regional & Federal Distribution */}
       <div>
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">🏛️ Federal Level Summary</h3>
-        <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Taxpayers with federal business license</p>
-        <div className="overflow-x-auto rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950">
-          <table className="min-w-full text-xs">
-            <thead className="bg-blue-100 dark:bg-blue-900">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-bold text-blue-900 dark:text-blue-100 min-w-[120px]">Federal Level</th>
-                {AUDIT_TYPES.map(a => (
-                  <th key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100 min-w-[70px] whitespace-nowrap">{a.shortName}</th>
-                ))}
-                <th className="px-3 py-2.5 text-center font-bold text-blue-900 dark:text-blue-100">Total</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-blue-950">
-              <tr>
-                <td className="px-3 py-2.5 font-bold text-blue-900 dark:text-blue-100">Federal Taxpayers</td>
-                {AUDIT_TYPES.map(a => (
-                  <td key={a.id} className="px-2 py-2.5 text-center font-bold text-blue-900 dark:text-blue-200 tabular-nums">
-                    {federalTotals[a.id]}
-                  </td>
-                ))}
-                <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 tabular-nums text-base">
-                  {federalGrandTotal}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Regional Distribution */}
-      <div>
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">🗺️ Regional Distribution</h3>
         <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-600">
           <table className="min-w-full text-xs">
             <thead className="bg-gray-50 dark:bg-slate-700">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-gray-600 dark:text-slate-300 min-w-[120px]">Region</th>
-                {AUDIT_TYPES.map(a => (
-                  <th key={a.id} className="px-2 py-2.5 text-center font-semibold text-gray-600 dark:text-slate-300 min-w-[70px] whitespace-nowrap">{a.shortName}</th>
+                {activeAuditTypes.map(a => (
+                  <th key={a.id} className="px-2 py-2.5 text-center font-semibold text-gray-600 dark:text-slate-300 min-w-[70px] whitespace-nowrap">
+                    {a.shortName || a.name?.slice(0, 5) || a.id}
+                  </th>
                 ))}
                 <th className="px-3 py-2.5 text-center font-semibold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-600">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-600 bg-white dark:bg-slate-700">
-              {regionsToDisplay.map(region => {
+              {activeRegions.map(region => {
                 const dist = distribution[region.id] || {};
-                const rowTotal = AUDIT_TYPES.reduce((sum, a) => sum + (dist[a.id] || 0), 0);
+                const rowTotal = activeAuditTypes.reduce((sum, a) => sum + (dist[a.id] || 0), 0);
                 return (
                   <tr key={region.id} className="hover:bg-blue-50 dark:hover:bg-slate-600">
                     <td className="px-3 py-2 font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">{region.name}</td>
-                    {AUDIT_TYPES.map(a => (
+                    {activeAuditTypes.map(a => (
                       <td key={a.id} className="px-1.5 py-1.5">
                         <input
                           type="number"
@@ -185,7 +217,7 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
             <tfoot className="bg-gray-100 dark:bg-slate-600">
               <tr>
                 <td className="px-3 py-2.5 font-bold text-gray-700 dark:text-slate-200">Total</td>
-                {AUDIT_TYPES.map(a => (
+                {activeAuditTypes.map(a => (
                   <td key={a.id} className="px-2 py-2.5 text-center font-bold text-gray-700 dark:text-slate-200 tabular-nums">{totals[a.id]}</td>
                 ))}
                 <td className="px-3 py-2.5 text-center font-bold text-blue-700 dark:text-blue-400 text-sm tabular-nums">{grandTotal}</td>
@@ -199,20 +231,9 @@ export function EditableDistributionTable({ distribution, onChange, regions = RE
 }
 
 // Tax center allocation table (editable)
-export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations, onChange }) {
-  const { TAX_CENTERS, AUDIT_TYPES: AT } = { TAX_CENTERS: null, AUDIT_TYPES: null };
-  // Import inline to avoid circular
-  const tcs = (() => {
-    const TC = {
-      addis_ababa: [{ id: 'addis_ababa-tc1', name: 'AA-TC1' }, { id: 'addis_ababa-tc2', name: 'AA-TC2' }, { id: 'addis_ababa-tc3', name: 'AA-TC3' }],
-      amhara: [{ id: 'amhara-tc1', name: 'AM-TC1' }, { id: 'amhara-tc2', name: 'AM-TC2' }, { id: 'amhara-tc3', name: 'AM-TC3' }],
-      oromia: [{ id: 'oromia-tc1', name: 'OR-TC1' }, { id: 'oromia-tc2', name: 'OR-TC2' }, { id: 'oromia-tc3', name: 'OR-TC3' }],
-      snnpr: [{ id: 'snnpr-tc1', name: 'SN-TC1' }, { id: 'snnpr-tc2', name: 'SN-TC2' }, { id: 'snnpr-tc3', name: 'SN-TC3' }],
-      somali: [{ id: 'somali-tc1', name: 'SO-TC1' }, { id: 'somali-tc2', name: 'SO-TC2' }, { id: 'somali-tc3', name: 'SO-TC3' }],
-    };
-    return TC[regionId] || [];
-  })();
-  const auditTypes = AUDIT_TYPES;
+export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations, onChange, taxCenters, auditTypes = AUDIT_TYPES }) {
+  const tcs = taxCenters || TAX_CENTERS[regionId] || [];
+  const activeAuditTypes = (auditTypes || AUDIT_TYPES).filter(a => a.active !== false);
 
   const handleChange = (tcId, auditTypeId, rawValue) => {
     const value = Math.max(0, parseInt(rawValue) || 0);
@@ -224,7 +245,7 @@ export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations
   };
 
   const columnTotals = {};
-  auditTypes.forEach(a => {
+  activeAuditTypes.forEach(a => {
     columnTotals[a.id] = tcs.reduce((sum, tc) => sum + (tcAllocations[tc.id]?.[a.id] || 0), 0);
   });
   const grandTotal = Object.values(columnTotals).reduce((s, v) => s + v, 0);
@@ -243,7 +264,7 @@ export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations
           <thead className="bg-gray-50 dark:bg-gray-800 dark:bg-slate-700">
             <tr>
               <th className="px-3 py-2.5 text-left font-semibold text-gray-600 dark:text-slate-400">Tax Center</th>
-              {auditTypes.map(a => {
+              {activeAuditTypes.map(a => {
                 const colMatch = columnTotals[a.id] === (regionDist[a.id] || 0);
                 return (
                   <th key={a.id} className={`px-2 py-2.5 text-center font-semibold min-w-[70px] whitespace-nowrap ${colMatch ? 'text-green-600' : 'text-gray-600'}`}>
@@ -258,11 +279,11 @@ export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations
           <tbody className="divide-y divide-gray-100 bg-white dark:bg-gray-800">
             {tcs.map(tc => {
               const alloc = tcAllocations[tc.id] || {};
-              const rowTotal = auditTypes.reduce((sum, a) => sum + (alloc[a.id] || 0), 0);
+              const rowTotal = activeAuditTypes.reduce((sum, a) => sum + (alloc[a.id] || 0), 0);
               return (
                 <tr key={tc.id} className="hover:bg-blue-50 dark:hover:bg-slate-600">
                   <td className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">{tc.name}</td>
-                  {auditTypes.map(a => (
+                  {activeAuditTypes.map(a => (
                     <td key={a.id} className="px-1.5 py-1.5">
                       <input
                         type="number" min={0}
@@ -281,7 +302,7 @@ export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations
           <tfoot className="bg-gray-100">
             <tr>
               <td className="px-3 py-2.5 font-bold text-gray-700 dark:text-slate-200">Total</td>
-              {auditTypes.map(a => {
+              {activeAuditTypes.map(a => {
                 const colMatch = columnTotals[a.id] === (regionDist[a.id] || 0);
                 return (
                   <td key={a.id} className={`px-2 py-2.5 text-center font-bold tabular-nums ${colMatch ? 'text-green-600' : 'text-orange-600'}`}>
@@ -296,7 +317,7 @@ export function TaxCenterDistributionTable({ regionId, regionDist, tcAllocations
           </tfoot>
         </table>
       </div>
-      {auditTypes.map(a => columnTotals[a.id] !== (regionDist[a.id] || 0)).some(Boolean) && (
+      {activeAuditTypes.map(a => columnTotals[a.id] !== (regionDist[a.id] || 0)).some(Boolean) && (
         <p className="text-xs text-orange-600">⚠ Some columns don't match their regional targets. Each column must equal the target shown.</p>
       )}
     </div>

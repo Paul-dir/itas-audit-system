@@ -44,17 +44,18 @@ public class AuditWorkflowController {
             @RequestBody(required = false) HandoffRequest request,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
         String comment = request != null ? request.getComment() : null;
-        ApAuditCaseEntity result = workflowService.handoffCase(caseId, actorId, comment);
+        String effectiveActorId = (request != null && request.getTeamLeaderId() != null && !request.getTeamLeaderId().isBlank() && !"system".equalsIgnoreCase(request.getTeamLeaderId()))
+                ? request.getTeamLeaderId() : actorId;
+        ApAuditCaseEntity result = workflowService.handoffCase(caseId, effectiveActorId, comment);
         return ResponseEntity.ok(GenericResponse.success(result));
     }
 
     @PostMapping("/import-from-committee")
     public ResponseEntity<GenericResponse<ApAuditCaseEntity>> importCaseFromCommittee(
             @PathVariable UUID caseId,
-            @RequestBody ImportFromCommitteeRequest request,
+            @RequestBody(required = false) ImportFromCommitteeRequest request,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
-        // Use request body teamLeaderId, fall back to X-Actor-Id header, then to system
-        String teamLeaderId = request.getTeamLeaderId();
+        String teamLeaderId = request != null ? request.getTeamLeaderId() : null;
         if (teamLeaderId == null || teamLeaderId.isEmpty() || "system".equals(teamLeaderId)) {
             teamLeaderId = actorId;
         }
@@ -67,20 +68,6 @@ public class AuditWorkflowController {
             @PathVariable UUID caseId,
             @RequestBody DeclineHandoffRequest request) {
         ApAuditCaseEntity result = workflowService.declineHandoff(caseId, request.getReason());
-        return ResponseEntity.ok(GenericResponse.success(result));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 2: ASSIGNMENT
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    @PostMapping("/assign-auditor")
-    public ResponseEntity<GenericResponse<ApAuditCaseEntity>> assignToAuditor(
-            @PathVariable UUID caseId,
-            @RequestBody AssignToAuditorRequest request,
-            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
-        ApAuditCaseEntity result = workflowService.assignToAuditor(
-                caseId, request.getAuditorId(), request.getDueDate(), request.getInstructions(), actorId);
         return ResponseEntity.ok(GenericResponse.success(result));
     }
 
@@ -155,6 +142,17 @@ public class AuditWorkflowController {
             @PathVariable UUID caseId,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
         ConferenceRecordEntity result = workflowService.approveConference(caseId, actorId);
+        return ResponseEntity.ok(GenericResponse.success(result));
+    }
+
+    @PostMapping("/conference/skip")
+    public ResponseEntity<GenericResponse<Map<String, Object>>> skipConference(
+            @PathVariable UUID caseId,
+            @RequestBody(required = false) Map<String, String> data,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        String reason = (data != null) ? data.getOrDefault("reason", "Waived — not applicable for this case") : "Waived";
+        workflowService.skipConference(caseId, reason, actorId);
+        Map<String, Object> result = Map.of("status", "SKIPPED", "reason", reason, "caseId", caseId.toString());
         return ResponseEntity.ok(GenericResponse.success(result));
     }
 
@@ -243,9 +241,20 @@ public class AuditWorkflowController {
             @PathVariable UUID anomalyId,
             @RequestBody ValidateAnomalyRequest request,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        String effectiveNotes = (request.getNotes() != null && !request.getNotes().isBlank())
+                ? request.getNotes()
+                : request.getReason();
         CaatAnomalyEntity result = workflowService.validateAnomaly(
-                caseId, anomalyId, request.getDecision(), request.getNotes(), actorId);
+                caseId, anomalyId, request.getDecision(), effectiveNotes, request.getAmendedAmount(), actorId);
         return ResponseEntity.ok(GenericResponse.success(result));
+    }
+
+    @PostMapping("/caat/promote-to-findings")
+    public ResponseEntity<GenericResponse<List<AuditFindingEntity>>> promoteCaatToFindings(
+            @PathVariable UUID caseId,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
+        List<AuditFindingEntity> result = workflowService.promoteValidatedAnomaliesToFindings(caseId, actorId);
+        return ResponseEntity.ok(GenericResponse.success(result, result.size(), (long) result.size()));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -278,7 +287,7 @@ public class AuditWorkflowController {
     @PostMapping("/findings")
     public ResponseEntity<GenericResponse<AuditFindingEntity>> createFinding(
             @PathVariable UUID caseId,
-            @RequestBody Map<String, String> data,
+            @RequestBody Map<String, Object> data,
             @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String actorId) {
         AuditFindingEntity result = workflowService.createFinding(caseId, data, actorId);
         return ResponseEntity.ok(GenericResponse.success(result));
@@ -419,6 +428,7 @@ public class AuditWorkflowController {
     @Data
     static class HandoffRequest {
         private String comment;
+        private String teamLeaderId;
     }
 
     @Data
@@ -477,6 +487,8 @@ public class AuditWorkflowController {
     static class ValidateAnomalyRequest {
         private String decision;
         private String notes;
+        private String reason;
+        private java.math.BigDecimal amendedAmount;
     }
 
     @Data

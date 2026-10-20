@@ -20,3 +20,12 @@ dist/
 
 # Kiro local development notes (not in git)
 .kiro/
+
+# Presentation documents
+**/Presentation/**
+
+# Archives & Temporary Data
+*.zip
+
+# AI assistant configs
+.claude/

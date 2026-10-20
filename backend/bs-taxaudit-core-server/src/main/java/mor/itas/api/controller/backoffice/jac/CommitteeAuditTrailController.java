@@ -20,7 +20,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('COMMITTEE_MEMBER')")
 public class CommitteeAuditTrailController {
 
     private final GetAuditTrailUseCase getAuditTrailUseCase;
@@ -46,11 +45,14 @@ public class CommitteeAuditTrailController {
     public ResponseEntity<Page<AuditTrailEntryResponse>> getGlobalAuditTrail(
             @RequestParam(required = false) String actionType,
             @RequestParam(required = false) String actorId,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String search,
             @RequestParam(required = false) String taxCenter,
             Pageable pageable) {
-        log.info("Fetching global audit trail with actionType={}, actorId={}, taxCenter={}", actionType, actorId, taxCenter);
+        log.info("Fetching global audit trail with actionType={}, actorId={}, category={}, search={}, taxCenter={}",
+                actionType, actorId, category, search, taxCenter);
         Page<AuditTrailEntryResponse> auditTrail = getAuditTrailUseCase.getGlobalAuditTrail(
-                actionType, actorId, taxCenter, pageable);
+                actionType, actorId, category, search, taxCenter, pageable);
         return ResponseEntity.ok(auditTrail);
     }
 

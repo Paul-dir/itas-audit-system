@@ -19,12 +19,40 @@ import java.util.UUID;
 public class AuditTrailEntryResponse {
     
     private UUID logId;
-    private UUID actorId;
+    private String caseId;
+    private String entityId;
+    private String entityType; // "PLAN", "AUDIT_CASE", "COMMITTEE", "SYSTEM"
+    private String category;   // "PLANNING & STRATEGY", "AUDIT EXECUTION", "GOVERNANCE & COMMITTEE"
+    private String actorId;
     private String actorName;
+    private String actorRole;
     private String actionType;
+    private String description;
     private Map<String, Object> beforeState;
     private Map<String, Object> afterState;
     private String actionReason;
     private OffsetDateTime actionTimestamp;
     private String actionHash;
+
+    public static class AuditTrailEntryResponseBuilder {
+        public AuditTrailEntryResponseBuilder actorId(UUID uuid) {
+            this.actorId = uuid != null ? uuid.toString() : null;
+            return this;
+        }
+
+        public AuditTrailEntryResponseBuilder actorId(String str) {
+            this.actorId = str;
+            return this;
+        }
+
+        public AuditTrailEntryResponseBuilder caseId(UUID uuid) {
+            this.caseId = uuid != null ? uuid.toString() : null;
+            return this;
+        }
+
+        public AuditTrailEntryResponseBuilder caseId(String str) {
+            this.caseId = str;
+            return this;
+        }
+    }
 }

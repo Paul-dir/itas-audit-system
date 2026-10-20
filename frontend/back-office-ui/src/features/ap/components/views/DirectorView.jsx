@@ -73,7 +73,7 @@ function DirectorView({ currentView }) {
 
   const handleSendToSeniorManagement = (planId) => {
     if (submitToSeniorManagement(planId)) {
-      alert('✅ Plan sent to Senior Management for final approval. Status: SUBMITTED_TO_SENIOR_MANAGEMENT');
+      alert('✅ Plan sent to Senior Management for final approval. Status: SUBMITTED_TO_SENIOR_MGMT');
       loadPlans();
     } else {
       alert('❌ Cannot send to Senior Management. Plan must have FEEDBACK_COLLECTED status.');
@@ -89,7 +89,7 @@ function DirectorView({ currentView }) {
     } else if (!notes) {
       alert('Please enter what was revised in the plan.');
     } else {
-      alert('Cannot resubmit. Plan must be SENIOR_MANAGEMENT_REJECTED.');
+      alert('Cannot resubmit. Plan must be SENIOR_MGMT_REJECTED.');
     }
   };
 
@@ -180,7 +180,7 @@ function DirectorView({ currentView }) {
               </button>
             )}
 
-            {selectedPlan.status === 'SENIOR_MANAGEMENT_REJECTED' && (
+            {selectedPlan.status === 'SENIOR_MGMT_REJECTED' && (
               <button 
                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-5 hover:bg-rose-900/40 hover:border-rose-500/60 transition-all duration-200 shadow-lg"
                 onClick={() => { handleResubmitRejectedPlan(selectedPlan.id); }}
@@ -195,7 +195,7 @@ function DirectorView({ currentView }) {
               </button>
             )}
 
-            {selectedPlan.status === 'SENIOR_MANAGEMENT_APPROVED' && (
+            {selectedPlan.status === 'SENIOR_MGMT_APPROVED' && (
               <button 
                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 hover:bg-emerald-900/40 hover:border-emerald-500/60 transition-all duration-200 shadow-lg"
                 onClick={() => { 
@@ -256,7 +256,7 @@ function DirectorView({ currentView }) {
             )}
           </div>
 
-          {selectedPlan.status === 'SENIOR_MANAGEMENT_REJECTED' && selectedPlan.approvalHistory && selectedPlan.approvalHistory.length > 0 && (
+          {selectedPlan.status === 'SENIOR_MGMT_REJECTED' && selectedPlan.approvalHistory && selectedPlan.approvalHistory.length > 0 && (
             <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4">
               <p className="text-xs font-bold text-rose-400 mb-1 flex items-center gap-2">
                 <i className="fas fa-circle-exclamation"></i> Rejection Feedback:
@@ -445,7 +445,7 @@ function DirectorView({ currentView }) {
     approved: plans.filter(p => p.status === 'DIRECTOR_APPROVED').length,
     awaitingFeedback: plans.filter(p => p.status === 'AWAITING_REGIONAL_FEEDBACK').length,
     feedbackCollected: plans.filter(p => p.status === 'FEEDBACK_COLLECTED').length,
-    seniorApproved: plans.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length,
+    seniorApproved: plans.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length,
     finalized: plans.filter(p => p.status === 'FINALIZED').length,
   };
 

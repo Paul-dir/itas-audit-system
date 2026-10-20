@@ -1,6 +1,6 @@
 /**
  * useAuditTrail Hook
- * Manages audit trail retrieval for cases and global view
+ * Manages audit trail retrieval for cases and global view across all actions
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,8 +12,9 @@ export function useAuditTrail(caseId = null, taxCenter = null) {
   const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [activeFilters, setActiveFilters] = useState({});
 
-  const fetchCaseTrail = useCallback(async (pageNum = page) => {
+  const fetchCaseTrail = useCallback(async (pageNum = 0) => {
     if (!caseId) return;
     try {
       setLoading(true);
@@ -22,18 +23,24 @@ export function useAuditTrail(caseId = null, taxCenter = null) {
       setEntries(data.content || []);
       setTotalElements(data.totalElements || 0);
     } catch (err) {
-      setError(err.message || 'Failed to load audit trail');
+      setError(err.message || 'Failed to load case audit trail');
       console.error('[useAuditTrail] fetchCaseTrail', err);
     } finally {
       setLoading(false);
     }
-  }, [caseId, page]);
+  }, [caseId]);
 
-  const fetchGlobalTrail = useCallback(async (filters = {}, pageNum = page) => {
+  const fetchGlobalTrail = useCallback(async (filters = {}, pageNum = 0) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await committeeAPI.getGlobalAuditTrail({ ...filters, taxCenter }, pageNum);
+      const cleanFilters = {};
+      Object.entries({ ...filters }).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'All') {
+          cleanFilters[k] = v;
+        }
+      });
+      const data = await committeeAPI.getGlobalAuditTrail(cleanFilters, pageNum);
       setEntries(data.content || []);
       setTotalElements(data.totalElements || 0);
     } catch (err) {
@@ -42,15 +49,35 @@ export function useAuditTrail(caseId = null, taxCenter = null) {
     } finally {
       setLoading(false);
     }
-  }, [page, taxCenter]);
+  }, []);
+
+  const changePage = useCallback((newPage) => {
+    setPage(newPage);
+    if (caseId) {
+      fetchCaseTrail(newPage);
+    } else {
+      fetchGlobalTrail(activeFilters, newPage);
+    }
+  }, [caseId, fetchCaseTrail, fetchGlobalTrail, activeFilters]);
+
+  const applyFilters = useCallback((newFilters) => {
+    const filtersToUse = newFilters !== undefined ? newFilters : activeFilters;
+    setActiveFilters(filtersToUse || {});
+    setPage(0);
+    if (caseId) {
+      fetchCaseTrail(0);
+    } else {
+      fetchGlobalTrail(filtersToUse || {}, 0);
+    }
+  }, [caseId, fetchCaseTrail, fetchGlobalTrail, activeFilters]);
 
   useEffect(() => {
     if (caseId) {
-      fetchCaseTrail();
+      fetchCaseTrail(0);
     } else {
-      fetchGlobalTrail();
+      fetchGlobalTrail(activeFilters, 0);
     }
-  }, [caseId, fetchCaseTrail, fetchGlobalTrail, taxCenter]);
+  }, [caseId]);
 
   const exportTrail = async (format = 'csv') => {
     try {
@@ -69,8 +96,8 @@ export function useAuditTrail(caseId = null, taxCenter = null) {
     error,
     totalElements,
     page,
-    setPage,
-    refresh: caseId ? fetchCaseTrail : fetchGlobalTrail,
+    setPage: changePage,
+    refresh: applyFilters,
     exportTrail,
   };
 }

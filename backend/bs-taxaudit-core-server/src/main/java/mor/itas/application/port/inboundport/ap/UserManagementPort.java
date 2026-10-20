@@ -9,6 +9,7 @@ public interface UserManagementPort {
     User createUser(String username, String email, String fullName, String userType, 
                     String auditType, String assignedLevel, String assignedLocation, String actorId);
     User getUserById(UUID userId);
+    User getUserByUsername(String username);
     List<User> getAllUsers();
     List<User> getTeamLeaders(String auditType, String taxCenterCode);
     List<User> getAuditors(String auditType, String taxCenterCode);

@@ -57,6 +57,10 @@ public class PlanResponseMapper {
         // Distribution data
         response.setDistribution(plan.getDistribution());
 
+        // Revenue data
+        response.setEstimatedRevenue(plan.getEstimatedRevenue());
+        response.setEstimatedRevenueDistribution(plan.getEstimatedRevenueDistribution());
+
         // Metadata
         response.setUpdatedAt(plan.getUpdatedAt());
         response.setVersion(plan.getVersion());
@@ -103,6 +107,8 @@ public class PlanResponseMapper {
         response.setTcFeedbackSubmitted(allocation.getTcFeedbackSubmitted());
         response.setTcFeedbackSubmittedAt(allocation.getTcFeedbackSubmittedAt());
         response.setEffectiveCount(allocation.getEffectiveCount());
+        response.setEstimatedRevenue(allocation.getEstimatedRevenue());
+        response.setRevenueByAuditType(allocation.getRevenueByAuditType());
         response.setCreatedAt(allocation.getCreatedAt());
         response.setUpdatedAt(allocation.getUpdatedAt());
 

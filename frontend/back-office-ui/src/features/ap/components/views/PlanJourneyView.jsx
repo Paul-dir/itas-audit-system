@@ -65,9 +65,9 @@ function PlanJourneyView() {
         plan.status === 'REVISION_REQUESTED' ||
         plan.status === 'RESUBMITTED_TO_DIRECTOR' ||
         plan.status === 'DIRECTOR_APPROVED' ||
-        plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' ||
-        plan.status === 'SENIOR_MANAGEMENT_APPROVED' ||
-        plan.status === 'SENIOR_MANAGEMENT_REJECTED' ||
+        plan.status === 'SUBMITTED_TO_SENIOR_MGMT' ||
+        plan.status === 'SENIOR_MGMT_APPROVED' ||
+        plan.status === 'SENIOR_MGMT_REJECTED' ||
         plan.status === 'DEPLOYED_TO_REGIONS') {
       alert('❌ This plan has already been submitted to regions or is in a later stage!');
       return;
@@ -137,7 +137,7 @@ function PlanJourneyView() {
         id: 2,
         title: 'Director Review',
         status: plan.status === 'SUBMITTED_TO_DIRECTOR' ? 'ACTIVE' : 
-                (plan.status && ['REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MANAGEMENT', 'SENIOR_MANAGEMENT_APPROVED', 'SENIOR_MANAGEMENT_REJECTED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
+                (plan.status && ['REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED', 'SENIOR_MGMT_REJECTED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
         description: 'Director reviews plan and makes initial approval decision',
         date: plan.directorReviewDate,
         icon: 'fas fa-clipboard-check',
@@ -146,7 +146,7 @@ function PlanJourneyView() {
       {
         id: 3,
         title: 'Submit to Regions',
-        status: plan.status && ['AWAITING_REGIONAL_FEEDBACK', 'FEEDBACK_COLLECTED', 'REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MANAGEMENT', 'SENIOR_MANAGEMENT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING',
+        status: plan.status && ['AWAITING_REGIONAL_FEEDBACK', 'FEEDBACK_COLLECTED', 'REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING',
         description: 'Director sends plan to Regional Directors for feedback collection',
         date: plan.distributedToRegionsDate,
         icon: 'fas fa-share-alt',
@@ -156,7 +156,7 @@ function PlanJourneyView() {
         id: 4,
         title: 'Regional Feedback',
         status: plan.status === 'AWAITING_REGIONAL_FEEDBACK' ? 'ACTIVE' : 
-                (plan.status && ['FEEDBACK_COLLECTED', 'REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MANAGEMENT', 'SENIOR_MANAGEMENT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
+                (plan.status && ['FEEDBACK_COLLECTED', 'REVISION_REQUESTED', 'RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
         description: 'Regions collect feedback from tax centers and submit to director',
         date: plan.feedbackCollectedDate,
         icon: 'fas fa-comments',
@@ -166,7 +166,7 @@ function PlanJourneyView() {
         id: 5,
         title: 'Planning Team Amendment',
         status: plan.status === 'REVISION_REQUESTED' ? 'ACTIVE' : 
-                (plan.status && ['RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MANAGEMENT', 'SENIOR_MANAGEMENT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
+                (plan.status && ['RESUBMITTED_TO_DIRECTOR', 'DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
         description: 'Planning Team reviews feedback and amends allocations',
         date: plan.amendmentSubmittedDate,
         icon: 'fas fa-edit',
@@ -176,7 +176,7 @@ function PlanJourneyView() {
         id: 6,
         title: 'Director Amendment Review',
         status: plan.status === 'RESUBMITTED_TO_DIRECTOR' ? 'ACTIVE' : 
-                (plan.status && ['DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MANAGEMENT', 'SENIOR_MANAGEMENT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
+                (plan.status && ['DIRECTOR_APPROVED', 'SUBMITTED_TO_SENIOR_MGMT', 'SENIOR_MGMT_APPROVED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
         description: 'Director reviews amended plan and approves',
         date: plan.directorAmendmentApprovedDate,
         icon: 'fas fa-check-circle',
@@ -185,8 +185,8 @@ function PlanJourneyView() {
       {
         id: 7,
         title: 'Senior Management Review',
-        status: plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' ? 'ACTIVE' : 
-                (plan.status && ['SENIOR_MANAGEMENT_APPROVED', 'SENIOR_MANAGEMENT_REJECTED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
+        status: plan.status === 'SUBMITTED_TO_SENIOR_MGMT' ? 'ACTIVE' : 
+                (plan.status && ['SENIOR_MGMT_APPROVED', 'SENIOR_MGMT_REJECTED'].includes(plan.status) ? 'COMPLETED' : 'PENDING'),
         description: 'Senior Management makes final approval decision',
         date: plan.approvedDate,
         icon: 'fas fa-gavel',
@@ -195,7 +195,7 @@ function PlanJourneyView() {
       {
         id: 8,
         title: 'Regional Deployment',
-        status: plan.status === 'SENIOR_MANAGEMENT_APPROVED' ? 'ACTIVE' : 
+        status: plan.status === 'SENIOR_MGMT_APPROVED' ? 'ACTIVE' : 
                 (plan.status === 'DEPLOYED_TO_REGIONS' ? 'COMPLETED' : 'PENDING'),
         description: 'Director submits approved plan to each region for execution',
         date: plan.deployedDate,

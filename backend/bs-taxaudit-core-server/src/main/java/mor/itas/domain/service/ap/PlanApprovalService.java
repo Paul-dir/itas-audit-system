@@ -97,16 +97,18 @@ public class PlanApprovalService {
         AnnualAuditPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new IllegalArgumentException("Plan not found with id: " + planId));
         
-        // Business rule: Can only request amendments for plans awaiting director review
-        if (!plan.getStatus().equals(PlanStatus.SUBMITTED_TO_DIRECTOR)) {
+        // Business rule: Accept SUBMITTED_TO_DIRECTOR, AWAITING_REGIONAL_FEEDBACK, or FEEDBACK_COLLECTED
+        PlanStatus status = plan.getStatus();
+        if (!status.equals(PlanStatus.SUBMITTED_TO_DIRECTOR) && !status.equals(PlanStatus.AWAITING_REGIONAL_FEEDBACK) && !status.equals(PlanStatus.FEEDBACK_COLLECTED)) {
             throw new IllegalStateException(
-                "Cannot request amendment. Current status: " + plan.getStatus() + 
-                ". Plan must be in SUBMITTED_TO_DIRECTOR status."
+                "Cannot request amendment. Current status: " + status + 
+                ". Plan must be in SUBMITTED_TO_DIRECTOR, AWAITING_REGIONAL_FEEDBACK, or FEEDBACK_COLLECTED status."
             );
         }
         
-        // Update plan status 
+        // Update plan status and store amendment comment
         plan.setStatus(PlanStatus.AMENDMENT_REQUIRED);
+        plan.setAmendmentComment(feedback);
         
         // Save and return
         return planRepository.update(plan);

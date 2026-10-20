@@ -8,10 +8,10 @@ import Badge from '../Badge';
  * Using NEW method: Simple status-based filtering like DirectorView
  * 
  * NEW WORKFLOW:
- * 1. Senior Management receives plans with status: 'SUBMITTED_TO_SENIOR_MANAGEMENT'
+ * 1. Senior Management receives plans with status: 'SUBMITTED_TO_SENIOR_MGMT'
  * 2. Reviews director's recommendation
  * 3. Makes final decision: APPROVE or REJECT
- * 4. Updates status: 'SENIOR_MANAGEMENT_APPROVED' or 'SENIOR_MANAGEMENT_REJECTED'
+ * 4. Updates status: 'SENIOR_MGMT_APPROVED' or 'SENIOR_MGMT_REJECTED'
  */
 
 function SeniorManagementApprovalView() {
@@ -47,15 +47,15 @@ function SeniorManagementApprovalView() {
     // ✅ NEW METHOD: Filter by status field (like DirectorView)
     // Show plans submitted to senior management or already decided
     const decisionPlans = (data.plans || []).filter(plan => {
-      return plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' || 
-             plan.status === 'SENIOR_MANAGEMENT_APPROVED' ||
-             plan.status === 'SENIOR_MANAGEMENT_REJECTED';
+      return plan.status === 'SUBMITTED_TO_SENIOR_MGMT' || 
+             plan.status === 'SENIOR_MGMT_APPROVED' ||
+             plan.status === 'SENIOR_MGMT_REJECTED';
     });
 
     console.log(`✅ Senior Management: Found ${decisionPlans.length} plans for decision`, {
-      pending: decisionPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT').length,
-      approved: decisionPlans.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length,
-      rejected: decisionPlans.filter(p => p.status === 'SENIOR_MANAGEMENT_REJECTED').length
+      pending: decisionPlans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length,
+      approved: decisionPlans.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length,
+      rejected: decisionPlans.filter(p => p.status === 'SENIOR_MGMT_REJECTED').length
     });
     setPlans(decisionPlans);
     setLoading(false);
@@ -76,7 +76,7 @@ function SeniorManagementApprovalView() {
     if (!plan) return;
 
     // ✅ DUPLICATE PREVENTION: Check if already decided
-    if (plan.status === 'SENIOR_MANAGEMENT_APPROVED' || plan.status === 'SENIOR_MANAGEMENT_REJECTED') {
+    if (plan.status === 'SENIOR_MGMT_APPROVED' || plan.status === 'SENIOR_MGMT_REJECTED') {
       alert('❌ Decision already made on this plan!\n\n' +
             `Status: ${plan.status}\n` +
             'Cannot change decision once submitted.');
@@ -84,8 +84,8 @@ function SeniorManagementApprovalView() {
     }
 
     // ✅ STATUS CHECK: Only allow if in correct status
-    if (plan.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT') {
-      alert(`❌ Cannot process this plan!\n\nCurrent status: ${plan.status}\nRequired status: SUBMITTED_TO_SENIOR_MANAGEMENT`);
+    if (plan.status !== 'SUBMITTED_TO_SENIOR_MGMT') {
+      alert(`❌ Cannot process this plan!\n\nCurrent status: ${plan.status}\nRequired status: SUBMITTED_TO_SENIOR_MGMT`);
       return;
     }
 
@@ -109,11 +109,11 @@ function SeniorManagementApprovalView() {
 
     // ✅ Update plan status
     if (decision === 'APPROVE') {
-      plan.status = 'SENIOR_MANAGEMENT_APPROVED';
+      plan.status = 'SENIOR_MGMT_APPROVED';
       plan.approvedDate = new Date().toISOString();
       plan.approvedBy = userInfo?.fullName || 'Senior Management';
     } else {
-      plan.status = 'SENIOR_MANAGEMENT_REJECTED';
+      plan.status = 'SENIOR_MGMT_REJECTED';
       plan.rejectionDate = new Date().toISOString();
       plan.rejectionReason = comments || 'Plan rejected';
     }
@@ -166,7 +166,7 @@ function SeniorManagementApprovalView() {
           <div className="bg-panel dark:bg-panel border border-border dark:border-border rounded-lg">
             <div className="px-4 py-3 border-b border-border dark:border-border">
               <h3 className="text-text-hi dark:text-text-hi font-bold m-0">
-                Plans Awaiting Decision ({plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT').length})
+                Plans Awaiting Decision ({plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length})
               </h3>
             </div>
 
@@ -193,8 +193,8 @@ function SeniorManagementApprovalView() {
                         <p className="font-bold text-text-hi dark:text-text-hi m-0">{plan.id}</p>
                         <p className="text-xs text-text-mid dark:text-text-mid m-0 mt-1">{plan.name}</p>
                         <Badge 
-                          status={plan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' ? 'pending' : 
-                                  plan.status === 'SENIOR_MANAGEMENT_APPROVED' ? 'approved' : 'rejected'}
+                          status={plan.status === 'SUBMITTED_TO_SENIOR_MGMT' ? 'pending' : 
+                                  plan.status === 'SENIOR_MGMT_APPROVED' ? 'approved' : 'rejected'}
                           text={plan.status}
                           className="mt-2"
                         />
@@ -337,7 +337,7 @@ function SeniorManagementApprovalView() {
               ) : (
                 <button
                   onClick={() => setShowDecisionForm(true)}
-                  disabled={planDetails.status !== 'SUBMITTED_TO_SENIOR_MANAGEMENT'}
+                  disabled={planDetails.status !== 'SUBMITTED_TO_SENIOR_MGMT'}
                   className="w-full py-3 px-4 rounded font-bold bg-teal dark:bg-teal text-white hover:bg-teal/80 dark:hover:bg-teal/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   🎯 Make Final Decision

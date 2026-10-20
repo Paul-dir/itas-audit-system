@@ -23,9 +23,9 @@ function SeniorManagementView({ currentView }) {
   const loadPlans = () => {
     // Show plans submitted to senior management or already approved/rejected
     const seniorPlans = (data?.plans || []).filter(p => 
-      p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' || 
-      p.status === 'SENIOR_MANAGEMENT_APPROVED' ||
-      p.status === 'SENIOR_MANAGEMENT_REJECTED'
+      p.status === 'SUBMITTED_TO_SENIOR_MGMT' || 
+      p.status === 'SENIOR_MGMT_APPROVED' ||
+      p.status === 'SENIOR_MGMT_REJECTED'
     );
     setPlans(seniorPlans);
     console.log('Senior Management plans loaded:', seniorPlans.length, 'plans');
@@ -81,7 +81,7 @@ function SeniorManagementView({ currentView }) {
         <div className="action-bar" style={{ marginTop: '20px' }}>
           <div></div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {selectedPlan.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT' && (
+            {selectedPlan.status === 'SUBMITTED_TO_SENIOR_MGMT' && (
               <>
                 <button className="btn btn-success" onClick={() => { handleApprove(selectedPlan.id); }}>
                   <i className="fas fa-check"></i> Approve Plan
@@ -91,10 +91,10 @@ function SeniorManagementView({ currentView }) {
                 </button>
               </>
             )}
-            {selectedPlan.status === 'SENIOR_MANAGEMENT_APPROVED' && (
+            {selectedPlan.status === 'SENIOR_MGMT_APPROVED' && (
               <Badge status="Approved" className="senior-approved" />
             )}
-            {selectedPlan.status === 'SENIOR_MANAGEMENT_REJECTED' && (
+            {selectedPlan.status === 'SENIOR_MGMT_REJECTED' && (
               <Badge status="Rejected" className="rejected" />
             )}
           </div>
@@ -104,9 +104,9 @@ function SeniorManagementView({ currentView }) {
   }
 
   const stats = {
-    pending: plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MANAGEMENT').length,
-    approved: plans.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length,
-    rejected: plans.filter(p => p.status === 'SENIOR_MANAGEMENT_REJECTED').length,
+    pending: plans.filter(p => p.status === 'SUBMITTED_TO_SENIOR_MGMT').length,
+    approved: plans.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length,
+    rejected: plans.filter(p => p.status === 'SENIOR_MGMT_REJECTED').length,
   };
 
   return (
@@ -165,7 +165,7 @@ function SeniorManagementView({ currentView }) {
               </td></tr>
             ) : (
               plans.map(plan => {
-                const submissionDate = plan.approvalHistory?.find(h => h.action === 'SUBMITTED_TO_SENIOR_MANAGEMENT')?.date;
+                const submissionDate = plan.approvalHistory?.find(h => h.action === 'SUBMITTED_TO_SENIOR_MGMT')?.date;
                 return (
                   <tr key={plan.id}>
                     <td><strong>{plan.id}</strong></td>

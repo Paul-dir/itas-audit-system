@@ -56,18 +56,11 @@ CREATE INDEX idx_ap_regional_feedback_plan_id ON ap_regional_feedback(plan_id);
 CREATE INDEX idx_ap_regional_feedback_region ON ap_regional_feedback(region_id);
 
 -- ============================================================================
--- 5. Regional Deployments - Tracks when regions deploy to tax centers
+-- 5. Regional Deployments - MOVED TO V9
 -- ============================================================================
-CREATE TABLE ap_regional_deployments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    plan_id UUID NOT NULL REFERENCES ap_annual_audit_plans(id) ON DELETE CASCADE,
-    region_id VARCHAR(64) NOT NULL,
-    deployed_by VARCHAR(64) NOT NULL,
-    deployed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(32) DEFAULT 'DEPLOYED',
-    CONSTRAINT unique_regional_deployment UNIQUE(plan_id, region_id)
-);
-CREATE INDEX idx_ap_regional_deployments_plan_id ON ap_regional_deployments(plan_id);
+-- This table is now created in V9__director_approval_and_regional_deployment.sql
+-- with the canonical schema (region_code, sent_at, region_allocated_cases).
+-- Do not create it here to avoid schema conflicts (see V8 no-op precedent).
 
 -- ============================================================================
 -- 6. Audit Cases - Cases generated from finalized plans

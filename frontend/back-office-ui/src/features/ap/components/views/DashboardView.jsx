@@ -62,7 +62,7 @@ function DashboardView({ currentRole }) {
       case 'director':
         statsData.myOpenTasks = data.plans?.filter(p => p.status === 'SUBMITTED_TO_DIRECTOR').length || 0;
         statsData.pendingReview = data.plans?.filter(p => p.status === 'DIRECTOR_APPROVED').length || 0;
-        statsData.underReview = data.plans?.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length || 0;
+        statsData.underReview = data.plans?.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length || 0;
         statsData.feedback = data.plans?.filter(p => p.directorFeedback && Object.keys(p.directorFeedback).length > 0).length || 0;
         break;
 
@@ -82,7 +82,7 @@ function DashboardView({ currentRole }) {
 
       case 'senior_management':
         statsData.myOpenTasks = data.plans?.filter(p => p.status === 'DIRECTOR_APPROVED').length || 0;
-        statsData.pendingReview = data.plans?.filter(p => p.status === 'SENIOR_MANAGEMENT_APPROVED').length || 0;
+        statsData.pendingReview = data.plans?.filter(p => p.status === 'SENIOR_MGMT_APPROVED').length || 0;
         statsData.underReview = data.plans?.filter(p => p.status === 'FINALIZED').length || 0;
         statsData.feedback = 0;
         break;
@@ -118,11 +118,11 @@ function DashboardView({ currentRole }) {
       'DRAFT': 'draft',
       'SUBMITTED_TO_DIRECTOR': 'submitted',
       'DIRECTOR_APPROVED': 'director-approved',
-      'SENIOR_MANAGEMENT_APPROVED': 'senior-approved',
+      'SENIOR_MGMT_APPROVED': 'senior-approved',
       'FINALIZED': 'senior-approved',
       'REVISION_REQUESTED': 'feedback',
       'REJECTED': 'rejected',
-      'SUBMITTED_TO_SENIOR_MANAGEMENT': 'submitted',
+      'SUBMITTED_TO_SENIOR_MGMT': 'submitted',
       'AWAITING_SENIOR_MANAGEMENT_APPROVAL': 'feedback'
     };
     return statusMap[status] || 'pending';

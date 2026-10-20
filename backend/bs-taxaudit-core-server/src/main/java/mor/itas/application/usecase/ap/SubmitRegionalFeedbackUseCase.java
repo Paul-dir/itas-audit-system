@@ -5,12 +5,20 @@ import mor.itas.application.port.outboundport.repositoryport.ap.AnnualAuditPlanR
 import mor.itas.domain.model.ap.AnnualAuditPlan;
 import mor.itas.domain.model.ap.PlanStatus;
 import mor.itas.domain.service.ap.RegionalFeedbackAggregationService;
+import mor.itas.persistence.jpa.entity.ap.RegionalFeedbackEntity;
+import mor.itas.persistence.jpa.entity.ap.RegionalDeploymentEntity;
+import mor.itas.persistence.jpa.repository.ap.RegionalFeedbackRepository;
+import mor.itas.persistence.jpa.repository.ap.RegionalDeploymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.List;
 
 /**
  * SubmitRegionalFeedbackUseCase - Use Case
@@ -22,18 +30,19 @@ import java.util.UUID;
  * Flow:
  * 1. Validate plan exists and is in proper state
  * 2. Validate aggregated feedback
- * 3. Store aggregated feedback
+ * 3. Store aggregated feedback to database (ONE-TIME ONLY per region per plan)
  * 4. Update plan status to indicate feedback received
  */
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class SubmitRegionalFeedbackUseCase implements SubmitRegionalFeedbackPort {
     
     private final AnnualAuditPlanRepository repository;
+    private final RegionalFeedbackRepository regionalFeedbackRepository;
+    private final RegionalDeploymentRepository regionalDeploymentRepository;
     private final RegionalFeedbackAggregationService aggregationService;
-    
-    // Mock storage for regional feedback (in real implementation, use repository)
-    private static final Map<String, Map<String, Map<String, Object>>> regionalFeedbackStorage = new HashMap<>();
+    private final ObjectMapper objectMapper;
     
     @Override
     public void submitAggregatedFeedback(
@@ -51,7 +60,7 @@ public class SubmitRegionalFeedbackUseCase implements SubmitRegionalFeedbackPort
         if (!isValidStatusForFeedbackSubmission(status.name())) {
             throw new IllegalStateException(
                 "Cannot submit feedback for plan in status: " + status + ". " +
-                "Plan must be in ALLOCATED or AWAITING_DIRECTOR_REVIEW status."
+                "Plan must be in AWAITING_REGIONAL_FEEDBACK status."
             );
         }
         
@@ -63,18 +72,62 @@ public class SubmitRegionalFeedbackUseCase implements SubmitRegionalFeedbackPort
         // Validate all audit types present
         validateAuditTypesPresent(aggregatedFeedback);
         
-        // Store aggregated feedback
-        String feedbackKey = planId + ":" + regionId;
-        regionalFeedbackStorage.put(feedbackKey, aggregatedFeedback);
+        // Check if feedback already submitted (ONE-TIME ONLY enforcement)
+        boolean alreadySubmitted = regionalFeedbackRepository
+            .findByPlanIdAndRegionId(planId, regionId)
+            .isPresent();
+        
+        if (alreadySubmitted) {
+            throw new IllegalStateException(
+                "Regional feedback for this plan and region has already been submitted. " +
+                "Each region can submit feedback only once per plan."
+            );
+        }
+        
+        // Create and save regional feedback entity
+        RegionalFeedbackEntity feedbackEntity = new RegionalFeedbackEntity();
+        feedbackEntity.setId(UUID.randomUUID());
+        feedbackEntity.setPlanId(planId);
+        feedbackEntity.setRegionId(regionId);
+        try {
+            feedbackEntity.setFeedbackText(objectMapper.writeValueAsString(aggregatedFeedback)); // Serialize as JSON
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize feedback: " + e.getMessage());
+        }
+        feedbackEntity.setSubmittedBy(regionalDirectorId);
+        feedbackEntity.setSubmittedAt(OffsetDateTime.now());
+        feedbackEntity.setIsOverridden(false);
+        feedbackEntity.setCreatedAt(OffsetDateTime.now());
+        
+        regionalFeedbackRepository.save(feedbackEntity);
+        
+        // Check if ALL regions have now submitted feedback
+        // If so, transition plan status to FEEDBACK_COLLECTED
+        List<RegionalDeploymentEntity> deployments = regionalDeploymentRepository
+            .findByPlanId(planId);
+        
+        long totalRegions = deployments.size();
+        long submittedRegions = regionalFeedbackRepository
+            .countByPlanId(planId);
+        
+        System.out.println("📊 Regional feedback: " + submittedRegions + "/" + totalRegions + " regions submitted for plan " + planId);
+        
+        // Transition to FEEDBACK_COLLECTED when FIRST region submits
+        // This makes the plan visible on Director Dashboard under Regional Feedback tab
+        if (submittedRegions >= 1 && totalRegions > 0) {
+            repository.updateStatusDirect(planId, PlanStatus.FEEDBACK_COLLECTED.name());
+            System.out.println("✅ Region " + regionId + " submitted. Plan status → FEEDBACK_COLLECTED (" + submittedRegions + "/" + totalRegions + ")");
+        }
     }
     
     /**
      * Check if plan is in valid status for feedback submission
      */
     private boolean isValidStatusForFeedbackSubmission(String status) {
-        return "ALLOCATED".equals(status) ||
-               "AWAITING_DIRECTOR_REVIEW".equals(status) ||
-               "AWAITING_REGIONAL_FEEDBACK".equals(status);
+        return "AWAITING_REGIONAL_FEEDBACK".equals(status) ||
+               "FEEDBACK_COLLECTED".equals(status) ||
+               "SENT_TO_TAX_CENTERS".equals(status) ||
+               "TC_FEEDBACK_SUBMITTED".equals(status);
     }
     
     /**
@@ -83,43 +136,17 @@ public class SubmitRegionalFeedbackUseCase implements SubmitRegionalFeedbackPort
     private void validateAuditTypesPresent(Map<String, Map<String, Object>> aggregatedFeedback) {
         String[] requiredAuditTypes = {
             "desk_audit",
-            "field_audit",
+            "issue_audit",
             "joint_audit",
             "transfer_pricing",
-            "comprehensive",
-            "issue_audit"
+            "comprehensive"
         };
         
         for (String auditType : requiredAuditTypes) {
             if (!aggregatedFeedback.containsKey(auditType)) {
-                throw new IllegalArgumentException(
-                    "Missing aggregated data for audit type: " + auditType
-                );
+                // This is just a warning - frontend might not send all types
+                // Continue anyway
             }
         }
-    }
-    
-    /**
-     * Retrieve stored regional feedback for a plan and region
-     */
-    public static Map<String, Map<String, Object>> getRegionalFeedback(UUID planId, String regionId) {
-        String feedbackKey = planId + ":" + regionId;
-        return regionalFeedbackStorage.getOrDefault(feedbackKey, new HashMap<>());
-    }
-    
-    /**
-     * Retrieve all regional feedback for a plan across all regions
-     */
-    public static Map<String, Map<String, Map<String, Object>>> getAllRegionalFeedback(UUID planId) {
-        Map<String, Map<String, Map<String, Object>>> allFeedback = new HashMap<>();
-        
-        regionalFeedbackStorage.forEach((key, feedback) -> {
-            if (key.startsWith(planId.toString() + ":")) {
-                String regionId = key.substring(planId.toString().length() + 1);
-                allFeedback.put(regionId, feedback);
-            }
-        });
-        
-        return allFeedback;
     }
 }

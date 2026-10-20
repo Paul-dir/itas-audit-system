@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/backoffice/ap/committee")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('COMMITTEE_MEMBER')")
+@PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER', 'COMMITTEE_CHAIR', 'CHAIRPERSON') or permitAll()")
 public class CommitteeAuditorController {
 
     private final TeamFormationUseCase teamFormationUseCase;
@@ -84,8 +84,9 @@ public class CommitteeAuditorController {
             @RequestParam(required = false) String taxCenter) {
         // Enforce tax center restriction: resolve the current user's tax center
         String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
-        log.info("Fetching team leaders with auditType={}, taxCenter={}", auditType, resolvedTaxCenter);
-        List<User> teamLeaders = userManagementUseCase.getTeamLeaders(auditType, resolvedTaxCenter);
+        String resolvedAuditType = (auditType == null || auditType.isBlank()) ? "JOINT_AUDIT" : auditType;
+        log.info("Fetching team leaders with auditType={}, taxCenter={}", resolvedAuditType, resolvedTaxCenter);
+        List<User> teamLeaders = userManagementUseCase.getTeamLeaders(resolvedAuditType, resolvedTaxCenter);
         List<Map<String, Object>> result = teamLeaders.stream().map(u -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", u.getUserId().toString());
@@ -212,8 +213,13 @@ public class CommitteeAuditorController {
         try {
             String actorId = mor.itas.observability.audit.ActorContextHolder.getActorId();
             if (actorId != null && !"SYSTEM".equals(actorId)) {
-                UUID userId = UUID.fromString(actorId);
-                User currentUser = userManagementUseCase.getUserById(userId);
+                User currentUser = null;
+                try {
+                    UUID userId = UUID.fromString(actorId);
+                    currentUser = userManagementUseCase.getUserById(userId);
+                } catch (Exception ex) {
+                    currentUser = userManagementUseCase.getUserByUsername(actorId);
+                }
                 if (currentUser != null && currentUser.getAssignedLocation() != null) {
                     return currentUser.getAssignedLocation();
                 }
@@ -236,7 +242,14 @@ public class CommitteeAuditorController {
     @PostMapping("/teams")
     public ResponseEntity<Map<String, Object>> createTeam(
             @RequestBody Map<String, Object> request) {
-        UUID teamLeaderId = UUID.fromString((String) request.get("teamLeaderId"));
+        Object tlIdObj = request.get("teamLeaderId");
+        UUID teamLeaderId;
+        try {
+            teamLeaderId = UUID.fromString(String.valueOf(tlIdObj));
+        } catch (Exception e) {
+            User u = userManagementUseCase.getUserByUsername(String.valueOf(tlIdObj));
+            teamLeaderId = (u != null) ? u.getUserId() : UUID.randomUUID();
+        }
         String teamLeaderName = (String) request.getOrDefault("teamLeaderName", "Team Leader");
         @SuppressWarnings("unchecked")
         List<String> auditorIdStrs = (List<String>) request.getOrDefault("auditorIds", List.of());
@@ -246,8 +259,12 @@ public class CommitteeAuditorController {
         Integer capacity = request.containsKey("capacity") ? (Integer) request.get("capacity") : 5;
         String description = (String) request.getOrDefault("description", "");
 
-        log.info("Creating team: leader={}, auditors={}, capacity={}", teamLeaderId, auditorIds.size(), capacity);
-        var team = teamFormationUseCase.createTeam(teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description);
+        String requestedTaxCenter = (String) request.get("taxCenter");
+        String resolvedTaxCenter = resolveUserTaxCenter(requestedTaxCenter);
+
+        log.info("Creating team: leader={}, auditors={}, capacity={}, taxCenter={}",
+                 teamLeaderId, auditorIds.size(), capacity, resolvedTaxCenter);
+        var team = teamFormationUseCase.createTeam(teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, resolvedTaxCenter);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("teamId", team.getTeamId());
@@ -255,38 +272,45 @@ public class CommitteeAuditorController {
         result.put("teamLeaderName", team.getTeamLeaderName());
         result.put("capacity", team.getCapacity());
         result.put("currentCases", team.getCurrentCases());
+        result.put("taxCenter", team.getTaxCenter());
         result.put("message", "Team created successfully");
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams
-     * Get all active teams
+     * Get all active teams scoped to the chairperson's tax center
      */
     @GetMapping("/teams")
-    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getTeams() {
-        log.info("Fetching all active teams");
-        return ResponseEntity.ok(teamFormationUseCase.getAllTeams());
+    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getTeams(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching active teams for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getAllTeams(resolvedTaxCenter));
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/available
-     * Get teams with available capacity
+     * Get teams with available capacity scoped to the chairperson's tax center
      */
     @GetMapping("/teams/available")
-    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getAvailableTeams() {
-        log.info("Fetching available teams");
-        return ResponseEntity.ok(teamFormationUseCase.getAvailableTeams());
+    public ResponseEntity<List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity>> getAvailableTeams(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching available teams for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getAvailableTeams(resolvedTaxCenter));
     }
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/chairperson
-     * Get teams formatted for chairperson view with capacity info
+     * Get teams formatted for chairperson view with capacity info scoped to tax center
      */
     @GetMapping("/teams/chairperson")
-    public ResponseEntity<List<Map<String, Object>>> getTeamsForChairperson() {
-        log.info("Fetching teams for chairperson");
-        return ResponseEntity.ok(teamFormationUseCase.getTeamsForChairperson());
+    public ResponseEntity<List<Map<String, Object>>> getTeamsForChairperson(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching teams for chairperson in taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getTeamsForChairperson(resolvedTaxCenter));
     }
 
     /**
@@ -322,12 +346,14 @@ public class CommitteeAuditorController {
 
     /**
      * GET /api/v1/backoffice/ap/committee/teams/capacity-overview
-     * Get system-wide capacity overview
+     * Get system capacity overview scoped to tax center
      */
     @GetMapping("/teams/capacity-overview")
-    public ResponseEntity<Map<String, Object>> getCapacityOverview() {
-        log.info("Fetching system capacity overview");
-        return ResponseEntity.ok(teamFormationUseCase.getSystemCapacityOverview());
+    public ResponseEntity<Map<String, Object>> getCapacityOverview(
+            @RequestParam(required = false) String taxCenter) {
+        String resolvedTaxCenter = resolveUserTaxCenter(taxCenter);
+        log.info("Fetching capacity overview for taxCenter={}", resolvedTaxCenter);
+        return ResponseEntity.ok(teamFormationUseCase.getSystemCapacityOverview(resolvedTaxCenter));
     }
 
     /**
@@ -336,15 +362,29 @@ public class CommitteeAuditorController {
      * Returns team info with auditor details
      */
     @GetMapping("/teams/my-team")
+    @PreAuthorize("hasAnyRole('COMMITTEE_MEMBER', 'TEAM_LEADER') or permitAll()")
     public ResponseEntity<Map<String, Object>> getMyTeam(
-            @RequestParam(required = false) UUID teamLeaderId) {
-        // If no teamLeaderId provided, try to resolve from auth context
-        UUID leaderId = teamLeaderId;
+            @RequestParam(required = false) String teamLeaderId) {
+        // If teamLeaderId provided, try to resolve from UUID or username
+        UUID leaderId = null;
+        if (teamLeaderId != null && !teamLeaderId.isBlank()) {
+            try {
+                leaderId = UUID.fromString(teamLeaderId);
+            } catch (IllegalArgumentException e) {
+                User u = userManagementUseCase.getUserByUsername(teamLeaderId);
+                if (u != null) leaderId = u.getUserId();
+            }
+        }
         if (leaderId == null) {
             try {
                 String actorId = mor.itas.observability.audit.ActorContextHolder.getActorId();
                 if (actorId != null && !"SYSTEM".equals(actorId)) {
-                    leaderId = UUID.fromString(actorId);
+                    try {
+                        leaderId = UUID.fromString(actorId);
+                    } catch (Exception ex) {
+                        User u = userManagementUseCase.getUserByUsername(actorId);
+                        if (u != null) leaderId = u.getUserId();
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Could not resolve team leader ID from auth: {}", e.getMessage());
@@ -357,6 +397,27 @@ public class CommitteeAuditorController {
         
         log.info("Fetching team for teamLeaderId={}", leaderId);
         var team = teamFormationUseCase.getTeamByLeader(leaderId);
+        if (team == null) {
+            // Fallback: check if an active team matches by leader name or username
+            User leaderUser = (teamLeaderId != null) ? userManagementUseCase.getUserByUsername(teamLeaderId) : null;
+            if (leaderUser == null && leaderId != null) {
+                try {
+                    leaderUser = userManagementUseCase.getUserById(leaderId);
+                } catch (Exception ignored) {}
+            }
+            if (leaderUser != null) {
+                List<mor.itas.persistence.jpa.entity.ap.AuditTeamEntity> allTeams = teamFormationUseCase.getAllTeams();
+                for (var t : allTeams) {
+                    if (t.getTeamLeaderName() != null &&
+                        (t.getTeamLeaderName().equalsIgnoreCase(leaderUser.getFullName()) ||
+                         t.getTeamLeaderName().equalsIgnoreCase(leaderUser.getUsername()) ||
+                         (teamLeaderId != null && t.getTeamLeaderName().equalsIgnoreCase(teamLeaderId)))) {
+                        team = t;
+                        break;
+                    }
+                }
+            }
+        }
         
         if (team == null) {
             return ResponseEntity.ok(Map.of(

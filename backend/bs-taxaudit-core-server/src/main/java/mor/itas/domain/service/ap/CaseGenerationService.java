@@ -75,6 +75,10 @@ public class CaseGenerationService {
                 caseEntity.setAllocationId(allocation.getId());
                 caseEntity.setCaseNumber(generateCaseNumber(planId, taxCenter, i));
                 caseEntity.setTaxpayerId(mockTin);
+                caseEntity.setTaxCenterCode(taxCenter);
+                caseEntity.setTaxpayerName("Taxpayer " + (taxCenter.contains("fed") ? "Federal Corp " : "Addis Enterprise ") + (i + 1));
+                caseEntity.setSegment(i % 3 == 0 ? "LARGE" : (i % 3 == 1 ? "MEDIUM" : "SMALL"));
+                caseEntity.setRiskPriority(riskScore >= 70 ? "HIGH" : (riskScore >= 50 ? "MEDIUM" : "LOW"));
                 caseEntity.setAuditType(auditType);
                 caseEntity.setRiskScore(riskScore);
                 caseEntity.setStatus("PENDING_ASSIGNMENT");

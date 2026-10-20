@@ -38,7 +38,7 @@ public class PlanAuditLogEntity {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "changed_fields", columnDefinition = "jsonb")
-    private Map<String, String> changedFields = new HashMap<>();
+    private Map<String, Object> changedFields = new HashMap<>();
 
     @Column(nullable = false, name = "created_at")
     private OffsetDateTime createdAt = OffsetDateTime.now();
@@ -113,11 +113,11 @@ public class PlanAuditLogEntity {
         this.reason = reason;
     }
 
-    public Map<String, String> getChangedFields() {
+    public Map<String, Object> getChangedFields() {
         return changedFields;
     }
 
-    public void setChangedFields(Map<String, String> changedFields) {
+    public void setChangedFields(Map<String, Object> changedFields) {
         this.changedFields = changedFields;
     }
 

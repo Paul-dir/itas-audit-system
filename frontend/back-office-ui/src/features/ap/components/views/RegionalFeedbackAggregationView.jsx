@@ -34,6 +34,10 @@ function RegionalFeedbackAggregationView() {
   const [showAggregationForm, setShowAggregationForm] = useState(false);
   const [regionalComments, setRegionalComments] = useState('');
   const [collectedTaxCenters, setCollectedTaxCenters] = useState([]);
+  const [showDetailedFeedback, setShowDetailedFeedback] = useState(false);
+  const [selectedTaxCenterForDetail, setSelectedTaxCenterForDetail] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editedAggregation, setEditedAggregation] = useState({});
 
   const auditTypeLabels = {
     desk_audit: 'Desk Audit',
@@ -187,6 +191,82 @@ function RegionalFeedbackAggregationView() {
     return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
   };
 
+  const handleShowDetailedFeedback = () => {
+    setShowDetailedFeedback(true);
+    setSelectedTaxCenterForDetail(null);
+  };
+
+  const getTaxCenterDetailedFeedback = (taxCenterName) => {
+    if (!planDetails || !planDetails.taxCenterFeedback || !planDetails.taxCenterFeedback[region]) {
+      return null;
+    }
+    return planDetails.taxCenterFeedback[region][taxCenterName];
+  };
+
+  const handleEditTaxCenterFeedback = (taxCenterName, auditType, newValue) => {
+    if (!planDetails) return;
+    
+    const updatedData = { ...data };
+    const planIndex = updatedData.plans.findIndex(p => p.id === selectedPlan);
+    if (planIndex < 0) return;
+    
+    const plan = updatedData.plans[planIndex];
+    const tcFeedback = plan.taxCenterFeedback?.[region]?.[taxCenterName];
+    
+    if (!tcFeedback || !tcFeedback.feedbackByType) return;
+    
+    // Update the specific audit type feedback
+    const parsed = parseInt(newValue) || 0;
+    tcFeedback.feedbackByType[auditType].proposedAmount = parsed;
+    tcFeedback.feedbackByType[auditType].edited = true;
+    
+    updateData(updatedData);
+    
+    // Recalculate aggregation in real-time
+    const newAgg = calculateAggregation(selectedPlan);
+    console.log(`✅ Updated ${taxCenterName} ${auditType} to ${parsed}. New aggregation:`, newAgg);
+  };
+
+  const handleEnterEditMode = () => {
+    // Copy current aggregation to editable state
+    const copy = {};
+    Object.entries(aggregation).forEach(([type, agg]) => {
+      if (agg.totalAllocated > 0) {
+        copy[type] = {
+          totalAllocated: agg.totalAllocated,
+          totalProposed: agg.totalProposed,
+          edited: false
+        };
+      }
+    });
+    setEditedAggregation(copy);
+    setEditMode(true);
+  };
+
+  const handleEditProposedAmount = (type, newValue) => {
+    const parsed = parseInt(newValue) || 0;
+    setEditedAggregation(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        totalProposed: parsed,
+        edited: true
+      }
+    }));
+  };
+
+  const handleExitEditMode = () => {
+    setEditMode(false);
+    setEditedAggregation({});
+  };
+
+  const getEditedAggregation = () => {
+    if (!editMode || Object.keys(editedAggregation).length === 0) {
+      return aggregation;
+    }
+    return editedAggregation;
+  };
+
   const handleSubmitAggregatedFeedback = async () => {
     if (!selectedPlan) return;
 
@@ -199,60 +279,90 @@ function RegionalFeedbackAggregationView() {
       return;
     }
 
-    const aggregation = calculateAggregation(selectedPlan);
+    // Check if any tax center feedback was edited
+    const plan = data.plans[planIndex];
+    const hasTC Edits = Object.entries(plan.taxCenterFeedback?.[region] || {}).some(([tcName, tcFB]) => {
+      return Object.entries(tcFB.feedbackByType || {}).some(([type, fb]) => fb.edited);
+    });
+
+    // Use current aggregation (which reflects any edits)
+    const finalAggregation = calculateAggregation(selectedPlan);
+
+    // Use edited aggregation if in edit mode, otherwise use calculated
+    const finalAggregate = editMode && Object.keys(editedAggregation).length > 0 
+      ? { ...editedAggregation, ...finalAggregation }  // Merge both edits
+      : finalAggregation;
 
     const updatedData = { ...data };
-    const plan = updatedData.plans[planIndex];
+    const updatedPlan = updatedData.plans[planIndex];
 
     // ✅ Store AGGREGATED regional feedback
-    if (!plan.regionFeedbackStatus) {
-      plan.regionFeedbackStatus = {};
+    if (!updatedPlan.regionFeedbackStatus) {
+      updatedPlan.regionFeedbackStatus = {};
     }
 
-    plan.regionFeedbackStatus[region] = {
+    // Track all types of edits
+    const hasRegionalEdits = editMode && Object.keys(editedAggregation).length > 0 && 
+                             Object.values(editedAggregation).some(agg => agg.edited);
+
+    updatedPlan.regionFeedbackStatus[region] = {
       status: 'received',
       regionalComments: regionalComments,
-      aggregatedFeedback: aggregation,
+      aggregatedFeedback: finalAggregate,
       taxCenterCount: collectedTaxCenters.filter(tc => tc.submitted).length,
       receivedDate: new Date().toISOString(),
       submittedBy: userInfo?.fullName || 'Regional Director',
-      region: region
+      region: region,
+      regionalEdits: hasRegionalEdits,  // Regional director override of aggregation
+      taxCenterEdits: hasTC Edits,       // Tax center feedback was edited by regional director
+      originalAggregation: hasRegionalEdits ? calculateAggregation(selectedPlan) : null
     };
 
     // ✅ UPDATE plan status if ALL regions submitted
-    const allRegions = Object.keys(plan.allocationSentStatus || {});
-    const allRegionsSubmitted = allRegions.every(r => plan.regionFeedbackStatus?.[r]?.status === 'received');
+    const allRegions = Object.keys(updatedPlan.allocationSentStatus || {});
+    const allRegionsSubmitted = allRegions.every(r => updatedPlan.regionFeedbackStatus?.[r]?.status === 'received');
     
     if (allRegionsSubmitted) {
-      plan.status = 'FEEDBACK_COLLECTED';
+      updatedPlan.status = 'FEEDBACK_COLLECTED';
       console.log('✅ ALL REGIONS SUBMITTED - Plan status updated to FEEDBACK_COLLECTED');
     }
 
     // ✅ Track in approval history
-    plan.approvalHistory = plan.approvalHistory || [];
-    plan.approvalHistory.push({
+    updatedPlan.approvalHistory = updatedPlan.approvalHistory || [];
+    updatedPlan.approvalHistory.push({
       action: 'REGIONAL_FEEDBACK_AGGREGATED_SUBMITTED',
       by: userInfo?.fullName || 'Regional Director',
       date: new Date().toISOString(),
       region: region,
       taxCenterCount: collectedTaxCenters.filter(tc => tc.submitted).length,
       notes: regionalComments || 'Regional feedback aggregated and submitted',
-      version: plan.version
+      regionalEdits: hasRegionalEdits,
+      taxCenterEdits: hasTC Edits,
+      version: updatedPlan.version
     });
 
     console.log('✅ AGGREGATED REGIONAL FEEDBACK SUBMITTED:', {
-      planId: plan.id,
+      planId: updatedPlan.id,
       region: region,
       taxCentersReporting: collectedTaxCenters.filter(tc => tc.submitted).length,
-      aggregatedFeedback: aggregation
+      aggregatedFeedback: finalAggregate,
+      regionalEdits: hasRegionalEdits,
+      taxCenterEdits: hasTC Edits
     });
 
     updateData(updatedData);
-    alert(`✅ Aggregated feedback from ${collectedTaxCenters.filter(tc => tc.submitted).length} tax centers submitted to Audit Director!\n\nDirector will review summary and feedback.`);
+    
+    const editNotes = [];
+    if (hasTC Edits) editNotes.push('(with tax center feedback adjustments)');
+    if (hasRegionalEdits) editNotes.push('(with regional capacity overrides)');
+    
+    alert(`✅ Aggregated feedback from ${collectedTaxCenters.filter(tc => tc.submitted).length} tax centers submitted to Audit Director!\n\n${editNotes.join(' ')}`);
     
     setSelectedPlan(null);
     setShowAggregationForm(false);
     setRegionalComments('');
+    setEditMode(false);
+    setEditedAggregation({});
     loadPlans();
   };
 
@@ -264,8 +374,162 @@ function RegionalFeedbackAggregationView() {
   const planDetails = getPlanDetails();
   const aggregation = selectedPlan ? calculateAggregation(selectedPlan) : {};
 
+  // Detailed Feedback Modal
+  const DetailedFeedbackModal = () => {
+    if (!showDetailedFeedback || !planDetails) return null;
+
+    const feedbackList = collectedTaxCenters.filter(tc => tc.submitted);
+
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div className="bg-panel dark:bg-panel rounded-lg max-w-5xl w-full max-h-[80vh] overflow-y-auto mx-4 border border-border dark:border-border">
+          {/* Header */}
+          <div className="sticky top-0 bg-ink dark:bg-ink border-b border-border dark:border-border p-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-text-hi dark:text-text-hi m-0">
+                <i className="fas fa-eye mr-2"></i>Individual Tax Center Feedback
+              </h3>
+              <p className="text-xs text-text-mid dark:text-text-mid m-0 mt-1">
+                Regional Director can edit per-audit-type feedback to optimize allocation
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setShowDetailedFeedback(false);
+                setSelectedTaxCenterForDetail(null);
+              }}
+              className="text-text-mid dark:text-text-mid hover:text-text-hi dark:hover:text-text-hi cursor-pointer text-xl"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
+            {feedbackList.length === 0 ? (
+              <p className="text-text-mid dark:text-text-mid text-center py-8">No tax center feedback submitted yet</p>
+            ) : (
+              <div className="space-y-4">
+                {feedbackList.map((tc, idx) => {
+                  const tcFeedback = getTaxCenterDetailedFeedback(tc.name);
+                  if (!tcFeedback) return null;
+
+                  return (
+                    <div key={idx} className="border border-border dark:border-border rounded-lg p-4 bg-ink/30 dark:bg-ink/30">
+                      <div className="flex items-center justify-between mb-3 pb-3 border-b border-border dark:border-border">
+                        <h4 className="text-text-hi dark:text-text-hi font-bold m-0">{tc.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <Badge status="approved" text="Submitted" className="text-xs" />
+                          <span className="text-xs text-text-mid dark:text-text-mid">
+                            Editable below
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Per-Audit-Type Adjustments - EDITABLE */}
+                      {tcFeedback.feedbackByType && Object.keys(tcFeedback.feedbackByType).length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-ink dark:bg-ink">
+                              <tr>
+                                <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Audit Type</th>
+                                <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Allocated</th>
+                                <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Original Proposed</th>
+                                <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Regional Override</th>
+                                <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Change</th>
+                                <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border dark:divide-border">
+                              {Object.entries(tcFeedback.feedbackByType).map(([type, fb]) => {
+                                const originalProposed = fb.proposedAmount || fb.allocated;
+                                const isEdited = fb.edited;
+                                const currentValue = fb.proposedAmount || fb.allocated;
+                                const change = currentValue - (fb.allocated || 0);
+                                const changeColor = change > 0 ? 'text-info' : change < 0 ? 'text-warning' : 'text-teal';
+                                
+                                return (
+                                  <tr key={type} className={isEdited ? 'bg-warning/20 dark:bg-warning/20' : 'hover:bg-ink dark:hover:bg-ink'}>
+                                    <td className="p-2 text-text-hi dark:text-text-hi font-bold">
+                                      {auditTypeLabels[type] || type}
+                                    </td>
+                                    <td className="p-2 text-center text-text-mid dark:text-text-mid">
+                                      {fb.allocated}
+                                    </td>
+                                    <td className="p-2 text-center text-text-mid dark:text-text-mid">
+                                      {originalProposed}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      <input
+                                        type="number"
+                                        value={currentValue}
+                                        onChange={(e) => handleEditTaxCenterFeedback(tc.name, type, e.target.value)}
+                                        className={`w-20 px-2 py-1 rounded border text-center font-bold text-text-hi dark:text-text-hi ${
+                                          isEdited
+                                            ? 'border-warning dark:border-warning bg-warning/10 dark:bg-warning/10'
+                                            : 'border-info dark:border-info bg-ink dark:bg-ink'
+                                        }`}
+                                      />
+                                    </td>
+                                    <td className={`p-2 text-center font-bold ${changeColor} dark:${changeColor}`}>
+                                      {change > 0 ? `+${change}` : change}
+                                    </td>
+                                    <td className="p-2 text-text-mid dark:text-text-mid text-xs">
+                                      {fb.remarks || '—'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-text-mid dark:text-text-mid text-xs">No per-audit-type feedback recorded</p>
+                      )}
+
+                      {/* Overall Comments */}
+                      {(tcFeedback.overallComments || tcFeedback.feedback) && (
+                        <div className="mt-3 p-2 bg-panel dark:bg-panel rounded border border-border dark:border-border">
+                          <p className="text-xs text-text-mid dark:text-text-mid m-0 mb-1 font-bold">Their Comments:</p>
+                          <p className="text-xs text-text-primary dark:text-text-primary m-0">
+                            {tcFeedback.overallComments || tcFeedback.feedback}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Submission Date */}
+                      <p className="text-xs text-text-mid dark:text-text-mid m-0 mt-2">
+                        Submitted: {tcFeedback.feedbackDate ? new Date(tcFeedback.feedbackDate).toLocaleDateString() : 'Unknown'}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Instructions */}
+            <div className="mt-4 p-3 bg-info/10 dark:bg-info/10 rounded border border-info dark:border-info">
+              <p className="text-xs text-info dark:text-info font-bold m-0 mb-1">
+                <i className="fas fa-info-circle mr-1"></i>How to Use
+              </p>
+              <ul className="text-xs text-text-mid dark:text-text-mid m-0 space-y-1 ml-4">
+                <li>✏️ Edit "Regional Override" column to adjust tax center feedback</li>
+                <li>📊 Aggregated summary above updates automatically</li>
+                <li>⚠️ Edited rows highlight in orange</li>
+                <li>💾 Changes saved automatically as you type</li>
+                <li>✅ Close this modal when done - your edits persist</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="px-6 py-8">
+      <DetailedFeedbackModal />
+      
       {/* Header */}
       <div className="detail-header mb-6">
         <h2 className="text-2xl font-bold text-text-hi dark:text-text-hi flex items-center gap-2">
@@ -433,49 +697,114 @@ function RegionalFeedbackAggregationView() {
                   {/* Aggregated Feedback Summary */}
                   {Object.keys(aggregation).length > 0 && (
                     <div className="bg-panel dark:bg-panel border border-border dark:border-border rounded-lg p-4">
-                      <h4 className="text-text-hi dark:text-text-hi font-bold m-0 mb-3">
-                        <i className="fas fa-chart-bar mr-2"></i>Aggregated Feedback Summary
-                      </h4>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-text-hi dark:text-text-hi font-bold m-0">
+                          <i className="fas fa-chart-bar mr-2"></i>Aggregated Capacity by Audit Type
+                        </h4>
+                        {!editMode ? (
+                          <button
+                            onClick={handleEnterEditMode}
+                            className="px-3 py-1 rounded bg-info/20 dark:bg-info/20 text-info dark:text-info font-bold text-xs hover:bg-info/30 dark:hover:bg-info/30"
+                          >
+                            <i className="fas fa-edit mr-1"></i>Edit
+                          </button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleExitEditMode}
+                              className="px-3 py-1 rounded bg-gray-600 dark:bg-gray-600 text-white font-bold text-xs hover:bg-gray-500"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead className="bg-ink dark:bg-ink">
                             <tr>
                               <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Audit Type</th>
-                              <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Allocated</th>
-                              <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Proposed</th>
-                              <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Capacity</th>
-                              <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Resources</th>
-                              <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Timeline</th>
+                              <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Your Target</th>
+                              <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">
+                                {editMode ? 'Revised Capacity' : 'TC Capacity'}
+                              </th>
+                              <th className="text-center p-2 text-text-hi dark:text-text-hi font-bold">Gap</th>
+                              <th className="text-left p-2 text-text-hi dark:text-text-hi font-bold">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border dark:divide-border">
-                            {Object.entries(aggregation).map(([type, agg]) => (
-                              agg.totalAllocated > 0 && (
-                                <tr key={type} className="hover:bg-ink/50 dark:hover:bg-ink/50">
-                                  <td className="p-2 text-text-hi dark:text-text-hi font-bold">
-                                    {auditTypeLabels[type] || type}
-                                  </td>
-                                  <td className="p-2 text-center text-teal dark:text-teal font-bold">
-                                    {agg.totalAllocated}
-                                  </td>
-                                  <td className="p-2 text-center text-text-hi dark:text-text-hi">
-                                    {agg.totalProposed}
-                                  </td>
-                                  <td className="p-2 text-text-mid dark:text-text-mid text-xs">
-                                    {getMostCommonStatus(agg.capacityStatuses)}
-                                  </td>
-                                  <td className="p-2 text-text-mid dark:text-text-mid text-xs">
-                                    {getMostCommonStatus(agg.resourceStatuses)}
-                                  </td>
-                                  <td className="p-2 text-text-mid dark:text-text-mid text-xs">
-                                    {getMostCommonStatus(agg.timelineStatuses)}
-                                  </td>
-                                </tr>
-                              )
-                            ))}
+                            {Object.entries(getEditedAggregation()).map(([type, agg]) => {
+                              const gap = agg.totalAllocated - agg.totalProposed;
+                              const gapPercentage = agg.totalAllocated > 0 ? ((gap / agg.totalAllocated) * 100).toFixed(1) : 0;
+                              let statusBadge = '● Match';
+                              let statusColor = 'text-teal';
+                              if (gap > 0) {
+                                statusBadge = `● Surplus +${gap}`;
+                                statusColor = 'text-info';
+                              } else if (gap < 0) {
+                                statusBadge = `● Short ${gap}`;
+                                statusColor = 'text-warning';
+                              }
+                              
+                              return (
+                                agg.totalAllocated > 0 && (
+                                  <tr key={type} className={editMode && agg.edited ? 'bg-info/10 dark:bg-info/10' : 'hover:bg-ink/50 dark:hover:bg-ink/50'}>
+                                    <td className="p-2 text-text-hi dark:text-text-hi font-bold">
+                                      {auditTypeLabels[type] || type}
+                                    </td>
+                                    <td className="p-2 text-center text-text-hi dark:text-text-hi font-bold">
+                                      {agg.totalAllocated}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      {editMode ? (
+                                        <input
+                                          type="number"
+                                          value={agg.totalProposed}
+                                          onChange={(e) => handleEditProposedAmount(type, e.target.value)}
+                                          className="w-16 px-2 py-1 rounded border border-info dark:border-info bg-ink dark:bg-ink text-text-hi dark:text-text-hi font-bold text-center"
+                                        />
+                                      ) : (
+                                        <span className="text-teal dark:text-teal font-bold">{agg.totalProposed}</span>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-center font-bold" style={{color: gap > 0 ? '#06b6d4' : gap < 0 ? '#f59e0b' : '#10b981'}}>
+                                      {gap > 0 ? `+${gap}` : gap}
+                                    </td>
+                                    <td className={`p-2 font-bold ${statusColor} dark:${statusColor}`}>
+                                      {statusBadge}
+                                    </td>
+                                  </tr>
+                                )
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
+                      
+                      {/* Show individual tax center feedback link */}
+                      {!editMode && (
+                        <div className="mt-4 pt-3 border-t border-border dark:border-border">
+                          <button
+                            onClick={handleShowDetailedFeedback}
+                            className="text-info dark:text-info font-bold hover:underline text-sm flex items-center gap-2 cursor-pointer"
+                          >
+                            <i className="fas fa-eye"></i> Show individual tax center feedback
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Edit Mode Info */}
+                      {editMode && (
+                        <div className="mt-4 pt-3 border-t border-border dark:border-border p-3 bg-info/10 dark:bg-info/10 rounded">
+                          <p className="text-xs text-info dark:text-info font-bold m-0 mb-2">
+                            <i className="fas fa-info-circle mr-1"></i>Edit Mode: Adjust capacity amounts as needed based on regional analysis
+                          </p>
+                          <p className="text-xs text-text-mid dark:text-text-mid m-0">
+                            Changes are highlighted in blue. Click Cancel to revert or continue to submit with new values.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
