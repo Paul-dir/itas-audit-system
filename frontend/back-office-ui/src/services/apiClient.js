@@ -11,7 +11,7 @@
  * - Invalid user IDs will result in 401 Unauthorized responses
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1/backoffice/ap';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1/backoffice/ap';
 
 /**
  * Get the current actor ID from session/auth context

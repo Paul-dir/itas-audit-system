@@ -7,7 +7,7 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_MOR_IDENTITY_URL || 
-  'https://localhost:8080/api/public/v1';
+  '/api/public/v1';
 
 class MORIdentityAPI {
   constructor() {
