@@ -6,9 +6,9 @@ spring:
     active: mock
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:itas_audit}
-    username: ${DB_USER:itas_dev}
-    password: ${DB_PASSWORD:dev_password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:itas_audit}${DB_PARAMS:}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:itas_dev}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:dev_password}}
     driver-class-name: org.postgresql.Driver
 
   jpa:
