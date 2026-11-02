@@ -188,6 +188,18 @@ export default function RiskEngineDashboard() {
         headers: { 'Content-Type': 'application/json', 'X-Actor-Id': user.id || 'tax-center-staff' },
         body: JSON.stringify(cascadeBody)
       });
+      if (!response.ok) {
+        let msg = `Server returned error (${response.status})`;
+        try {
+          const errData = await response.json();
+          msg = errData.message || errData.error?.message || errData.error || msg;
+        } catch (_) {
+          if (response.status === 502 || response.status === 504) {
+            msg = 'Backend service is starting up or temporarily busy. Please retry in a few moments.';
+          }
+        }
+        throw new Error(msg);
+      }
       const result = await response.json();
       if (result.status === 'ERROR') throw new Error(result.error?.message || 'Cascade failed');
       alert(`✅ Success!\n\n${result.data?.totalCasesCreated || 0} audit cases created via risk engine cascade.`);

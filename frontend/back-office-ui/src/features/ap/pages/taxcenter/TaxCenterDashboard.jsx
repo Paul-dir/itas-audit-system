@@ -318,6 +318,18 @@ export default function TaxCenterDashboard({ view }) {
           body: JSON.stringify({ taxCenterCode: taxCenter })
         }
       );
+      if (!response.ok) {
+        let msg = `Server returned error (${response.status})`;
+        try {
+          const errData = await response.json();
+          msg = errData.message || errData.error?.message || errData.error || msg;
+        } catch (_) {
+          if (response.status === 502 || response.status === 504) {
+            msg = 'Backend service is starting up or temporarily busy. Please retry in a few moments.';
+          }
+        }
+        throw new Error(msg);
+      }
       const result = await response.json();
       if (result.status === 'ERROR' || result.error) {
         throw new Error(result.error?.message || result.message || 'Cascade failed');

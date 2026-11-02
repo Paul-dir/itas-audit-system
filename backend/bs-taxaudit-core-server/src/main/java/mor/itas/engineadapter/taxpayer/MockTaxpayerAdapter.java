@@ -24,7 +24,7 @@ public class MockTaxpayerAdapter {
     // Only detailed taxpayers (the 500 per tax center)
     private static final Map<String, List<Map<String, Object>>> DETAILED_TAXPAYERS = new HashMap<>();
 
-    private static final int DETAILED_PER_TC = 500;
+    private static final int DETAILED_PER_TC = 300;
 
     private static final String[] PREFIXES = {"Prime", "Global", "National", "Imperial", "Royal", "Elite",
         "United", "Alpha", "Beta", "Sigma", "Zenith", "Apex", "Nova", "Delta", "Omega",
@@ -48,38 +48,38 @@ public class MockTaxpayerAdapter {
     private static void initializeTaxpayers() {
         Map<String, Integer> taxCenterQuotas = new LinkedHashMap<>();
         // Federal LTO
-        taxCenterQuotas.put("federal-lto1", 45000);
-        taxCenterQuotas.put("federal-lto2", 35000);
+        taxCenterQuotas.put("federal-lto1", 300);
+        taxCenterQuotas.put("federal-lto2", 250);
 
         // Addis Ababa Tax Centers (AA)
-        taxCenterQuotas.put("TC-AA-01", 30000);
-        taxCenterQuotas.put("TC-AA-02", 28000);
-        taxCenterQuotas.put("TC-AA-03", 25000);
+        taxCenterQuotas.put("TC-AA-01", 200);
+        taxCenterQuotas.put("TC-AA-02", 200);
+        taxCenterQuotas.put("TC-AA-03", 200);
         
         // Amhara (BA)
-        taxCenterQuotas.put("TC-BA-01", 15000);
-        taxCenterQuotas.put("TC-BA-02", 12000);
-        taxCenterQuotas.put("TC-BA-03", 10000);
+        taxCenterQuotas.put("TC-BA-01", 150);
+        taxCenterQuotas.put("TC-BA-02", 150);
+        taxCenterQuotas.put("TC-BA-03", 150);
 
         // Oromia (BB)
-        taxCenterQuotas.put("TC-BB-01", 15000);
-        taxCenterQuotas.put("TC-BB-02", 12000);
-        taxCenterQuotas.put("TC-BB-03", 10000);
+        taxCenterQuotas.put("TC-BB-01", 150);
+        taxCenterQuotas.put("TC-BB-02", 150);
+        taxCenterQuotas.put("TC-BB-03", 150);
 
         // Dire Dawa (DD)
-        taxCenterQuotas.put("TC-DD-01", 8000);
-        taxCenterQuotas.put("TC-DD-02", 7000);
-        taxCenterQuotas.put("TC-DD-03", 6000);
+        taxCenterQuotas.put("TC-DD-01", 100);
+        taxCenterQuotas.put("TC-DD-02", 100);
+        taxCenterQuotas.put("TC-DD-03", 100);
 
         // SNNPR (CA)
-        taxCenterQuotas.put("TC-CA-01", 8000);
-        taxCenterQuotas.put("TC-CA-02", 7000);
-        taxCenterQuotas.put("TC-CA-03", 6000);
+        taxCenterQuotas.put("TC-CA-01", 100);
+        taxCenterQuotas.put("TC-CA-02", 100);
+        taxCenterQuotas.put("TC-CA-03", 100);
 
         // Somali (SM)
-        taxCenterQuotas.put("TC-SM-01", 6000);
-        taxCenterQuotas.put("TC-SM-02", 5000);
-        taxCenterQuotas.put("TC-SM-03", 4000);
+        taxCenterQuotas.put("TC-SM-01", 100);
+        taxCenterQuotas.put("TC-SM-02", 100);
+        taxCenterQuotas.put("TC-SM-03", 100);
 
         String[] sectors = {"Manufacturing", "Trade", "Services", "Agriculture", "Technology",
             "Transportation", "Construction", "Wholesale", "Retail", "Finance",
