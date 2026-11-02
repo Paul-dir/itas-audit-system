@@ -70,7 +70,7 @@ public class ApAuditCaseEntity {
     @Column(length = 10, name = "region_code")
     private String regionCode;
 
-    @Column(nullable = false, length = 32, name = "case_number", unique = true)
+    @Column(nullable = false, length = 64, name = "case_number", unique = true)
     private String caseNumber;
 
     /** TIN / taxpayer registration number */

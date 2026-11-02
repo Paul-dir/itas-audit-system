@@ -580,9 +580,18 @@ public class CascadePlanToCasesUseCase {
      */
     private String generateCaseNumber(AnnualAuditPlanEntity plan, String region, String taxCenter, AtomicInteger counter) {
         String year = String.valueOf(plan.getYear());
-        String planShort = plan.getId().toString().substring(0, 8);
+        String planShort = plan.getId().toString().substring(0, 4);
+        String shortTc = (taxCenter != null ? taxCenter : "TC")
+            .replaceAll("(?i)(federal-|addis_ababa-|amhara-|oromia-|dire_dawa-|snnpr-|somali-|tc-)", "")
+            .replace("-", "")
+            .toUpperCase();
         String seq = String.format("%04d", counter.getAndIncrement());
-        return year + "-" + planShort + "-" + region + "-" + taxCenter + "-" + seq;
+        String reg = (region != null && !region.isBlank()) ? region.toUpperCase() : "FED";
+        String generated = year + "-" + planShort + "-" + reg + "-" + shortTc + "-" + seq;
+        if (generated.length() > 32) {
+            generated = generated.substring(0, 32);
+        }
+        return generated;
     }
 
     private List<PlanAllocationEntity> autoGenerateMissingTaxCenterAllocations(AnnualAuditPlanEntity plan, List<PlanAllocationEntity> existingAllocations) {

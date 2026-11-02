@@ -51,7 +51,12 @@ public class PlanCascadeController {
         } catch (IllegalStateException e) {
             return ResponseEntity.ok(GenericResponse.error("INVALID_STATE", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.ok(GenericResponse.error("CASCADE_ERROR", "Failed to cascade plan: " + e.getMessage()));
+            org.slf4j.LoggerFactory.getLogger(PlanCascadeController.class).error("Cascade failed", e);
+            Throwable root = e;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            return ResponseEntity.ok(GenericResponse.error("CASCADE_ERROR", "Failed to cascade plan: " + root.getMessage()));
         }
     }
 }
