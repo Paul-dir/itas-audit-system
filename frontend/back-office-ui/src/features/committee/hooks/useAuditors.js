@@ -82,11 +82,22 @@ export function useAuditors(caseId) {
    */
   const enrichAndFilterAuditors = useCallback((auditorList) => {
     return auditorList
-      .map(a => ({
-        ...a,
-        // If backend didn't return taxCenter, fill from hardcoded map
-        taxCenter: a.taxCenter || AUDITOR_TAX_CENTER_MAP[a.id] || AUDITOR_TAX_CENTER_MAP[a.auditorId] || null,
-      }))
+      .map(a => {
+        const id = a.id || a.auditorId;
+        const name = a.name || a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim();
+        const firstName = a.firstName || (name.split(' ')[0] || 'auditor');
+        const lastName = a.lastName || (name.split(' ')[1] || 'user');
+        const email = a.email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@mor.gov.et`;
+        return {
+          ...a,
+          id,
+          auditorId: id,
+          name,
+          fullName: name,
+          email,
+          taxCenter: a.taxCenter || AUDITOR_TAX_CENTER_MAP[id] || null,
+        };
+      })
       .filter(a => {
         // If no tax center resolved, show the auditor (don't silently drop)
         if (!userTaxCenter) return true;

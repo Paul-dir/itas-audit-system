@@ -1,6 +1,7 @@
 package mor.itas.api.controller.backoffice.jac;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -37,6 +38,40 @@ public class CommitteeEventService {
 
     /** Per-case subscribers (vote tally, case status) */
     private final Map<UUID, List<SseEmitter>> caseEmitters = new ConcurrentHashMap<>();
+
+    /**
+     * Periodic heartbeat comment to prevent Cloudflare/Render reverse proxies
+     * from closing idle SSE connections (which triggers rapid client reconnect loops).
+     */
+    @Scheduled(fixedRate = 20000)
+    public void sendHeartbeat() {
+        if (globalEmitters.isEmpty() && caseEmitters.isEmpty()) {
+            return;
+        }
+
+        SseEmitter.SseEventBuilder ping = SseEmitter.event().comment("ping");
+
+        globalEmitters.removeIf(emitter -> {
+            try {
+                emitter.send(ping);
+                return false;
+            } catch (Exception e) {
+                return true;
+            }
+        });
+
+        caseEmitters.forEach((caseId, emitters) -> {
+            emitters.removeIf(emitter -> {
+                try {
+                    emitter.send(ping);
+                    return false;
+                } catch (Exception e) {
+                    return true;
+                }
+            });
+        });
+        caseEmitters.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+    }
 
     // ── Subscription Management ──────────────────────────────────────
 

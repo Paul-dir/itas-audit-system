@@ -252,8 +252,20 @@ public class CommitteeAuditorController {
         }
         String teamLeaderName = (String) request.getOrDefault("teamLeaderName", "Team Leader");
         @SuppressWarnings("unchecked")
-        List<String> auditorIdStrs = (List<String>) request.getOrDefault("auditorIds", List.of());
-        List<UUID> auditorIds = auditorIdStrs.stream().map(UUID::fromString).toList();
+        List<?> rawAuditorIds = (List<?>) request.getOrDefault("auditorIds", List.of());
+        List<UUID> auditorIds = new ArrayList<>();
+        if (rawAuditorIds != null) {
+            for (Object obj : rawAuditorIds) {
+                if (obj == null) continue;
+                String str = String.valueOf(obj).trim();
+                if (str.isEmpty() || "null".equalsIgnoreCase(str) || "undefined".equalsIgnoreCase(str)) continue;
+                try {
+                    auditorIds.add(UUID.fromString(str));
+                } catch (Exception ex) {
+                    log.warn("Invalid auditor UUID skipped: {}", str);
+                }
+            }
+        }
         @SuppressWarnings("unchecked")
         List<String> auditorNames = (List<String>) request.getOrDefault("auditorNames", List.of());
         Integer capacity = request.containsKey("capacity") ? (Integer) request.get("capacity") : 5;
@@ -261,6 +273,9 @@ public class CommitteeAuditorController {
 
         String requestedTaxCenter = (String) request.get("taxCenter");
         String resolvedTaxCenter = resolveUserTaxCenter(requestedTaxCenter);
+        if (resolvedTaxCenter == null || resolvedTaxCenter.isBlank()) {
+            resolvedTaxCenter = (requestedTaxCenter != null && !requestedTaxCenter.isBlank()) ? requestedTaxCenter : "federal-lto1";
+        }
 
         log.info("Creating team: leader={}, auditors={}, capacity={}, taxCenter={}",
                  teamLeaderId, auditorIds.size(), capacity, resolvedTaxCenter);

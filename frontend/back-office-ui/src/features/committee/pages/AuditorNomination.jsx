@@ -149,10 +149,11 @@ export default function TeamFormation() {
       const result = await committeeAPI.createTeam({
         teamLeaderId: teamLeader.id,
         teamLeaderName: teamLeader.name,
-        auditorIds: teamAuditors.map(a => a.id),
-        auditorNames: teamAuditors.map(a => a.name),
+        auditorIds: teamAuditors.map(a => a.id).filter(Boolean),
+        auditorNames: teamAuditors.map(a => a.name).filter(Boolean),
         capacity: teamCapacity,
         description: teamDescription || `Team led by ${teamLeader.name}`,
+        taxCenter: userTaxCenter || teamLeader.taxCenter || 'federal-lto1',
       });
       setFormedTeam(result);
       setTeamFormed(true);

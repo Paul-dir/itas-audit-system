@@ -13,8 +13,8 @@
 
 const SSE_BASE = '/api/v1/backoffice/ap/committee/events';
 
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
-const MAX_RETRY = RECONNECT_DELAYS.length - 1;
+const RECONNECT_DELAYS = [3000, 6000, 15000, 30000];
+const MAX_RETRY = 5;
 
 function getAuthToken() {
   return localStorage.getItem('authToken') || '';
@@ -137,10 +137,28 @@ class CommitteeSSEClient {
       this._setState('disconnected');
       es.close();
 
+      if (stream.retries >= MAX_RETRY) {
+        console.warn(`[SSE] Max retries (${MAX_RETRY}) reached for ${streamKey}. Stopping auto-reconnect.`);
+        return;
+      }
+
+      if (typeof document !== 'undefined' && document.hidden) {
+        const onVisible = () => {
+          if (!document.hidden) {
+            document.removeEventListener('visibilitychange', onVisible);
+            if (this._streams.has(streamKey)) {
+              this._openConnection(streamKey);
+            }
+          }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return;
+      }
+
       // Auto-reconnect with backoff
-      const delay = RECONNECT_DELAYS[Math.min(stream.retries, MAX_RETRY)];
+      const delay = RECONNECT_DELAYS[Math.min(stream.retries, RECONNECT_DELAYS.length - 1)];
       stream.retries++;
-      console.log(`[SSE] Reconnecting ${streamKey} in ${delay}ms (attempt ${stream.retries})`);
+      console.log(`[SSE] Reconnecting ${streamKey} in ${delay}ms (attempt ${stream.retries}/${MAX_RETRY})`);
 
       setTimeout(() => {
         if (this._streams.has(streamKey)) {

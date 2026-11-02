@@ -78,7 +78,11 @@ export default function App() {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 8000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadNotifications();
+      }
+    }, 60000);
     return () => clearInterval(interval);
   }, [loadNotifications, currentUser]);
 

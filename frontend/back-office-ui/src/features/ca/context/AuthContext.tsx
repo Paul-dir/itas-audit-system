@@ -85,8 +85,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     fetchNotifications(currentUser);
     const interval = setInterval(() => {
-      fetchNotifications(currentUser);
-    }, 10000);
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchNotifications(currentUser);
+      }
+    }, 60000);
     return () => clearInterval(interval);
   }, [currentUser]);
 

@@ -23,41 +23,81 @@ export default function TopBar({ title, subtitle, onNavigate }) {
   const calendarRef = useRef(null);
   const notificationRef = useRef(null);
   const userMenuRef = useRef(null);
+  const cooldownUntilRef = useRef(0);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force = false) => {
     if (!user) return;
+    if (typeof document !== 'undefined' && document.hidden && !force) return;
+    if (Date.now() < cooldownUntilRef.current && !force) return;
+
     try {
       const actorId = user.username || user.id || '';
       if (!actorId) return;
-      const [countRes, listRes] = await Promise.all([
-        fetch('/api/v1/notifications/unread-count', {
-          headers: { 'X-Actor-Id': actorId }
-        }),
-        fetch('/api/v1/notifications', {
-          headers: { 'X-Actor-Id': actorId }
-        })
-      ]);
+
+      const countRes = await fetch('/api/v1/notifications/unread-count', {
+        headers: { 'X-Actor-Id': actorId }
+      });
+
+      if (countRes.status === 429) {
+        // Rate limited — back off for 60 seconds
+        cooldownUntilRef.current = Date.now() + 60000;
+        return;
+      }
+
       if (countRes.ok) {
         const json = await countRes.json();
-        setUnreadCount(json?.data?.unreadCount || 0);
-      }
-      if (listRes.ok) {
-        const json = await listRes.json();
-        setNotifications(json?.data || []);
+        const count = json?.data?.unreadCount || 0;
+        setUnreadCount(count);
+
+        // Only fetch list if there are unread items or popover is currently open
+        if (count > 0 || showNotifications) {
+          const listRes = await fetch('/api/v1/notifications', {
+            headers: { 'X-Actor-Id': actorId }
+          });
+          if (listRes.ok) {
+            const listJson = await listRes.json();
+            setNotifications(listJson?.data || []);
+          }
+        }
       }
     } catch (e) {
       console.warn('Could not fetch notifications', e);
     }
   };
 
+  const fetchFullNotificationsList = async () => {
+    if (!user) return;
+    try {
+      const actorId = user.username || user.id || '';
+      if (!actorId) return;
+      const listRes = await fetch('/api/v1/notifications', {
+        headers: { 'X-Actor-Id': actorId }
+      });
+      if (listRes.ok) {
+        const listJson = await listRes.json();
+        setNotifications(listJson?.data || []);
+      }
+    } catch (e) {
+      console.warn('Could not fetch notification list', e);
+    }
+  };
+
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
-    const handleUpdate = () => fetchNotifications();
+    fetchNotifications(true);
+    // Poll every 45s (safe for Render/Cloudflare free tier)
+    const interval = setInterval(() => fetchNotifications(false), 45000);
+    const handleUpdate = () => fetchNotifications(true);
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchNotifications(false);
+      }
+    };
     window.addEventListener('notification-updated', handleUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       clearInterval(interval);
       window.removeEventListener('notification-updated', handleUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [user?.id, user?.username]);
 
@@ -268,7 +308,11 @@ export default function TopBar({ title, subtitle, onNavigate }) {
           <div className="relative" ref={notificationRef}>
             <button 
               type="button"
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={() => {
+                const nextState = !showNotifications;
+                setShowNotifications(nextState);
+                if (nextState) fetchFullNotificationsList();
+              }}
               className={`relative p-2 ${subtextColor} ${hoverBg} rounded-lg transition-colors cursor-pointer ${
                 showNotifications ? 'bg-blue-50 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : ''
               }`}

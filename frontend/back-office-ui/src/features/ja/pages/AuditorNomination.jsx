@@ -159,10 +159,12 @@ export default function TeamFormation() {
   const handleAddToTeam = () => {
     if (!selectedMember) return;
     const id = selectedMember.id || selectedMember.auditorId;
+    const name = selectedMember.name || selectedMember.fullName || `${selectedMember.firstName || ''} ${selectedMember.lastName || ''}`.trim() || 'Auditor';
+    const email = selectedMember.email || `${name.toLowerCase().replace(/\s+/g, '.')}@mor.gov.et`;
     const member = {
       id,
-      name: selectedMember.name,
-      email: selectedMember.email,
+      name,
+      email,
       expertise: selectedMember.expertise,
       seniority: selectedMember.seniority,
       taxCenter: selectedMember.taxCenter,
@@ -203,11 +205,11 @@ export default function TeamFormation() {
       const result = await committeeAPI.createTeam({
         teamLeaderId: teamLeader.id,
         teamLeaderName: teamLeader.name,
-        auditorIds: teamAuditors.map(a => a.id),
-        auditorNames: teamAuditors.map(a => a.name),
+        auditorIds: teamAuditors.map(a => a.id).filter(Boolean),
+        auditorNames: teamAuditors.map(a => a.name).filter(Boolean),
         capacity: teamCapacity,
         description: teamDescription || `Team led by ${teamLeader.name}`,
-        taxCenter: userTaxCenter || teamLeader.taxCenter,
+        taxCenter: userTaxCenter || teamLeader.taxCenter || 'federal-lto1',
       });
       setFormedTeam({
         ...result,

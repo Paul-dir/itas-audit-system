@@ -66,7 +66,12 @@ export const committeeAPI = {
   getCases: async (page = 0, size = 25, filters = {}) => {
     const params = buildParams({ page, size, ...filters });
     const res = await fetch(`${API_BASE}/cases?${params}`, { headers: getHeaders() });
-    if (!res.ok) throw new Error('Failed to fetch cases');
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Server rate limit reached (HTTP 429). Please wait a moment and try again.');
+      }
+      throw new Error('Failed to fetch cases');
+    }
     return res.json();
   },
 
@@ -342,7 +347,13 @@ export const committeeAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ teamLeaderId, teamLeaderName, auditorIds, auditorNames, capacity, description, taxCenter }),
     });
-    if (!res.ok) throw new Error('Failed to create team');
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Server is temporarily rate-limiting requests (HTTP 429). Please wait 30 seconds and try again.');
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Failed to create team');
+    }
     return res.json();
   },
 
